@@ -46,6 +46,7 @@ untangle : [X] gtk COMMON UNTANGLE
 blackbox : [X] gtk COMMON blackbox
 slant    : [X] gtk COMMON SLANT
 lightup  : [X] gtk COMMON lightup
+map      : [X] gtk COMMON map
 
 # Auxiliary command-line programs.
 solosolver :    [U] solo[STANDALONE_SOLVER] malloc
