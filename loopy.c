@@ -557,6 +557,7 @@ static void free_params(game_params *params)
 
 static void decode_params(game_params *params, char const *string)
 {
+    debug(("Decoding params '%s'\n",string));
     params->h = params->w = atoi(string);
     params->diff = DIFF_EASY;
     params->dual = 0;
@@ -566,14 +567,14 @@ static void decode_params(game_params *params, char const *string)
         params->h = atoi(string);
         while (*string && isdigit((unsigned char)*string)) string++;
     }
-    if (*string == 'l') {
-        string++;
-        params->dual = 1;
-    }
     if (*string == 't') {
         string++;
         params->type = atoi(string);
         while (*string && isdigit((unsigned char)*string)) string++;
+    }
+    if (*string == 'l') {
+        string++;
+        params->dual = 1;
     }
     if (*string == 'd') {
         int i;
@@ -592,6 +593,7 @@ static char *encode_params(game_params *params, int full)
             params->dual ? "l" : "");
     if (full)
         sprintf(str + strlen(str), "d%c", diffchars[params->diff]);
+    debug(("Encoded to '%s'\n",str));
     return dupstr(str);
 }
 
@@ -745,6 +747,9 @@ static char *validate_desc(game_params *params, char *desc)
 
     g = loopy_generate_grid(params, grid_desc);
     if (grid_desc) sfree(grid_desc);
+
+    debug(("Validating '%s' type %d %dx%d dual: %d\n", 
+                desc, params->type, params->w, params->h, params->dual));
 
     for (; *desc; ++desc) {
         if ((*desc >= '0' && *desc <= '9') || (*desc >= 'A' && *desc <= 'Z')) {
