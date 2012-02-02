@@ -518,7 +518,6 @@ static void grid_make_consistent(grid *g)
      * We use "-1", not "-2" here, because Euler's formula includes the
      * infinite face, which we don't count. */
     g->num_edges = g->num_faces + g->num_dots - 1;
-    debug(("allocating room for %d edges\n", g->num_edges));
     g->edges = snewn(g->num_edges, grid_edge);
     next_new_edge = g->edges;
 
@@ -533,7 +532,6 @@ static void grid_make_consistent(grid *g)
     for (i = 0; i < g->num_faces; i++) {
         grid_face *f = g->faces + i;
         int j;
-        assert(f->order > 2);
         for (j = 0; j < f->order; j++) {
             grid_edge e; /* fake edge for searching */
             grid_edge *edge_found;
@@ -1371,70 +1369,6 @@ void grid_find_incentre(grid_face *f)
     f->iy = ybest + 0.5;
 }
 
-/* Generate the dual to a grid
- * Returns a new dynamically-allocated grid whose dots are the
- * faces of the input, and whose faces are the dots of the input.
- * A few modifications are made: dots on input that have only two
- * edges are deleted, and the infinite exterior face is also removed
- * before conversion.
- */
-static grid *grid_dual(grid *g)
-{
-    grid *new_g;
-    int i, j, k;
-    tree234* points;
-
-    new_g = grid_empty();
-    new_g->tilesize = g->tilesize;
-    new_g->faces = snewn(g->num_dots, grid_face);
-    new_g->dots = snewn(g->num_faces, grid_dot);
-    debug(("taking the dual of a grid with %d faces and %d dots\n",
-                g->num_faces,g->num_dots));
-
-    points = newtree234(grid_point_cmp_fn);
-
-    for (i=0;i<g->num_faces;i++)
-    {
-        grid_find_incentre(&(g->faces[i]));
-    }
-    for (i=0;i<g->num_dots;i++)
-    {
-        int order;
-        grid_dot *d;
-
-        d = &(g->dots[i]);
-
-        order = d->order;
-        for (j=0;j<d->order;j++)
-        {
-            if (!d->faces[j]) order--;
-        }
-        if (order>2)
-        {
-            grid_face_add_new(new_g, order);
-            for (j=0,k=0;j<d->order;j++)
-            {
-                grid_dot *new_d;
-                if (d->faces[j])
-                {
-                    new_d = grid_get_dot(new_g, points,
-                            d->faces[j]->ix, d->faces[j]->iy);
-                    grid_face_set_dot(new_g, new_d, k++);
-                }
-            }
-            assert(k==order);
-        }
-    }
-
-    freetree234(points);
-    assert(new_g->num_faces <= g->num_dots);
-    assert(new_g->num_dots <= g->num_faces);
-
-    debug(("dual has %d faces and %d dots\n",
-                new_g->num_faces,new_g->num_dots));
-    grid_make_consistent(new_g);
-    return new_g;
-}
 /* ------ Generate various types of grid ------ */
 
 /* General method is to generate faces, by calculating their dot coordinates.
@@ -2023,6 +1957,7 @@ static grid *grid_new_greathexagonal(int width, int height, char *desc)
     grid_make_consistent(g);
     return g;
 }
+
 #define OCTAGONAL_TILESIZE 40
 /* b/a approx sqrt(2) */
 #define OCTAGONAL_A 29
@@ -2771,7 +2706,7 @@ static grid *grid_new_penrose_p3_thick(int width, int height, char *desc)
 static grid *(*(grid_news[]))(int, int, char*) = { GRIDGEN_LIST(FNNEW) };
 static void(*(grid_sizes[]))(int, int, int*, int*, int*) = { GRIDGEN_LIST(FNSZ) };
 
-char *grid_new_desc(grid_type type, int width, int height, int dual, random_state *rs)
+char *grid_new_desc(grid_type type, int width, int height, random_state *rs)
 {
     if (type != GRID_PENROSE_P2 && type != GRID_PENROSE_P3)
         return NULL;
@@ -2779,7 +2714,7 @@ char *grid_new_desc(grid_type type, int width, int height, int dual, random_stat
     return grid_new_desc_penrose(type, width, height, rs);
 }
 
-char *grid_validate_desc(grid_type type, int width, int height, int dual, char *desc)
+char *grid_validate_desc(grid_type type, int width, int height, char *desc)
 {
     if (type != GRID_PENROSE_P2 && type != GRID_PENROSE_P3) {
         if (desc != NULL)
@@ -2790,25 +2725,12 @@ char *grid_validate_desc(grid_type type, int width, int height, int dual, char *
     return grid_validate_desc_penrose(type, width, height, desc);
 }
 
-grid *grid_new(grid_type type, int width, int height, int dual, char *desc)
+grid *grid_new(grid_type type, int width, int height, char *desc)
 {
-    char *err = grid_validate_desc(type, width, height, dual, desc);
+    char *err = grid_validate_desc(type, width, height, desc);
     if (err) assert(!"Invalid grid description.");
 
-    if (!dual)
-    {
-        return grid_news[type](width, height, desc);
-    }
-    else
-    {
-        grid *temp;
-        grid *g;
-
-        temp = grid_news[type](width, height, desc);
-        g = grid_dual(temp);
-        grid_free(temp);
-        return g;
-    }
+    return grid_news[type](width, height, desc);
 }
 
 void grid_compute_size(grid_type type, int width, int height,
