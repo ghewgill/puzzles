@@ -518,6 +518,7 @@ static void grid_make_consistent(grid *g)
      * We use "-1", not "-2" here, because Euler's formula includes the
      * infinite face, which we don't count. */
     g->num_edges = g->num_faces + g->num_dots - 1;
+    assert(g->num_edges > 2);
     g->edges = snewn(g->num_edges, grid_edge);
     next_new_edge = g->edges;
 
@@ -1369,6 +1370,69 @@ void grid_find_incentre(grid_face *f)
     f->iy = ybest + 0.5;
 }
 
+/* Generate the dual to a grid
+ * Returns a new dynamically-allocated grid whose dots are the
+ * faces of the input, and whose faces are the dots of the input.
+ * A few modifications are made: dots on input that have only two
+ * edges are deleted, and the infinite exterior face is also removed
+ * before conversion.
+ */
+static grid *grid_dual(grid *g)
+{
+    grid *new_g;
+    int i, j;
+    tree234* points;
+
+    new_g = grid_empty();
+    new_g->tilesize = g->tilesize;
+    new_g->faces = snewn(g->num_dots, grid_face);
+    new_g->dots = snewn(g->num_faces, grid_dot);
+    debug(("taking the dual of a grid with %d faces and %d dots\n",
+                g->num_faces,g->num_dots));
+
+    points = newtree234(grid_point_cmp_fn);
+
+    for (i=0;i<g->num_faces;i++)
+    {
+        grid_find_incentre(&(g->faces[i]));
+    }
+    for (i=0;i<g->num_dots;i++)
+    {
+        int order;
+        grid_dot *d;
+
+        d = &(g->dots[i]);
+
+        order = d->order;
+        for (j=0;j<d->order;j++)
+        {
+            if (!d->faces[j]) order--;
+        }
+        if (order>2)
+        {
+            grid_face_add_new(new_g, order);
+            for (j=0;j<d->order;j++)
+            {
+                grid_dot *new_d;
+                if (d->faces[j])
+                {
+                    new_d = grid_get_dot(new_g, points,
+                            d->faces[j]->ix, d->faces[j]->iy);
+                    grid_face_set_dot(new_g, new_d, j);
+                }
+            }
+        }
+    }
+
+    freetree234(points);
+    assert(new_g->num_faces <= g->num_dots);
+    assert(new_g->num_dots <= g->num_faces);
+
+    debug(("dual has %d faces and %d dots\n",
+                new_g->num_faces,new_g->num_dots));
+    grid_make_consistent(new_g);
+    return new_g;
+}
 /* ------ Generate various types of grid ------ */
 
 /* General method is to generate faces, by calculating their dot coordinates.
@@ -1957,7 +2021,6 @@ static grid *grid_new_greathexagonal(int width, int height, char *desc)
     grid_make_consistent(g);
     return g;
 }
-
 #define OCTAGONAL_TILESIZE 40
 /* b/a approx sqrt(2) */
 #define OCTAGONAL_A 29
@@ -2038,6 +2101,30 @@ static grid *grid_new_octagonal(int width, int height, char *desc)
     assert(g->num_dots <= max_dots);
 
     grid_make_consistent(g);
+    return g;
+}
+
+#define DUAL_OCTAGONAL_TILESIZE OCTAGONAL_TILESIZE
+/* b/a approx sqrt(2) */
+#define DUAL_OCTAGONAL_A OCTAGONAL_A
+#define DUAL_OCTAGONAL_B OCTAGONAL_B
+
+static void grid_size_dual_octagonal(int width, int height,
+                          int *tilesize, int *xextent, int *yextent)
+{
+    grid_size_octagonal(width, height, tilesize, xextent, yextent);
+}
+
+static grid *grid_new_dual_octagonal(int width, int height, char *desc)
+{
+    grid *orig;
+    grid *g;
+
+    orig = grid_new_octagonal(width, height, desc);
+
+    g = grid_dual(orig);
+    grid_free(orig);
+
     return g;
 }
 

@@ -101,6 +101,7 @@ typedef struct grid {
   A(CAIRO,cairo) \
   A(GREATHEXAGONAL,greathexagonal) \
   A(OCTAGONAL,octagonal) \
+  A(DUAL_OCTAGONAL,dual_octagonal) \
   A(KITE,kites) \
   A(FLORET,floret) \
   A(DODECAGONAL,dodecagonal) \
