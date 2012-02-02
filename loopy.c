@@ -208,6 +208,7 @@ struct game_params {
     int w, h;
     int diff;
     int type;
+    int dual;
 };
 
 /* line_drawstate is the same as line_state, but with the extra ERROR
@@ -257,7 +258,6 @@ static void check_caches(const solver_state* sstate);
     A(Great-Dodecagonal,GRID_GREATDODECAGONAL,2,2) \
     A(Penrose (kite/dart),GRID_PENROSE_P2,3,3) \
     A(Penrose (rhombs),GRID_PENROSE_P3,3,3) \
-    A(Octagonal (dual),GRID_DUAL_OCTAGONAL,3,3)
 
 #define GRID_NAME(title,type,amin,omin) #title,
 #define GRID_CONFIG(title,type,amin,omin) ":" #title
@@ -267,6 +267,7 @@ static void check_caches(const solver_state* sstate);
      "Width and height for this grid type must both be at least " #amin, \
      "At least one of width and height for this grid type must be at least " #omin,},
 static char const *const gridnames[] = { GRIDLIST(GRID_NAME) };
+static char const *const dualnames[] = { "", "(dual) " };
 #define GRID_CONFIGS GRIDLIST(GRID_CONFIG)
 static grid_type grid_types[] = { GRIDLIST(GRID_TYPE) };
 #define NUM_GRID_TYPES (sizeof(grid_types) / sizeof(grid_types[0]))
@@ -280,7 +281,7 @@ static const struct {
  * generated. */
 static grid *loopy_generate_grid(game_params *params, char *grid_desc)
 {
-    return grid_new(grid_types[params->type], params->w, params->h, grid_desc);
+    return grid_new(grid_types[params->type], params->w, params->h, params->dual, grid_desc);
 }
 
 /* ----------------------------------------------------------------------
@@ -476,6 +477,7 @@ static game_params *default_params(void)
 #endif
     ret->diff = DIFF_EASY;
     ret->type = 0;
+    ret->dual = 0;
 
     return ret;
 }
@@ -490,40 +492,40 @@ static game_params *dup_params(game_params *params)
 
 static const game_params presets[] = {
 #ifdef SMALL_SCREEN
-    {  7,  7, DIFF_EASY, 0 },
-    {  7,  7, DIFF_NORMAL, 0 },
-    {  7,  7, DIFF_HARD, 0 },
-    {  7,  7, DIFF_HARD, 1 },
-    {  7,  7, DIFF_HARD, 2 },
-    {  5,  5, DIFF_HARD, 3 },
-    {  7,  7, DIFF_HARD, 4 },
-    {  5,  4, DIFF_HARD, 5 },
-    {  5,  5, DIFF_HARD, 6 },
-    {  5,  5, DIFF_HARD, 7 },
-    {  3,  3, DIFF_HARD, 8 },
-    {  3,  3, DIFF_HARD, 9 },
-    {  3,  3, DIFF_HARD, 10 },
-    {  6,  6, DIFF_HARD, 11 },
-    {  6,  6, DIFF_HARD, 12 },
+    {  7,  7, DIFF_EASY, 0, 0 },
+    {  7,  7, DIFF_NORMAL, 0, 0 },
+    {  7,  7, DIFF_HARD, 0, 0 },
+    {  7,  7, DIFF_HARD, 1, 0 },
+    {  7,  7, DIFF_HARD, 2, 0 },
+    {  5,  5, DIFF_HARD, 3, 0 },
+    {  7,  7, DIFF_HARD, 4, 0 },
+    {  5,  4, DIFF_HARD, 5, 0 },
+    {  5,  5, DIFF_HARD, 6, 0 },
+    {  5,  5, DIFF_HARD, 7, 0 },
+    {  3,  3, DIFF_HARD, 8, 0 },
+    {  3,  3, DIFF_HARD, 9, 0 },
+    {  3,  3, DIFF_HARD, 10, 0 },
+    {  6,  6, DIFF_HARD, 11, 0 },
+    {  6,  6, DIFF_HARD, 12, 0 },
 #else
-    {  7,  7, DIFF_EASY, 0 },
-    {  10,  10, DIFF_EASY, 0 },
-    {  7,  7, DIFF_NORMAL, 0 },
-    {  10,  10, DIFF_NORMAL, 0 },
-    {  7,  7, DIFF_HARD, 0 },
-    {  10,  10, DIFF_HARD, 0 },
-    {  10,  10, DIFF_HARD, 1 },
-    {  12,  10, DIFF_HARD, 2 },
-    {  7,  7, DIFF_HARD, 3 },
-    {  9,  9, DIFF_HARD, 4 },
-    {  5,  4, DIFF_HARD, 5 },
-    {  7,  7, DIFF_HARD, 6 },
-    {  5,  5, DIFF_HARD, 7 },
-    {  5,  5, DIFF_HARD, 8 },
-    {  5,  4, DIFF_HARD, 9 },
-    {  5,  4, DIFF_HARD, 10 },
-    {  10, 10, DIFF_HARD, 11 },
-    {  10, 10, DIFF_HARD, 12 }
+    {  7,  7, DIFF_EASY, 0, 0 },
+    {  10,  10, DIFF_EASY, 0, 0 },
+    {  7,  7, DIFF_NORMAL, 0, 0 },
+    {  10,  10, DIFF_NORMAL, 0, 0 },
+    {  7,  7, DIFF_HARD, 0, 0 },
+    {  10,  10, DIFF_HARD, 0, 0 },
+    {  10,  10, DIFF_HARD, 1, 0 },
+    {  12,  10, DIFF_HARD, 2, 0 },
+    {  7,  7, DIFF_HARD, 3, 0 },
+    {  9,  9, DIFF_HARD, 4, 0 },
+    {  5,  4, DIFF_HARD, 5, 0 },
+    {  7,  7, DIFF_HARD, 6, 0 },
+    {  5,  5, DIFF_HARD, 7, 0 },
+    {  5,  5, DIFF_HARD, 8, 0 },
+    {  5,  4, DIFF_HARD, 9, 0 },
+    {  5,  4, DIFF_HARD, 10, 0 },
+    {  10, 10, DIFF_HARD, 11, 0 },
+    {  10, 10, DIFF_HARD, 12, 0 }
 #endif
 };
 
@@ -538,8 +540,9 @@ static int game_fetch_preset(int i, char **name, game_params **params)
     tmppar = snew(game_params);
     *tmppar = presets[i];
     *params = tmppar;
-    sprintf(buf, "%dx%d %s - %s", tmppar->h, tmppar->w,
-            gridnames[tmppar->type], diffnames[tmppar->diff]);
+    sprintf(buf, "%dx%d %s %s- %s", tmppar->h, tmppar->w,
+            gridnames[tmppar->type], dualnames[tmppar->dual], 
+            diffnames[tmppar->diff]);
     *name = dupstr(buf);
 
     return TRUE;
@@ -554,11 +557,16 @@ static void decode_params(game_params *params, char const *string)
 {
     params->h = params->w = atoi(string);
     params->diff = DIFF_EASY;
+    params->dual = 0;
     while (*string && isdigit((unsigned char)*string)) string++;
     if (*string == 'x') {
         string++;
         params->h = atoi(string);
         while (*string && isdigit((unsigned char)*string)) string++;
+    }
+    if (*string == 'l') {
+        string++;
+        params->dual = 1;
     }
     if (*string == 't') {
         string++;
@@ -578,7 +586,8 @@ static void decode_params(game_params *params, char const *string)
 static char *encode_params(game_params *params, int full)
 {
     char str[80];
-    sprintf(str, "%dx%dt%d", params->w, params->h, params->type);
+    sprintf(str, "%dx%dt%d%s", params->w, params->h, params->type,
+            params->dual ? "l" : "");
     if (full)
         sprintf(str + strlen(str), "d%c", diffchars[params->diff]);
     return dupstr(str);
@@ -589,7 +598,7 @@ static config_item *game_configure(game_params *params)
     config_item *ret;
     char buf[80];
 
-    ret = snewn(5, config_item);
+    ret = snewn(6, config_item);
 
     ret[0].name = "Width";
     ret[0].type = C_STRING;
@@ -613,10 +622,15 @@ static config_item *game_configure(game_params *params)
     ret[3].sval = DIFFCONFIG;
     ret[3].ival = params->diff;
 
-    ret[4].name = NULL;
-    ret[4].type = C_END;
+    ret[4].name = "Dual";
+    ret[4].type = C_BOOLEAN;
     ret[4].sval = NULL;
-    ret[4].ival = 0;
+    ret[4].ival = params->dual;
+
+    ret[5].name = NULL;
+    ret[5].type = C_END;
+    ret[5].sval = NULL;
+    ret[5].ival = 0;
 
     return ret;
 }
@@ -629,6 +643,7 @@ static game_params *custom_params(config_item *cfg)
     ret->h = atoi(cfg[1].sval);
     ret->type = cfg[2].ival;
     ret->diff = cfg[3].ival;
+    ret->dual = cfg[4].ival;
 
     return ret;
 }
@@ -723,7 +738,7 @@ static char *validate_desc(game_params *params, char *desc)
     /* It's pretty inefficient to do this just for validation. All we need to
      * know is the precise number of faces. */
     grid_desc = extract_grid_desc(&desc);
-    ret = grid_validate_desc(grid_types[params->type], params->w, params->h, grid_desc);
+    ret = grid_validate_desc(grid_types[params->type], params->w, params->h, params->dual, grid_desc);
     if (ret) return ret;
 
     g = loopy_generate_grid(params, grid_desc);
@@ -1374,7 +1389,7 @@ static char *new_game_desc(game_params *params, random_state *rs,
     game_state *state = snew(game_state);
     game_state *state_new;
 
-    grid_desc = grid_new_desc(grid_types[params->type], params->w, params->h, rs);
+    grid_desc = grid_new_desc(grid_types[params->type], params->w, params->h, params->dual, rs);
     state->game_grid = g = loopy_generate_grid(params, grid_desc);
 
     state->clues = snewn(g->num_faces, signed char);

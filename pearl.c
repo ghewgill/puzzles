@@ -1048,7 +1048,7 @@ int pearl_loopgen_bias(void *vctx, char *board, int face)
 
 void pearl_loopgen(int w, int h, char *lines, random_state *rs)
 {
-    grid *g = grid_new(GRID_SQUARE, w-1, h-1, NULL);
+    grid *g = grid_new(GRID_SQUARE, w-1, h-1, 0, NULL);
     char *board = snewn(g->num_faces, char);
     int i, s = g->tilesize;
     struct pearl_loopgen_bias_ctx biasctx;

@@ -518,7 +518,7 @@ static void grid_make_consistent(grid *g)
      * We use "-1", not "-2" here, because Euler's formula includes the
      * infinite face, which we don't count. */
     g->num_edges = g->num_faces + g->num_dots - 1;
-    assert(g->num_edges > 2);
+    debug(("allocating room for %d edges\n", g->num_edges));
     g->edges = snewn(g->num_edges, grid_edge);
     next_new_edge = g->edges;
 
@@ -533,6 +533,7 @@ static void grid_make_consistent(grid *g)
     for (i = 0; i < g->num_faces; i++) {
         grid_face *f = g->faces + i;
         int j;
+        assert(f->order > 2);
         for (j = 0; j < f->order; j++) {
             grid_edge e; /* fake edge for searching */
             grid_edge *edge_found;
@@ -1380,7 +1381,7 @@ void grid_find_incentre(grid_face *f)
 static grid *grid_dual(grid *g)
 {
     grid *new_g;
-    int i, j;
+    int i, j, k;
     tree234* points;
 
     new_g = grid_empty();
@@ -1411,16 +1412,17 @@ static grid *grid_dual(grid *g)
         if (order>2)
         {
             grid_face_add_new(new_g, order);
-            for (j=0;j<d->order;j++)
+            for (j=0,k=0;j<d->order;j++)
             {
                 grid_dot *new_d;
                 if (d->faces[j])
                 {
                     new_d = grid_get_dot(new_g, points,
                             d->faces[j]->ix, d->faces[j]->iy);
-                    grid_face_set_dot(new_g, new_d, j);
+                    grid_face_set_dot(new_g, new_d, k++);
                 }
             }
+            assert(k==order);
         }
     }
 
@@ -2104,30 +2106,6 @@ static grid *grid_new_octagonal(int width, int height, char *desc)
     return g;
 }
 
-#define DUAL_OCTAGONAL_TILESIZE OCTAGONAL_TILESIZE
-/* b/a approx sqrt(2) */
-#define DUAL_OCTAGONAL_A OCTAGONAL_A
-#define DUAL_OCTAGONAL_B OCTAGONAL_B
-
-static void grid_size_dual_octagonal(int width, int height,
-                          int *tilesize, int *xextent, int *yextent)
-{
-    grid_size_octagonal(width, height, tilesize, xextent, yextent);
-}
-
-static grid *grid_new_dual_octagonal(int width, int height, char *desc)
-{
-    grid *orig;
-    grid *g;
-
-    orig = grid_new_octagonal(width, height, desc);
-
-    g = grid_dual(orig);
-    grid_free(orig);
-
-    return g;
-}
-
 #define KITE_TILESIZE 40
 /* b/a approx sqrt(3) */
 #define KITE_A 15
@@ -2793,7 +2771,7 @@ static grid *grid_new_penrose_p3_thick(int width, int height, char *desc)
 static grid *(*(grid_news[]))(int, int, char*) = { GRIDGEN_LIST(FNNEW) };
 static void(*(grid_sizes[]))(int, int, int*, int*, int*) = { GRIDGEN_LIST(FNSZ) };
 
-char *grid_new_desc(grid_type type, int width, int height, random_state *rs)
+char *grid_new_desc(grid_type type, int width, int height, int dual, random_state *rs)
 {
     if (type != GRID_PENROSE_P2 && type != GRID_PENROSE_P3)
         return NULL;
@@ -2801,7 +2779,7 @@ char *grid_new_desc(grid_type type, int width, int height, random_state *rs)
     return grid_new_desc_penrose(type, width, height, rs);
 }
 
-char *grid_validate_desc(grid_type type, int width, int height, char *desc)
+char *grid_validate_desc(grid_type type, int width, int height, int dual, char *desc)
 {
     if (type != GRID_PENROSE_P2 && type != GRID_PENROSE_P3) {
         if (desc != NULL)
@@ -2812,12 +2790,25 @@ char *grid_validate_desc(grid_type type, int width, int height, char *desc)
     return grid_validate_desc_penrose(type, width, height, desc);
 }
 
-grid *grid_new(grid_type type, int width, int height, char *desc)
+grid *grid_new(grid_type type, int width, int height, int dual, char *desc)
 {
-    char *err = grid_validate_desc(type, width, height, desc);
+    char *err = grid_validate_desc(type, width, height, dual, desc);
     if (err) assert(!"Invalid grid description.");
 
-    return grid_news[type](width, height, desc);
+    if (!dual)
+    {
+        return grid_news[type](width, height, desc);
+    }
+    else
+    {
+        grid *temp;
+        grid *g;
+
+        temp = grid_news[type](width, height, desc);
+        g = grid_dual(temp);
+        grid_free(temp);
+        return g;
+    }
 }
 
 void grid_compute_size(grid_type type, int width, int height,
