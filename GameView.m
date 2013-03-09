@@ -21,6 +21,10 @@ struct frontend {
 
 extern const struct drawing_api ios_drawing;
 
+const int ButtonDown[3] = {LEFT_BUTTON,  RIGHT_BUTTON,  MIDDLE_BUTTON};
+const int ButtonDrag[3] = {LEFT_DRAG,    RIGHT_DRAG,    MIDDLE_DRAG};
+const int ButtonUp[3]   = {LEFT_RELEASE, RIGHT_RELEASE, MIDDLE_RELEASE};
+
 const int NBUTTONS = 10;
 
 @implementation GameView {
@@ -30,6 +34,10 @@ const int NBUTTONS = 10;
     CGRect usable_frame;
     NSTimer *timer;
     UIButton *buttons[NBUTTONS];
+    int touchState;
+    int touchX, touchY;
+    int touchButton;
+    NSTimer *touchTimer;
 }
 
 @synthesize bitmap;
@@ -140,21 +148,67 @@ const int NBUTTONS = 10;
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
-    midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_BUTTON);
+    touchTimer = [NSTimer timerWithTimeInterval:0.5 target:self selector:@selector(handleTouchTimer:) userInfo:nil repeats:NO];
+    [[NSRunLoop currentRunLoop] addTimer:touchTimer forMode:NSDefaultRunLoopMode];
+    touchState = 1;
+    touchX = p.x * self.contentScaleFactor;
+    touchY = p.y * self.contentScaleFactor;
+    touchButton = 0;
 }
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
-    midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_DRAG);
+    int x = p.x * self.contentScaleFactor;
+    int y = p.y * self.contentScaleFactor;
+    if (touchState == 1) {
+        if (abs(x - touchX) >= 10 || abs(y - touchY) >= 10) {
+            [touchTimer invalidate];
+            touchTimer = nil;
+            midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
+            touchState = 2;
+        }
+    }
+    if (touchState == 2) {
+        midend_process_key(me, x, y, ButtonDrag[touchButton]);
+    }
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
-    midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_RELEASE);
+    int x = p.x * self.contentScaleFactor;
+    int y = p.y * self.contentScaleFactor;
+    if (touchState == 1) {
+        midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
+    }
+    midend_process_key(me, x, y, ButtonUp[touchButton]);
+    touchState = 0;
+    [touchTimer invalidate];
+    touchTimer = nil;
+}
+
+- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event
+{
+    touchState = 0;
+    [touchTimer invalidate];
+    touchTimer = nil;
+}
+
+- (void)handleTouchTimer:(NSTimer *)timer
+{
+    if (touchState == 1) {
+        extern const game net;
+        if (ourgame == &net) {
+            touchButton = 2; // middle button
+        } else {
+            touchButton = 1; // right button
+        }
+        midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
+        touchState = 2;
+    }
 }
 
 - (void)keyButton:(UIButton *)sender
