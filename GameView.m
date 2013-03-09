@@ -22,7 +22,6 @@ struct frontend {
 extern const struct drawing_api ios_drawing;
 
 @implementation GameView {
-    //CGContextRef bitmap;
     midend *me;
     frontend fe;
     NSTimer *timer;
@@ -34,28 +33,43 @@ extern const struct drawing_api ios_drawing;
 {
     self = [super initWithFrame:frame];
     if (self) {
-        CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-        bitmap = CGBitmapContextCreate(NULL, 320, 480, 8, 320*4, cs, kCGImageAlphaNoneSkipLast);
-        CGColorSpaceRelease(cs);
-        CGContextSetRGBFillColor(bitmap, 1, 0, 0, 1);
-        CGContextFillRect(bitmap, CGRectMake(10, 10, 90, 90));
+        self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         fe.gv = (__bridge void *)(self);
+        {
+            char buf[80], value[10];
+            int j, k;
+    
+            sprintf(buf, "%s_TILESIZE", g->name);
+            for (j = k = 0; buf[j]; j++)
+                if (!isspace((unsigned char)buf[j]))
+                    buf[k++] = toupper((unsigned char)buf[j]);
+            buf[k] = '\0';
+            snprintf(value, sizeof(value), "%d", g->preferred_tilesize*4);
+            setenv(buf, value, 1);
+        }
         me = midend_new(&fe, g, &ios_drawing, &fe);
         midend_new_game(me);
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
-        int w = 320;
-        int h = 480;
-        midend_size(me, &w, &h, FALSE);
-        midend_redraw(me);
     }
     return self;
+}
+
+- (void)layoutSubviews
+{
+    int w = self.frame.size.width * self.contentScaleFactor;
+    int h = self.frame.size.height * self.contentScaleFactor;
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    bitmap = CGBitmapContextCreate(NULL, w, h, 8, w*4, cs, kCGImageAlphaNoneSkipLast);
+    CGColorSpaceRelease(cs);
+    midend_size(me, &w, &h, FALSE);
+    midend_force_redraw(me);
 }
 
 - (void)drawRect:(CGRect)rect
 {
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGImageRef image = CGBitmapContextCreateImage(bitmap);
-    CGContextDrawImage(context, CGRectMake(0, 0, 320, 480), image);
+    CGContextDrawImage(context, self.frame, image);
     CGImageRelease(image);
 }
 
@@ -63,21 +77,21 @@ extern const struct drawing_api ios_drawing;
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
-    midend_process_key(me, p.x, p.y, LEFT_BUTTON);
+    midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_BUTTON);
 }
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
-    midend_process_key(me, p.x, p.y, LEFT_DRAG);
+    midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_DRAG);
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
-    midend_process_key(me, p.x, p.y, LEFT_RELEASE);
+    midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_RELEASE);
 }
 
 - (void)activateTimer

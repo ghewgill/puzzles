@@ -30,7 +30,7 @@
 
 - (void)loadView
 {
-    self.view = [[GameView alloc] initWithFrame:CGRectMake(0, 0, 320, 480) game:thegame];
+    self.view = [[GameView alloc] initWithFrame:[UIScreen mainScreen].bounds game:thegame];
 }
 
 - (void)viewDidLoad
