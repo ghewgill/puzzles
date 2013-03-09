@@ -24,10 +24,12 @@ extern const struct drawing_api ios_drawing;
 @implementation GameView {
     midend *me;
     frontend fe;
+    CGRect usable_frame;
     NSTimer *timer;
 }
 
 @synthesize bitmap;
+@synthesize statusbar;
 
 - (id)initWithFrame:(CGRect)frame game:(const game *)g
 {
@@ -56,8 +58,25 @@ extern const struct drawing_api ios_drawing;
 
 - (void)layoutSubviews
 {
+    int usable_height = self.frame.size.height;
+    if (midend_wants_statusbar(me)) {
+        usable_height -= 20;
+        CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 20);
+        if (statusbar) {
+            [statusbar setFrame:r];
+        } else {
+            statusbar = [[UILabel alloc] initWithFrame:r];
+            [self addSubview:statusbar];
+        }
+    } else {
+        if (statusbar) {
+            [statusbar removeFromSuperview];
+            statusbar = nil;
+        }
+    }
+    usable_frame = CGRectMake(0, 0, self.frame.size.width, usable_height);
     int w = self.frame.size.width * self.contentScaleFactor;
-    int h = self.frame.size.height * self.contentScaleFactor;
+    int h = usable_height * self.contentScaleFactor;
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
     bitmap = CGBitmapContextCreate(NULL, w, h, 8, w*4, cs, kCGImageAlphaNoneSkipLast);
     CGColorSpaceRelease(cs);
@@ -69,7 +88,7 @@ extern const struct drawing_api ios_drawing;
 {
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGImageRef image = CGBitmapContextCreateImage(bitmap);
-    CGContextDrawImage(context, self.frame, image);
+    CGContextDrawImage(context, usable_frame, image);
     CGImageRelease(image);
 }
 
@@ -239,7 +258,9 @@ static void ios_end_draw(void *handle)
 
 static void ios_status_bar(void *handle, char *text)
 {
-    NSLog(@"Status bar: %@", [NSString stringWithUTF8String:text]);
+    frontend *fe = (frontend *)handle;
+    GameView *gv = (__bridge GameView *)(fe->gv);
+    gv.statusbar.text = [NSString stringWithUTF8String:text];
 }
 
 struct blitter {

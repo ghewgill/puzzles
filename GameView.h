@@ -15,5 +15,6 @@
 - (id)initWithFrame:(CGRect)frame game:(const game *)g;
 
 @property CGContextRef bitmap;
+@property UILabel *statusbar;
 
 @end
