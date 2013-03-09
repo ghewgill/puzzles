@@ -21,11 +21,15 @@ struct frontend {
 
 extern const struct drawing_api ios_drawing;
 
+const int NBUTTONS = 10;
+
 @implementation GameView {
+    const game *ourgame;
     midend *me;
     frontend fe;
     CGRect usable_frame;
     NSTimer *timer;
+    UIButton *buttons[NBUTTONS];
 }
 
 @synthesize bitmap;
@@ -35,21 +39,22 @@ extern const struct drawing_api ios_drawing;
 {
     self = [super initWithFrame:frame];
     if (self) {
+        ourgame = g;
         self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         fe.gv = (__bridge void *)(self);
         {
             char buf[80], value[10];
             int j, k;
     
-            sprintf(buf, "%s_TILESIZE", g->name);
+            sprintf(buf, "%s_TILESIZE", ourgame->name);
             for (j = k = 0; buf[j]; j++)
                 if (!isspace((unsigned char)buf[j]))
                     buf[k++] = toupper((unsigned char)buf[j]);
             buf[k] = '\0';
-            snprintf(value, sizeof(value), "%d", g->preferred_tilesize*4);
+            snprintf(value, sizeof(value), "%d", ourgame->preferred_tilesize*4);
             setenv(buf, value, 1);
         }
-        me = midend_new(&fe, g, &ios_drawing, &fe);
+        me = midend_new(&fe, ourgame, &ios_drawing, &fe);
         midend_new_game(me);
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
     }
@@ -72,6 +77,45 @@ extern const struct drawing_api ios_drawing;
         if (statusbar) {
             [statusbar removeFromSuperview];
             statusbar = nil;
+        }
+    }
+    extern const game filling;
+    extern const game keen;
+    extern const game solo;
+    extern const game towers;
+    extern const game undead;
+    extern const game unequal;
+    if (ourgame == &filling
+     || ourgame == &keen
+     || ourgame == &solo
+     || ourgame == &towers
+     || ourgame == &undead
+     || ourgame == &unequal) {
+        usable_height -= 40;
+        int n = 9;
+        const char *labels = "123456789";
+        if (ourgame == &undead) {
+            n = 3;
+            labels = "GVZ";
+        }
+        for (int i = 0; i < n; i++) {
+            CGRect r = CGRectMake(35*i, usable_height, 30, 40);
+            if (buttons[i]) {
+                [buttons[i] setFrame:r];
+            } else {
+                buttons[i] = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+                [buttons[i] addTarget:self action:@selector(keyButton:) forControlEvents:UIControlEventTouchUpInside];
+                [buttons[i] setFrame:r];
+                [self addSubview:buttons[i]];
+                [buttons[i] setTitle:[NSString stringWithFormat:@"%c", labels[i]] forState:UIControlStateNormal];
+            }
+        }
+    } else {
+        for (int i = 0; i < NBUTTONS; i++) {
+            if (buttons[i]) {
+                [buttons[i] removeFromSuperview];
+                buttons[i] = nil;
+            }
         }
     }
     usable_frame = CGRectMake(0, 0, self.frame.size.width, usable_height);
@@ -111,6 +155,16 @@ extern const struct drawing_api ios_drawing;
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
     midend_process_key(me, p.x * self.contentScaleFactor, p.y * self.contentScaleFactor, LEFT_RELEASE);
+}
+
+- (void)keyButton:(UIButton *)sender
+{
+    for (int i = 0; i < NBUTTONS; i++) {
+        if (sender == buttons[i]) {
+            midend_process_key(me, -1, -1, [sender.currentTitle characterAtIndex:0]);
+            break;
+        }
+    }
 }
 
 - (void)activateTimer
