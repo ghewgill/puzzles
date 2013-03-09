@@ -66,7 +66,13 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
-    cell.textLabel.text = [NSString stringWithUTF8String:gamelist[indexPath.row]->name];
+    NSString *name = [NSString stringWithUTF8String:gamelist[indexPath.row]->name];
+    cell.textLabel.text = name;
+    NSString *iconname = [[name stringByReplacingOccurrencesOfString:@" " withString:@""] lowercaseString];
+    if ([iconname isEqualToString:@"rectangles"]) {
+        iconname = @"rect";
+    }
+    cell.imageView.image = [UIImage imageNamed:[iconname stringByAppendingString:@"-96d24.png"]];
     
     return cell;
 }
