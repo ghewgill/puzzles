@@ -12,7 +12,7 @@
 
 @interface GameView : UIView
 
-- (id)initWithFrame:(CGRect)frame game:(const game *)g;
+- (id)initWithFrame:(CGRect)frame game:(const game *)g saved:(NSString *)saved;
 
 @property CGContextRef bitmap;
 @property UILabel *statusbar;

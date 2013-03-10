@@ -43,7 +43,22 @@ const int NBUTTONS = 10;
 @synthesize bitmap;
 @synthesize statusbar;
 
-- (id)initWithFrame:(CGRect)frame game:(const game *)g
+struct StringReadContext {
+    void *save;
+    int pos;
+};
+
+static int saveGameRead(void *ctx, void *buf, int len)
+{
+    struct StringReadContext *srctx = (struct StringReadContext *)ctx;
+    NSString *save = (__bridge NSString *)(srctx->save);
+    NSUInteger used = 0;
+    BOOL r = [save getBytes:buf maxLength:len usedLength:&used encoding:NSUTF8StringEncoding options:0 range:NSMakeRange(srctx->pos, save.length-srctx->pos) remainingRange:NULL];
+    srctx->pos += used;
+    return r;
+}
+
+- (id)initWithFrame:(CGRect)frame game:(const game *)g saved:(NSString *)saved
 {
     self = [super initWithFrame:frame];
     if (self) {
@@ -63,7 +78,14 @@ const int NBUTTONS = 10;
             setenv(buf, value, 1);
         }
         me = midend_new(&fe, ourgame, &ios_drawing, &fe);
-        midend_new_game(me);
+        if (saved) {
+            struct StringReadContext srctx;
+            srctx.save = (__bridge void *)(saved);
+            srctx.pos = 0;
+            midend_deserialise(me, saveGameRead, &srctx);
+        } else {
+            midend_new_game(me);
+        }
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
     }
     return self;
@@ -72,6 +94,22 @@ const int NBUTTONS = 10;
 - (void)dealloc
 {
     midend_free(me);
+}
+
+static void saveGameWrite(void *ctx, void *buf, int len)
+{
+    NSMutableString *save = (__bridge NSMutableString *)(ctx);
+    [save appendString:[[NSString alloc] initWithBytes:buf length:len encoding:NSUTF8StringEncoding]];
+}
+
+- (NSString *)saveGameState
+{
+    if (midend_status(me) == 0) {
+        NSMutableString *save = [[NSMutableString alloc] init];
+        midend_serialise(me, saveGameWrite, (__bridge void *)(save));
+        return save;
+    }
+    return nil;
 }
 
 - (void)layoutSubviews
