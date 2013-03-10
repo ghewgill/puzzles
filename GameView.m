@@ -69,6 +69,11 @@ const int NBUTTONS = 10;
     return self;
 }
 
+- (void)dealloc
+{
+    midend_free(me);
+}
+
 - (void)layoutSubviews
 {
     int usable_height = self.frame.size.height;
