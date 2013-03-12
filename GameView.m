@@ -35,6 +35,7 @@ const int NBUTTONS = 10;
     midend *me;
     frontend fe;
     CGRect usable_frame;
+    CGRect game_rect;
     NSTimer *timer;
     UIButton *buttons[NBUTTONS];
     int touchState;
@@ -92,6 +93,7 @@ static int saveGameRead(void *ctx, void *buf, int len)
             midend_new_game(me);
         }
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
+        self.backgroundColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:1];
     }
     return self;
 }
@@ -192,12 +194,15 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         }
     }
     usable_frame = CGRectMake(0, 0, self.frame.size.width, usable_height);
-    int w = self.frame.size.width * self.contentScaleFactor;
-    int h = usable_height * self.contentScaleFactor;
+    int fw = self.frame.size.width * self.contentScaleFactor;
+    int fh = usable_height * self.contentScaleFactor;
+    int w = fw;
+    int h = fh;
+    midend_size(me, &w, &h, FALSE);
+    game_rect = CGRectMake((fw - w)/2/self.contentScaleFactor, (fh - h)/2/self.contentScaleFactor, w/self.contentScaleFactor, h/self.contentScaleFactor);
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
     bitmap = CGBitmapContextCreate(NULL, w, h, 8, w*4, cs, kCGImageAlphaNoneSkipLast);
     CGColorSpaceRelease(cs);
-    midend_size(me, &w, &h, FALSE);
     midend_force_redraw(me);
 }
 
@@ -205,7 +210,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGImageRef image = CGBitmapContextCreateImage(bitmap);
-    CGContextDrawImage(context, usable_frame, image);
+    CGContextDrawImage(context, game_rect, image);
     CGImageRelease(image);
 }
 
@@ -213,6 +218,8 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
+    p.x -= game_rect.origin.x;
+    p.y -= game_rect.origin.y;
     touchTimer = [NSTimer timerWithTimeInterval:0.5 target:self selector:@selector(handleTouchTimer:) userInfo:nil repeats:NO];
     [[NSRunLoop currentRunLoop] addTimer:touchTimer forMode:NSDefaultRunLoopMode];
     touchState = 1;
@@ -225,6 +232,8 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
+    p.x -= game_rect.origin.x;
+    p.y -= game_rect.origin.y;
     int x = p.x * self.contentScaleFactor;
     int y = p.y * self.contentScaleFactor;
     if (touchState == 1) {
@@ -244,6 +253,8 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     UITouch *touch = [touches anyObject];
     CGPoint p = [touch locationInView:self];
+    p.x -= game_rect.origin.x;
+    p.y -= game_rect.origin.y;
     int x = p.x * self.contentScaleFactor;
     int y = p.y * self.contentScaleFactor;
     if (touchState == 1) {
