@@ -111,6 +111,9 @@
 		3701DD2716EB171800896D7D /* unequal-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = 3701DD0316EB171800896D7D /* unequal-96d24.png */; };
 		3701DD2816EB171800896D7D /* unruly-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = 3701DD0416EB171800896D7D /* unruly-96d24.png */; };
 		3701DD2916EB171800896D7D /* untangle-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = 3701DD0516EB171800896D7D /* untangle-96d24.png */; };
+		3701DD2F16EDBC9F00896D7D /* GameTypeController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD2E16EDBC9E00896D7D /* GameTypeController.m */; };
+		3701DD3216EDC7F200896D7D /* GameSettingsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD3116EDC7F200896D7D /* GameSettingsController.m */; };
+		3701DD3516EEEC9A00896D7D /* GameSettingsChoiceController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD3416EEEC9900896D7D /* GameSettingsChoiceController.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -232,6 +235,12 @@
 		3701DD0316EB171800896D7D /* unequal-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "unequal-96d24.png"; path = "icons/unequal-96d24.png"; sourceTree = "<group>"; };
 		3701DD0416EB171800896D7D /* unruly-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "unruly-96d24.png"; path = "icons/unruly-96d24.png"; sourceTree = "<group>"; };
 		3701DD0516EB171800896D7D /* untangle-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "untangle-96d24.png"; path = "icons/untangle-96d24.png"; sourceTree = "<group>"; };
+		3701DD2D16EDBC9E00896D7D /* GameTypeController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GameTypeController.h; sourceTree = SOURCE_ROOT; };
+		3701DD2E16EDBC9E00896D7D /* GameTypeController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GameTypeController.m; sourceTree = SOURCE_ROOT; };
+		3701DD3016EDC7F100896D7D /* GameSettingsController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GameSettingsController.h; sourceTree = SOURCE_ROOT; };
+		3701DD3116EDC7F200896D7D /* GameSettingsController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GameSettingsController.m; sourceTree = SOURCE_ROOT; };
+		3701DD3316EEEC9800896D7D /* GameSettingsChoiceController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GameSettingsChoiceController.h; sourceTree = SOURCE_ROOT; };
+		3701DD3416EEEC9900896D7D /* GameSettingsChoiceController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GameSettingsChoiceController.m; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -286,6 +295,12 @@
 				3701DCAD16E9DBC100896D7D /* GameViewController.m */,
 				3701DCA616E85D5D00896D7D /* GameView.h */,
 				3701DCA716E85D5D00896D7D /* GameView.m */,
+				3701DD2D16EDBC9E00896D7D /* GameTypeController.h */,
+				3701DD2E16EDBC9E00896D7D /* GameTypeController.m */,
+				3701DD3016EDC7F100896D7D /* GameSettingsController.h */,
+				3701DD3116EDC7F200896D7D /* GameSettingsController.m */,
+				3701DD3316EEEC9800896D7D /* GameSettingsChoiceController.h */,
+				3701DD3416EEEC9900896D7D /* GameSettingsChoiceController.m */,
 				3701DC2E16E7330700896D7D /* Core */,
 				3701DC0F16E730ED00896D7D /* Supporting Files */,
 			);
@@ -582,6 +597,9 @@
 				3701DCA816E85D5D00896D7D /* GameView.m in Sources */,
 				3701DCAB16E9D93F00896D7D /* GameListViewController.m in Sources */,
 				3701DCAE16E9DBC100896D7D /* GameViewController.m in Sources */,
+				3701DD2F16EDBC9F00896D7D /* GameTypeController.m in Sources */,
+				3701DD3216EDC7F200896D7D /* GameSettingsController.m in Sources */,
+				3701DD3516EEEC9A00896D7D /* GameSettingsChoiceController.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

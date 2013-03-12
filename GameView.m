@@ -8,6 +8,8 @@
 
 #import "GameView.h"
 
+#import "GameTypeController.h"
+
 #include "puzzles.h"
 
 typedef float rgb[3];
@@ -28,6 +30,7 @@ const int ButtonUp[3]   = {LEFT_RELEASE, RIGHT_RELEASE, MIDDLE_RELEASE};
 const int NBUTTONS = 10;
 
 @implementation GameView {
+    UINavigationController *navigationController;
     const game *ourgame;
     midend *me;
     frontend fe;
@@ -38,6 +41,7 @@ const int NBUTTONS = 10;
     int touchX, touchY;
     int touchButton;
     NSTimer *touchTimer;
+    UIToolbar *toolbar;
 }
 
 @synthesize bitmap;
@@ -58,10 +62,11 @@ static int saveGameRead(void *ctx, void *buf, int len)
     return r;
 }
 
-- (id)initWithFrame:(CGRect)frame game:(const game *)g saved:(NSString *)saved
+- (id)initWithFrame:(CGRect)frame nc:(UINavigationController *)nc game:(const game *)g saved:(NSString *)saved
 {
     self = [super initWithFrame:frame];
     if (self) {
+        navigationController = nc;
         ourgame = g;
         self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         fe.gv = (__bridge void *)(self);
@@ -115,6 +120,23 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 - (void)layoutSubviews
 {
     int usable_height = self.frame.size.height;
+    usable_height -= 44;
+    CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 44);
+    if (toolbar) {
+        [toolbar setFrame:r];
+    } else {
+        toolbar = [[UIToolbar alloc] initWithFrame:r];
+        NSArray *items = @[
+            [[UIBarButtonItem alloc] initWithTitle:@"New" style:UIBarButtonItemStylePlain target:self action:@selector(doNew)],
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemUndo target:self action:@selector(doUndo)],
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRedo target:self action:@selector(doRedo)],
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRewind target:self action:@selector(doRestart)],
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFastForward target:self action:@selector(doSolve)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStylePlain target:self action:@selector(doType)],
+        ];
+        [toolbar setItems:items];
+        [self addSubview:toolbar];
+    }
     if (midend_wants_statusbar(me)) {
         usable_height -= 20;
         CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 20);
@@ -282,6 +304,40 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 - (void)timerFire:(NSTimer *)timer
 {
     midend_timer(me, 0.02);
+}
+
+- (void)doNew
+{
+    midend_new_game(me);
+    [self layoutSubviews];
+}
+
+- (void)doUndo
+{
+    midend_process_key(me, -1, -1, 'u');
+}
+
+- (void)doRedo
+{
+    midend_process_key(me, -1, -1, 'r'&0x1F);
+}
+
+- (void)doRestart
+{
+    midend_restart_game(me);
+}
+
+- (void)doSolve
+{
+    const char *msg = midend_solve(me);
+    if (msg) {
+        [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
+    }
+}
+
+- (void)doType
+{
+    [navigationController pushViewController:[[GameTypeController alloc] initWithMidend:me gameview:self] animated:YES];
 }
 
 @end

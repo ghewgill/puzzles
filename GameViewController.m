@@ -18,6 +18,7 @@ NSMutableDictionary *g_SavedGames;
 
 @implementation GameViewController {
     const game *thegame;
+    GameView *gameview;
     NSString *name;
 }
 
@@ -41,20 +42,20 @@ NSMutableDictionary *g_SavedGames;
     if (g_SavedGames && g_SavedGames[name]) {
         saved = g_SavedGames[name];
     }
-    self.view = [[GameView alloc] initWithFrame:[UIScreen mainScreen].bounds game:thegame saved:saved];
+    self.view = gameview = [[GameView alloc] initWithFrame:[UIScreen mainScreen].bounds nc:self.navigationController game:thegame saved:saved];
 }
 
 - (void)viewDidLoad
 {
     [super viewDidLoad];
 	// Do any additional setup after loading the view.
+    //self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Menu" style:UIBarButtonItemStylePlain target:self action:@selector(showMenu)];
 }
 
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
-    // use performSelector because self.view is not a GameView *
-    NSString *save = [self.view performSelector:@selector(saveGameState)];
+    NSString *save = [gameview saveGameState];
     if (save != nil) {
         g_SavedGames[name] = save;
     } else {
