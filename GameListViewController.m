@@ -12,6 +12,8 @@
 
 #include "puzzles.h"
 
+NSMutableDictionary *g_SavedGames;
+
 @interface GameListViewController ()
 
 @end
@@ -24,6 +26,9 @@
     if (self) {
         // Custom initialization
         self.title = @"Puzzles";
+        if (g_SavedGames == nil) {
+            g_SavedGames = [[NSMutableDictionary alloc] init];
+        }
     }
     return self;
 }
@@ -43,6 +48,12 @@
 {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self.tableView reloadData];
 }
 
 #pragma mark - Table view data source
@@ -73,6 +84,9 @@
         iconname = @"rect";
     }
     cell.imageView.image = [UIImage imageNamed:[iconname stringByAppendingString:@"-96d24.png"]];
+    if ([g_SavedGames objectForKey:name]) {
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
     
     return cell;
 }

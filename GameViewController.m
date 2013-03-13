@@ -10,7 +10,7 @@
 
 #import "GameView.h"
 
-NSMutableDictionary *g_SavedGames;
+extern NSMutableDictionary *g_SavedGames;
 
 @interface GameViewController ()
 
@@ -29,9 +29,6 @@ NSMutableDictionary *g_SavedGames;
         thegame = g;
         name = [NSString stringWithUTF8String:thegame->name];
         self.title = name;
-        if (g_SavedGames == nil) {
-            g_SavedGames = [[NSMutableDictionary alloc] init];
-        }
     }
     return self;
 }
