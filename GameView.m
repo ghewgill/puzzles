@@ -238,6 +238,10 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     p.y -= game_rect.origin.y;
     int x = p.x * self.contentScaleFactor;
     int y = p.y * self.contentScaleFactor;
+    if (x < 0) x = 0;
+    if (x >= game_rect.size.width) x = game_rect.size.width-1;
+    if (y < 0) y = 0;
+    if (y >= game_rect.size.height) y = game_rect.size.height-1;
     if (touchState == 1) {
         if (abs(x - touchX) >= 10 || abs(y - touchY) >= 10) {
             [touchTimer invalidate];
@@ -259,6 +263,10 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     p.y -= game_rect.origin.y;
     int x = p.x * self.contentScaleFactor;
     int y = p.y * self.contentScaleFactor;
+    if (x < 0) x = 0;
+    if (x >= game_rect.size.width) x = game_rect.size.width-1;
+    if (y < 0) y = 0;
+    if (y >= game_rect.size.height) y = game_rect.size.height-1;
     if (touchState == 1) {
         midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
     }
