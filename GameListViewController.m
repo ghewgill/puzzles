@@ -49,6 +49,20 @@ NSMutableSet *g_InProgress;
  
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+    
+    NSString *lastgame = [[NSUserDefaults standardUserDefaults] stringForKey:@"lastgame"];
+    if (lastgame) {
+        int i = gamecount-1;
+        while (i >= 0) {
+            if ([[NSString stringWithUTF8String:gamelist[i]->name] isEqualToString:lastgame]) {
+                break;
+            }
+            i--;
+        }
+        if (i >= 0) {
+            [self tableView:self.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]];
+        }
+    }
 }
 
 - (void)didReceiveMemoryWarning
@@ -60,6 +74,7 @@ NSMutableSet *g_InProgress;
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"lastgame"];
     [self.tableView reloadData];
 }
 
@@ -171,6 +186,7 @@ NSMutableSet *g_InProgress;
     }
     GameViewController *gv = [[GameViewController alloc] initWithGame:game saved:saved inprogress:inprogress saver:self];
     [self.navigationController pushViewController:gv animated:YES];
+    [[NSUserDefaults standardUserDefaults] setObject:name forKey:@"lastgame"];
 }
 
 @end
