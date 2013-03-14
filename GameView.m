@@ -487,6 +487,7 @@ static void ios_status_bar(void *handle, char *text)
 struct blitter {
     int w, h;
     int x, y;
+    int ox, oy;
     CGImageRef img;
 };
 
@@ -516,11 +517,14 @@ static void ios_blitter_save(void *handle, blitter *bl, int x, int y)
     if (bl->img != NULL) {
         CGImageRelease(bl->img);
     }
+    CGRect visible = CGRectIntersection(CGRectMake(x, y, bl->w, bl->h), CGRectMake(0, 0, CGBitmapContextGetWidth(gv.bitmap), CGBitmapContextGetHeight(gv.bitmap)));
     bl->x = x;
     bl->y = y;
+    bl->ox = visible.origin.x - x;
+    bl->oy = visible.origin.y - y;
     CGImageRef bitmap = CGBitmapContextCreateImage(gv.bitmap);
     // Not certain why the y coordinate inversion is necessary here, but it is
-    bl->img = CGImageCreateWithImageInRect(bitmap, CGRectMake(x, CGBitmapContextGetHeight(gv.bitmap)-y-bl->h, bl->w, bl->h));
+    bl->img = CGImageCreateWithImageInRect(bitmap, CGRectMake(visible.origin.x, CGBitmapContextGetHeight(gv.bitmap)-visible.origin.y-visible.size.height, visible.size.width, visible.size.height));
     CGImageRelease(bitmap);
 }
 
@@ -532,7 +536,9 @@ static void ios_blitter_load(void *handle, blitter *bl, int x, int y)
         x = bl->x;
         y = bl->y;
     }
-    CGContextDrawImage(gv.bitmap, CGRectMake(x, y, bl->w, bl->h), bl->img);
+    x += bl->ox;
+    y += bl->oy;
+    CGContextDrawImage(gv.bitmap, CGRectMake(x, y, CGImageGetWidth(bl->img), CGImageGetHeight(bl->img)), bl->img);
 }
 
 static char *ios_text_fallback(void *handle, const char *const *strings,
