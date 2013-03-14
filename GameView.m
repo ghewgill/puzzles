@@ -8,6 +8,8 @@
 
 #import "GameView.h"
 
+#import <AudioToolbox/AudioToolbox.h>
+
 #import "GameTypeController.h"
 
 #include "puzzles.h"
@@ -284,6 +286,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         }
         midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
         touchState = 2;
+        AudioServicesPlaySystemSound(0x450); // standard key click
     }
 }
 

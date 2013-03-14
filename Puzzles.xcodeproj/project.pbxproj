@@ -114,6 +114,7 @@
 		3701DD2F16EDBC9F00896D7D /* GameTypeController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD2E16EDBC9E00896D7D /* GameTypeController.m */; };
 		3701DD3216EDC7F200896D7D /* GameSettingsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD3116EDC7F200896D7D /* GameSettingsController.m */; };
 		3701DD3516EEEC9A00896D7D /* GameSettingsChoiceController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD3416EEEC9900896D7D /* GameSettingsChoiceController.m */; };
+		3701DD3716F12AE000896D7D /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3701DD3616F12ADF00896D7D /* AudioToolbox.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -241,6 +242,7 @@
 		3701DD3116EDC7F200896D7D /* GameSettingsController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GameSettingsController.m; sourceTree = SOURCE_ROOT; };
 		3701DD3316EEEC9800896D7D /* GameSettingsChoiceController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GameSettingsChoiceController.h; sourceTree = SOURCE_ROOT; };
 		3701DD3416EEEC9900896D7D /* GameSettingsChoiceController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GameSettingsChoiceController.m; sourceTree = SOURCE_ROOT; };
+		3701DD3616F12ADF00896D7D /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -248,6 +250,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3701DD3716F12AE000896D7D /* AudioToolbox.framework in Frameworks */,
 				3701DC0916E730ED00896D7D /* UIKit.framework in Frameworks */,
 				3701DC0B16E730ED00896D7D /* Foundation.framework in Frameworks */,
 				3701DC0D16E730ED00896D7D /* CoreGraphics.framework in Frameworks */,
@@ -260,6 +263,7 @@
 		3701DBFC16E730ED00896D7D = {
 			isa = PBXGroup;
 			children = (
+				3701DD3616F12ADF00896D7D /* AudioToolbox.framework */,
 				3701DC0E16E730ED00896D7D /* Puzzles */,
 				3701DC0716E730ED00896D7D /* Frameworks */,
 				3701DC0616E730ED00896D7D /* Products */,
