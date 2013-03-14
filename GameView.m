@@ -382,7 +382,7 @@ static void ios_draw_text(void *handle, int x, int y, int fonttype,
         case ALIGN_VNORMAL:
             break;
         case ALIGN_VCENTRE:
-            y += fontsize / 2;
+            y += fontsize / 2 - fontsize * 0.1;
             break;
     }
     CGContextSetTextDrawingMode(gv.bitmap, kCGTextFill);
