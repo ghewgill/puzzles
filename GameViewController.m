@@ -10,35 +10,33 @@
 
 #import "GameView.h"
 
-extern NSMutableDictionary *g_SavedGames;
-
 @interface GameViewController ()
 
 @end
 
 @implementation GameViewController {
     const game *thegame;
-    GameView *gameview;
     NSString *name;
+    NSString *saved;
+    id<GameViewControllerSaver> saver;
+    GameView *gameview;
 }
 
-- (id)initWithGame:(const game *)g
+- (id)initWithGame:(const game *)g saved:(NSString *)sav saver:(id<GameViewControllerSaver>)savr;
 {
     self = [super init];
     if (self) {
         thegame = g;
         name = [NSString stringWithUTF8String:thegame->name];
         self.title = name;
+        saved = sav;
+        saver = savr;
     }
     return self;
 }
 
 - (void)loadView
 {
-    NSString *saved;
-    if (g_SavedGames && g_SavedGames[name]) {
-        saved = g_SavedGames[name];
-    }
     self.view = gameview = [[GameView alloc] initWithFrame:[UIScreen mainScreen].bounds nc:self.navigationController game:thegame saved:saved];
 }
 
@@ -52,12 +50,9 @@ extern NSMutableDictionary *g_SavedGames;
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
-    NSString *save = [gameview saveGameState];
-    if (save != nil) {
-        g_SavedGames[name] = save;
-    } else {
-        [g_SavedGames removeObjectForKey:name];
-    }
+    BOOL inprogress;
+    NSString *save = [gameview saveGameState_inprogress:&inprogress];
+    [saver saveGame:name state:save inprogress:inprogress];
 }
 
 - (void)didReceiveMemoryWarning

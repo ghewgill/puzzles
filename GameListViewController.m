@@ -56,6 +56,11 @@ NSMutableDictionary *g_SavedGames;
     [self.tableView reloadData];
 }
 
+- (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress
+{
+    g_SavedGames[name] = save;
+}
+
 #pragma mark - Table view data source
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
@@ -141,7 +146,9 @@ NSMutableDictionary *g_SavedGames;
      // Pass the selected object to the new view controller.
      [self.navigationController pushViewController:detailViewController animated:YES];
      */
-    GameViewController *gv = [[GameViewController alloc] initWithGame:gamelist[indexPath.row]];
+    const game *game = gamelist[indexPath.row];
+    NSString *name = [NSString stringWithUTF8String:game->name];
+    GameViewController *gv = [[GameViewController alloc] initWithGame:game saved:[g_SavedGames objectForKey:name] saver:self];
     [self.navigationController pushViewController:gv animated:YES];
 }
 

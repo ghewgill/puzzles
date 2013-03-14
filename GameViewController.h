@@ -10,8 +10,14 @@
 
 #include "puzzles.h"
 
+@protocol GameViewControllerSaver <NSObject>
+
+- (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress;
+
+@end
+
 @interface GameViewController : UIViewController
 
-- (id)initWithGame:(const game *)g;
+- (id)initWithGame:(const game *)g saved:(NSString *)saved saver:(id<GameViewControllerSaver>)saver;
 
 @end

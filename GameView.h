@@ -13,7 +13,7 @@
 @interface GameView : UIView
 
 - (id)initWithFrame:(CGRect)frame nc:(UINavigationController *)nc game:(const game *)g saved:(NSString *)saved;
-- (NSString *)saveGameState;
+- (NSString *)saveGameState_inprogress:(BOOL *)inprogress;
 
 @property CGContextRef bitmap;
 @property UILabel *statusbar;

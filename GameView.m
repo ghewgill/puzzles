@@ -90,7 +90,11 @@ static int saveGameRead(void *ctx, void *buf, int len)
             struct StringReadContext srctx;
             srctx.save = (__bridge void *)(saved);
             srctx.pos = 0;
-            midend_deserialise(me, saveGameRead, &srctx);
+            const char *msg = midend_deserialise(me, saveGameRead, &srctx);
+            if (msg) {
+                [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil] show];
+                midend_new_game(me);
+            }
         } else {
             midend_new_game(me);
         }
@@ -111,14 +115,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     [save appendString:[[NSString alloc] initWithBytes:buf length:len encoding:NSUTF8StringEncoding]];
 }
 
-- (NSString *)saveGameState
+- (NSString *)saveGameState_inprogress:(BOOL *)inprogress
 {
-    if (midend_status(me) == 0) {
-        NSMutableString *save = [[NSMutableString alloc] init];
-        midend_serialise(me, saveGameWrite, (__bridge void *)(save));
-        return save;
-    }
-    return nil;
+    *inprogress = midend_can_undo(me) && midend_status(me) == 0;
+    NSMutableString *save = [[NSMutableString alloc] init];
+    midend_serialise(me, saveGameWrite, (__bridge void *)(save));
+    return save;
 }
 
 - (void)layoutSubviews
