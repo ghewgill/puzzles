@@ -33,8 +33,14 @@
         saved = sav;
         init_inprogress = inprog;
         saver = savr;
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(saveGame) name:@"applicationDidEnterBackground" object:nil];
     }
     return self;
+}
+
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)loadView
@@ -52,15 +58,20 @@
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
-    BOOL inprogress;
-    NSString *save = [gameview saveGameState_inprogress:&inprogress];
-    [saver saveGame:name state:save inprogress:inprogress];
+    [self saveGame];
 }
 
 - (void)didReceiveMemoryWarning
 {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
+}
+
+- (void)saveGame
+{
+    BOOL inprogress;
+    NSString *save = [gameview saveGameState_inprogress:&inprogress];
+    [saver saveGame:name state:save inprogress:inprogress];
 }
 
 @end
