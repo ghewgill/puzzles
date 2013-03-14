@@ -428,6 +428,7 @@ static void ios_draw_polygon(void *handle, int *coords, int npoints,
     for (int i = 1; i < npoints; i++) {
         CGContextAddLineToPoint(gv.bitmap, coords[i*2], coords[i*2+1]);
     }
+    CGContextAddLineToPoint(gv.bitmap, coords[0], coords[1]);
     CGPathDrawingMode mode = kCGPathStroke;
     if (fillcolour >= 0) {
         CGContextSetRGBFillColor(gv.bitmap, fe->colours[fillcolour][0], fe->colours[fillcolour][1], fe->colours[fillcolour][2], 1);
