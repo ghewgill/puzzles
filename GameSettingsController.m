@@ -94,13 +94,14 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
+    int roffset = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad ? 40 : 0;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     switch (indexPath.section) {
         case 0:
             cell.textLabel.text = [NSString stringWithUTF8String:config_items[indexPath.row].name];
             switch (config_items[indexPath.row].type) {
                 case C_STRING: {
-                    UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100, 12, 80, 31)];
+                    UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, 12, 80, 31)];
                     text.tag = indexPath.row;
                     [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
                     text.textAlignment = NSTextAlignmentRight;
@@ -109,7 +110,7 @@
                     break;
                 }
                 case C_BOOLEAN: {
-                    UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(self.view.frame.size.width-95, 9, 80, 31)];
+                    UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(self.view.frame.size.width-95-roffset, 9, 80, 31)];
                     sw.tag = indexPath.row;
                     [sw addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventValueChanged];
                     sw.on = config_items[indexPath.row].ival;
@@ -118,7 +119,7 @@
                 }
                 case C_CHOICES: {
                     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-                    UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100, 11, 65, 31)];
+                    UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, 11, 65, 31)];
                     label.enabled = NO;
                     label.textAlignment = NSTextAlignmentRight;
                     label.text = choiceText[indexPath.row][config_items[indexPath.row].ival];
