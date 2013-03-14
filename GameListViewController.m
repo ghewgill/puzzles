@@ -12,13 +12,15 @@
 
 #include "puzzles.h"
 
-NSMutableDictionary *g_SavedGames;
+NSMutableSet *g_InProgress;
 
 @interface GameListViewController ()
 
 @end
 
-@implementation GameListViewController
+@implementation GameListViewController {
+    NSString *path;
+}
 
 - (id)initWithStyle:(UITableViewStyle)style
 {
@@ -26,8 +28,13 @@ NSMutableDictionary *g_SavedGames;
     if (self) {
         // Custom initialization
         self.title = @"Puzzles";
-        if (g_SavedGames == nil) {
-            g_SavedGames = [[NSMutableDictionary alloc] init];
+        g_InProgress = [[NSMutableSet alloc] init];
+        path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0];
+        NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:path error:NULL];
+        for (NSString *fn in files) {
+            if ([fn hasSuffix:@".save"]) {
+                [g_InProgress addObject:[fn substringToIndex:fn.length-5]];
+            }
         }
     }
     return self;
@@ -58,7 +65,15 @@ NSMutableDictionary *g_SavedGames;
 
 - (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress
 {
-    g_SavedGames[name] = save;
+    if (inprogress) {
+        [g_InProgress addObject:name];
+    } else {
+        [g_InProgress removeObject:name];
+    }
+    [save writeToFile:[NSString stringWithFormat:@"%@/%@.%@", path, name, (inprogress ? @"save" : @"new")] atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    if (!inprogress) {
+        [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithFormat:@"%@/%@.save", path, name] error:NULL];
+    }
 }
 
 #pragma mark - Table view data source
@@ -89,7 +104,7 @@ NSMutableDictionary *g_SavedGames;
         iconname = @"rect";
     }
     cell.imageView.image = [UIImage imageNamed:[iconname stringByAppendingString:@"-96d24.png"]];
-    if ([g_SavedGames objectForKey:name]) {
+    if ([g_InProgress containsObject:name]) {
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
     
@@ -148,7 +163,13 @@ NSMutableDictionary *g_SavedGames;
      */
     const game *game = gamelist[indexPath.row];
     NSString *name = [NSString stringWithUTF8String:game->name];
-    GameViewController *gv = [[GameViewController alloc] initWithGame:game saved:[g_SavedGames objectForKey:name] saver:self];
+    BOOL inprogress = YES;
+    NSString *saved = [NSString stringWithContentsOfFile:[NSString stringWithFormat:@"%@/%@.save", path, name] encoding:NSUTF8StringEncoding error:NULL];
+    if (saved == nil) {
+        saved = [NSString stringWithContentsOfFile:[NSString stringWithFormat:@"%@/%@.new", path, name] encoding:NSUTF8StringEncoding error:NULL];
+        inprogress = NO;
+    }
+    GameViewController *gv = [[GameViewController alloc] initWithGame:game saved:saved inprogress:inprogress saver:self];
     [self.navigationController pushViewController:gv animated:YES];
 }
 

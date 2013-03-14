@@ -65,7 +65,7 @@ static int saveGameRead(void *ctx, void *buf, int len)
     return r;
 }
 
-- (id)initWithFrame:(CGRect)frame nc:(UINavigationController *)nc game:(const game *)g saved:(NSString *)saved
+- (id)initWithFrame:(CGRect)frame nc:(UINavigationController *)nc game:(const game *)g saved:(NSString *)saved inprogress:(BOOL)inprogress
 {
     self = [super initWithFrame:frame];
     if (self) {
@@ -93,6 +93,9 @@ static int saveGameRead(void *ctx, void *buf, int len)
             const char *msg = midend_deserialise(me, saveGameRead, &srctx);
             if (msg) {
                 [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil] show];
+                midend_new_game(me);
+            }
+            if (!inprogress) {
                 midend_new_game(me);
             }
         } else {

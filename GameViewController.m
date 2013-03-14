@@ -18,11 +18,12 @@
     const game *thegame;
     NSString *name;
     NSString *saved;
+    BOOL init_inprogress;
     id<GameViewControllerSaver> saver;
     GameView *gameview;
 }
 
-- (id)initWithGame:(const game *)g saved:(NSString *)sav saver:(id<GameViewControllerSaver>)savr;
+- (id)initWithGame:(const game *)g saved:(NSString *)sav inprogress:(BOOL)inprog saver:(id<GameViewControllerSaver>)savr;
 {
     self = [super init];
     if (self) {
@@ -30,6 +31,7 @@
         name = [NSString stringWithUTF8String:thegame->name];
         self.title = name;
         saved = sav;
+        init_inprogress = inprog;
         saver = savr;
     }
     return self;
@@ -37,7 +39,7 @@
 
 - (void)loadView
 {
-    self.view = gameview = [[GameView alloc] initWithFrame:[UIScreen mainScreen].bounds nc:self.navigationController game:thegame saved:saved];
+    self.view = gameview = [[GameView alloc] initWithFrame:[UIScreen mainScreen].bounds nc:self.navigationController game:thegame saved:saved inprogress:init_inprogress];
 }
 
 - (void)viewDidLoad

@@ -18,6 +18,6 @@
 
 @interface GameViewController : UIViewController
 
-- (id)initWithGame:(const game *)g saved:(NSString *)saved saver:(id<GameViewControllerSaver>)saver;
+- (id)initWithGame:(const game *)g saved:(NSString *)saved inprogress:(BOOL)inprogress saver:(id<GameViewControllerSaver>)saver;
 
 @end
