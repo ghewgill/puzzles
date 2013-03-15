@@ -10,7 +10,7 @@
 
 #import "GameViewController.h"
 
-@interface GameListViewController : UITableViewController <GameViewControllerSaver>
+@interface GameListViewController : UICollectionViewController <GameViewControllerSaver>
 
 - (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress;
 

@@ -15,6 +15,59 @@
 
 NSMutableSet *g_InProgress;
 
+static NSString *CellIdentifier = @"Cell";
+
+@interface GameListViewCell: UICollectionViewCell
+@end
+
+@implementation GameListViewCell
+
+- (id)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+            self.contentView.backgroundColor = [UIColor whiteColor];
+            
+            UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.contentView.frame.size.width, 31)];
+            label.tag = 1;
+            label.font = [UIFont boldSystemFontOfSize:16];
+            label.textAlignment = NSTextAlignmentCenter;
+            [self.contentView addSubview:label];
+        
+            UIImageView *image = [[UIImageView alloc] initWithFrame:CGRectMake((self.contentView.frame.size.width-96)/2, 31, 96, 96)];
+            image.tag = 2;
+            [self.contentView addSubview:image];
+            
+            UILabel *detail = [[UILabel alloc] initWithFrame:CGRectMake(5, 31+96, self.contentView.frame.size.width-10, 50)];
+            detail.tag = 3;
+            detail.font = [UIFont systemFontOfSize:14];
+            detail.numberOfLines = 0;
+            [self.contentView addSubview:detail];
+        } else {
+            self.contentView.backgroundColor = [UIColor whiteColor];
+            
+            UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(100, 0, self.contentView.frame.size.width-100, 26)];
+            label.tag = 1;
+            label.font = [UIFont boldSystemFontOfSize:20];
+            [self.contentView addSubview:label];
+        
+            UIImageView *image = [[UIImageView alloc] initWithFrame:CGRectMake(2, 2, 96, 96)];
+            image.tag = 2;
+            [self.contentView addSubview:image];
+            
+            UILabel *detail = [[UILabel alloc] initWithFrame:CGRectMake(100, 30, self.contentView.frame.size.width-100, self.contentView.frame.size.height-30)];
+            detail.tag = 3;
+            detail.font = [UIFont systemFontOfSize:14];
+            detail.numberOfLines = 0;
+            [self.contentView addSubview:detail];
+        }
+    }
+    return self;
+}
+
+@end
+
 @interface GameListViewController ()
 
 @end
@@ -24,11 +77,18 @@ NSMutableSet *g_InProgress;
     NSDictionary *descriptions;
 }
 
-- (id)initWithStyle:(UITableViewStyle)style
+- (id)init
 {
-    self = [super initWithStyle:style];
+    UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
+    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        layout.itemSize = CGSizeMake(220, 31+96+50);
+    } else {
+        layout.itemSize = CGSizeMake(320, 100);
+    }
+    self = [super initWithCollectionViewLayout:layout];
     if (self) {
         // Custom initialization
+        [self.collectionView registerClass:[GameListViewCell class] forCellWithReuseIdentifier:CellIdentifier];
         self.title = @"Puzzles";
         g_InProgress = [[NSMutableSet alloc] init];
         path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0];
@@ -67,7 +127,7 @@ NSMutableSet *g_InProgress;
             i--;
         }
         if (i >= 0) {
-            [self tableView:self.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]];
+            [self collectionView:self.collectionView didSelectItemAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]];
         }
     }
 }
@@ -82,7 +142,7 @@ NSMutableSet *g_InProgress;
 {
     [super viewWillAppear:animated];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"lastgame"];
-    [self.tableView reloadData];
+    [self.collectionView reloadData];
 }
 
 - (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress
@@ -100,35 +160,37 @@ NSMutableSet *g_InProgress;
 
 #pragma mark - Table view data source
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView
 {
     // Return the number of sections.
     return 1;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
 {
     // Return the number of rows in the section.
     return gamecount;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
 {
-    static NSString *CellIdentifier = @"Cell";
     //UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier forIndexPath:indexPath];
-    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
+    UICollectionViewCell *cell = [self.collectionView dequeueReusableCellWithReuseIdentifier:CellIdentifier forIndexPath:indexPath];
+    UILabel *label = (UILabel *)[cell viewWithTag:1];
+    UIImageView *image = (UIImageView *)[cell viewWithTag:2];
+    UILabel *detail = (UILabel *)[cell viewWithTag:3];
     
     // Configure the cell...
     NSString *name = [NSString stringWithUTF8String:gamelist[indexPath.row]->name];
-    cell.textLabel.text = name;
-    cell.detailTextLabel.text = descriptions[name];
+    label.text = name;
+    detail.text = descriptions[name];
     NSString *iconname = [[name stringByReplacingOccurrencesOfString:@" " withString:@""] lowercaseString];
     if ([iconname isEqualToString:@"rectangles"]) {
         iconname = @"rect";
     }
-    cell.imageView.image = [UIImage imageNamed:[iconname stringByAppendingString:@"-96d24.png"]];
+    image.image = [UIImage imageNamed:[iconname stringByAppendingString:@"-96d24.png"]];
     if ([g_InProgress containsObject:name]) {
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        //cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
     
     return cell;
@@ -175,7 +237,7 @@ NSMutableSet *g_InProgress;
 
 #pragma mark - Table view delegate
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
     // Navigation logic may go here. Create and push another view controller.
     /*
