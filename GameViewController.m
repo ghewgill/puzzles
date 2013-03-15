@@ -9,6 +9,7 @@
 #import "GameViewController.h"
 
 #import "GameView.h"
+#import "GameHelpController.h"
 
 @interface GameViewController ()
 
@@ -52,7 +53,7 @@
 {
     [super viewDidLoad];
 	// Do any additional setup after loading the view.
-    //self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Menu" style:UIBarButtonItemStylePlain target:self action:@selector(showMenu)];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
 }
 
 - (void)viewWillDisappear:(BOOL)animated
@@ -72,6 +73,11 @@
     BOOL inprogress;
     NSString *save = [gameview saveGameState_inprogress:&inprogress];
     [saver saveGame:name state:save inprogress:inprogress];
+}
+
+- (void)showHelp
+{
+    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:[NSString stringWithFormat:@"%s.html", thegame->htmlhelp_topic]] animated:YES];
 }
 
 @end

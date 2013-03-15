@@ -9,6 +9,7 @@
 #import "GameListViewController.h"
 
 #import "GameViewController.h"
+#import "GameHelpController.h"
 
 #include "puzzles.h"
 #include "descriptions.h"
@@ -116,6 +117,7 @@ static NSString *CellIdentifier = @"Cell";
  
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
     
     NSString *lastgame = [[NSUserDefaults standardUserDefaults] stringForKey:@"lastgame"];
     if (lastgame) {
@@ -156,6 +158,11 @@ static NSString *CellIdentifier = @"Cell";
     if (!inprogress) {
         [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithFormat:@"%@/%@.save", path, name] error:NULL];
     }
+}
+
+- (void)showHelp
+{
+    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:@"index.html"] animated:YES];
 }
 
 #pragma mark - Table view data source
