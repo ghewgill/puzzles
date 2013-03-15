@@ -11,6 +11,7 @@
 #import "GameViewController.h"
 
 #include "puzzles.h"
+#include "descriptions.h"
 
 NSMutableSet *g_InProgress;
 
@@ -20,6 +21,7 @@ NSMutableSet *g_InProgress;
 
 @implementation GameListViewController {
     NSString *path;
+    NSDictionary *descriptions;
 }
 
 - (id)initWithStyle:(UITableViewStyle)style
@@ -36,6 +38,11 @@ NSMutableSet *g_InProgress;
                 [g_InProgress addObject:[fn substringToIndex:fn.length-5]];
             }
         }
+        NSMutableDictionary *descs = [[NSMutableDictionary alloc] init];
+        for (int i = 0; i < sizeof(GameDescriptions)/sizeof(GameDescriptions[0]); i++) {
+            descs[GameDescriptions[i][0]] = GameDescriptions[i][1];
+        }
+        descriptions = descs;
     }
     return self;
 }
@@ -109,11 +116,12 @@ NSMutableSet *g_InProgress;
 {
     static NSString *CellIdentifier = @"Cell";
     //UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier forIndexPath:indexPath];
-    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
     NSString *name = [NSString stringWithUTF8String:gamelist[indexPath.row]->name];
     cell.textLabel.text = name;
+    cell.detailTextLabel.text = descriptions[name];
     NSString *iconname = [[name stringByReplacingOccurrencesOfString:@" " withString:@""] lowercaseString];
     if ([iconname isEqualToString:@"rectangles"]) {
         iconname = @"rect";
