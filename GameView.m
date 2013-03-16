@@ -10,6 +10,7 @@
 
 #import <AudioToolbox/AudioToolbox.h>
 
+#import "GameMenuController.h"
 #import "GameTypeController.h"
 
 #include "puzzles.h"
@@ -45,6 +46,7 @@ const int NBUTTONS = 10;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
+    UIPopoverController *gameMenu;
 }
 
 @synthesize bitmap;
@@ -136,7 +138,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     } else {
         toolbar = [[UIToolbar alloc] initWithFrame:r];
         NSArray *items = @[
-            [[UIBarButtonItem alloc] initWithTitle:@"New" style:UIBarButtonItemStylePlain target:self action:@selector(doNew)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStylePlain target:self action:@selector(doGameMenu)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemUndo target:self action:@selector(doUndo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRedo target:self action:@selector(doRedo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRewind target:self action:@selector(doRestart)],
@@ -325,8 +327,43 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     midend_timer(me, 0.02);
 }
 
-- (void)doNew
+- (void)doGameMenu
 {
+    if (!gameMenu) {
+        gameMenu = [[UIPopoverController alloc] initWithContentViewController:[[GameMenuController alloc] initWithGameView:self midend:me]];
+    }
+    gameMenu.popoverContentSize = CGSizeMake(280, 250);
+    [gameMenu presentPopoverFromBarButtonItem:toolbar.items[0] permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+    gameMenu.passthroughViews = @[];
+}
+
+- (void)doNewGame
+{
+    [gameMenu dismissPopoverAnimated:YES];
+    midend_new_game(me);
+    [self layoutSubviews];
+}
+
+- (void)doSpecificGame:(NSString *)gameid
+{
+    [gameMenu dismissPopoverAnimated:YES];
+    const char *msg = midend_game_id(me, (char *)[gameid cStringUsingEncoding:NSUTF8StringEncoding]);
+    if (msg) {
+        [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
+        return;
+    }
+    midend_new_game(me);
+    [self layoutSubviews];
+}
+
+- (void)doSpecificSeed:(NSString *)seed
+{
+    [gameMenu dismissPopoverAnimated:YES];
+    const char *msg = midend_game_id(me, (char *)[seed cStringUsingEncoding:NSUTF8StringEncoding]);
+    if (msg) {
+        [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
+        return;
+    }
     midend_new_game(me);
     [self layoutSubviews];
 }
