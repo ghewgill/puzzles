@@ -172,6 +172,7 @@
 		371ADFA016F431A100A529A2 /* PSTGridLayoutRow.m in Sources */ = {isa = PBXBuildFile; fileRef = 371ADF9216F431A100A529A2 /* PSTGridLayoutRow.m */; };
 		371ADFA116F431A100A529A2 /* PSTGridLayoutSection.m in Sources */ = {isa = PBXBuildFile; fileRef = 371ADF9416F431A100A529A2 /* PSTGridLayoutSection.m */; };
 		371ADFA316F432CD00A529A2 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 371ADFA216F432CD00A529A2 /* QuartzCore.framework */; };
+		37DDFDB316F45C53007B6287 /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37DDFDB216F45C53007B6287 /* CoreText.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -374,6 +375,7 @@
 		371ADF9316F431A100A529A2 /* PSTGridLayoutSection.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PSTGridLayoutSection.h; path = PSTCollectionView/PSTCollectionView/PSTGridLayoutSection.h; sourceTree = SOURCE_ROOT; };
 		371ADF9416F431A100A529A2 /* PSTGridLayoutSection.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = PSTGridLayoutSection.m; path = PSTCollectionView/PSTCollectionView/PSTGridLayoutSection.m; sourceTree = SOURCE_ROOT; };
 		371ADFA216F432CD00A529A2 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		37DDFDB216F45C53007B6287 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -381,6 +383,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				37DDFDB316F45C53007B6287 /* CoreText.framework in Frameworks */,
 				371ADFA316F432CD00A529A2 /* QuartzCore.framework in Frameworks */,
 				3701DD3716F12AE000896D7D /* AudioToolbox.framework in Frameworks */,
 				3701DC0916E730ED00896D7D /* UIKit.framework in Frameworks */,
@@ -395,6 +398,7 @@
 		3701DBFC16E730ED00896D7D = {
 			isa = PBXGroup;
 			children = (
+				37DDFDB216F45C53007B6287 /* CoreText.framework */,
 				371ADFA216F432CD00A529A2 /* QuartzCore.framework */,
 				3701DD3616F12ADF00896D7D /* AudioToolbox.framework */,
 				3701DC0E16E730ED00896D7D /* Puzzles */,

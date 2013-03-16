@@ -9,6 +9,7 @@
 #import "GameView.h"
 
 #import <AudioToolbox/AudioToolbox.h>
+#import <CoreText/CoreText.h>
 
 #import "GameMenuController.h"
 #import "GameTypeController.h"
@@ -403,33 +404,37 @@ static void ios_draw_text(void *handle, int x, int y, int fonttype,
 {
     frontend *fe = (frontend *)handle;
     GameView *gv = (__bridge GameView *)(fe->gv);
-    CGContextSelectFont(gv.bitmap, "Helvetica", fontsize, kCGEncodingMacRoman);
+    NSMutableAttributedString *as = [[NSMutableAttributedString alloc] initWithString:[NSString stringWithUTF8String:text]];
+    UIFont *font = [UIFont fontWithName:@"Helvetica" size:fontsize];
+    NSRange range = NSMakeRange(0, as.length);
+    [as addAttribute:NSFontAttributeName value:font range:range];
+    [as addAttribute:NSForegroundColorAttributeName value:(id)[UIColor colorWithRed:fe->colours[colour][0] green:fe->colours[colour][1] blue:fe->colours[colour][2] alpha:1].CGColor range:range];
+    CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)as);
     CGContextSetTextMatrix(gv.bitmap, CGAffineTransformMake(1, 0, 0, -1, 0, 0));
-    CGContextSetRGBFillColor(gv.bitmap, fe->colours[colour][0], fe->colours[colour][1], fe->colours[colour][2], 1);
-    CGPoint p = CGContextGetTextPosition(gv.bitmap);
-    CGContextSetTextDrawingMode(gv.bitmap, kCGTextInvisible);
-    CGContextShowText(gv.bitmap, text, strlen(text));
-    CGPoint q = CGContextGetTextPosition(gv.bitmap);
+    CGRect bounds = CTLineGetImageBounds(line, gv.bitmap);
+    CGFloat width = CTLineGetOffsetForStringIndex(line, as.length, NULL);
+    CGFloat tx = x;
+    CGFloat ty = y;
     switch (align & (ALIGN_HLEFT|ALIGN_HCENTRE|ALIGN_HRIGHT)) {
         case ALIGN_HLEFT:
             break;
         case ALIGN_HCENTRE:
-            x -= (q.x - p.x) / 2;
+            tx -= width / 2;
             break;
         case ALIGN_HRIGHT:
-            x -= q.x - p.x;
+            tx -= width;
             break;
     }
     switch (align & (ALIGN_VNORMAL|ALIGN_VCENTRE)) {
         case ALIGN_VNORMAL:
             break;
         case ALIGN_VCENTRE:
-            y += fontsize / 2 - fontsize * 0.1;
+            ty += bounds.size.height / 2;
             break;
     }
-    CGContextSetTextDrawingMode(gv.bitmap, kCGTextFill);
-    // TODO: handle UTF-8 characters properly (Keen)
-    CGContextShowTextAtPoint(gv.bitmap, x, y, text, strlen(text));
+    CGContextSetTextPosition(gv.bitmap, tx, ty);
+    CTLineDraw(line, gv.bitmap);
+    CFRelease(line);
 }
 
 static void ios_draw_rect(void *handle, int x, int y, int w, int h, int colour)
@@ -587,7 +592,7 @@ static void ios_blitter_load(void *handle, blitter *bl, int x, int y)
 static char *ios_text_fallback(void *handle, const char *const *strings,
                                int nstrings)
 {
-    NSLog(@"TODO: text_fallback");
+    // we should be able to handle any requested UTF-8 string
     return dupstr(strings[0]);
 }
 
