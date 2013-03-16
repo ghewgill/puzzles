@@ -18,7 +18,7 @@ NSMutableSet *g_InProgress;
 
 static NSString *CellIdentifier = @"Cell";
 
-@interface GameListViewCell: UICollectionViewCell
+@interface GameListViewCell: PSUICollectionViewCell
 @end
 
 @implementation GameListViewCell
@@ -80,7 +80,7 @@ static NSString *CellIdentifier = @"Cell";
 
 - (id)init
 {
-    UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
+    PSUICollectionViewFlowLayout *layout = [[PSUICollectionViewFlowLayout alloc] init];
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
         layout.itemSize = CGSizeMake(220, 31+96+50);
     } else {
@@ -89,7 +89,6 @@ static NSString *CellIdentifier = @"Cell";
     self = [super initWithCollectionViewLayout:layout];
     if (self) {
         // Custom initialization
-        [self.collectionView registerClass:[GameListViewCell class] forCellWithReuseIdentifier:CellIdentifier];
         self.title = @"Puzzles";
         g_InProgress = [[NSMutableSet alloc] init];
         path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0];
@@ -111,6 +110,7 @@ static NSString *CellIdentifier = @"Cell";
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self.collectionView registerClass:[GameListViewCell class] forCellWithReuseIdentifier:CellIdentifier];
 
     // Uncomment the following line to preserve selection between presentations.
     // self.clearsSelectionOnViewWillAppear = NO;

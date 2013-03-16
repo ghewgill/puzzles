@@ -8,9 +8,11 @@
 
 #import <UIKit/UIKit.h>
 
+#import "PSTCollectionView.h"
+
 #import "GameViewController.h"
 
-@interface GameListViewController : UICollectionViewController <GameViewControllerSaver>
+@interface GameListViewController : PSUICollectionViewController <GameViewControllerSaver>
 
 - (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress;
 
