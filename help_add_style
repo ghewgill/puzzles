@@ -1,0 +1,9 @@
+#!/bin/sh
+
+for fn in *.html; do
+    if ! `grep -q stylesheet $fn`; then
+        sed -i '' -e '/<\/head>/i\
+            <link rel="stylesheet" type="text/css" href="style.css">
+        ' $fn
+    fi
+done
