@@ -27,6 +27,16 @@ struct frontend {
 
 extern const struct drawing_api ios_drawing;
 
+// Game instances we will want to refer to
+extern const game filling;
+extern const game keen;
+extern const game map;
+extern const game net;
+extern const game solo;
+extern const game towers;
+extern const game undead;
+extern const game unequal;
+
 const int ButtonDown[3] = {LEFT_BUTTON,  RIGHT_BUTTON,  MIDDLE_BUTTON};
 const int ButtonDrag[3] = {LEFT_DRAG,    RIGHT_DRAG,    MIDDLE_DRAG};
 const int ButtonUp[3]   = {LEFT_RELEASE, RIGHT_RELEASE, MIDDLE_RELEASE};
@@ -164,14 +174,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             statusbar = nil;
         }
     }
-    extern const game filling;
-    extern const game keen;
-    extern const game solo;
-    extern const game towers;
-    extern const game undead;
-    extern const game unequal;
     if (ourgame == &filling
      || ourgame == &keen
+     || ourgame == &map
      || ourgame == &solo
      || ourgame == &towers
      || ourgame == &undead
@@ -179,7 +184,10 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         usable_height -= 40;
         int n = 9;
         const char *labels = "123456789";
-        if (ourgame == &undead) {
+        if (ourgame == &map) {
+            n = 1;
+            labels = "L";
+        } else if (ourgame == &undead) {
             n = 3;
             labels = "GVZ";
         }
@@ -286,7 +294,6 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 - (void)handleTouchTimer:(NSTimer *)timer
 {
     if (touchState == 1) {
-        extern const game net;
         if (ourgame == &net) {
             touchButton = 2; // middle button
         } else {
