@@ -174,6 +174,7 @@
 		371ADFA316F432CD00A529A2 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 371ADFA216F432CD00A529A2 /* QuartzCore.framework */; };
 		37DDFDB316F45C53007B6287 /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37DDFDB216F45C53007B6287 /* CoreText.framework */; };
 		37DDFDB516F58765007B6287 /* style.css in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDB416F58765007B6287 /* style.css */; };
+		37DDFDB716F5A879007B6287 /* help.html in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDB616F5A879007B6287 /* help.html */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -378,6 +379,7 @@
 		371ADFA216F432CD00A529A2 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		37DDFDB216F45C53007B6287 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 		37DDFDB416F58765007B6287 /* style.css */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.css; path = style.css; sourceTree = "<group>"; };
+		37DDFDB616F5A879007B6287 /* help.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = help.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -587,6 +589,7 @@
 		3701DD3B16F398EA00896D7D /* help */ = {
 			isa = PBXGroup;
 			children = (
+				37DDFDB616F5A879007B6287 /* help.html */,
 				37DDFDB416F58765007B6287 /* style.css */,
 				3701DD3C16F3997300896D7D /* blackbox.html */,
 				3701DD3D16F3997300896D7D /* bridges.html */,
@@ -801,6 +804,7 @@
 				3701DD8C16F3997400896D7D /* unruly.html in Resources */,
 				3701DD8D16F3997400896D7D /* untangle.html in Resources */,
 				37DDFDB516F58765007B6287 /* style.css in Resources */,
+				37DDFDB716F5A879007B6287 /* help.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

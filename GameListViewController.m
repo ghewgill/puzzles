@@ -162,7 +162,7 @@ static NSString *CellIdentifier = @"Cell";
 
 - (void)showHelp
 {
-    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:@"index.html"] animated:YES];
+    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:@"help.html"] animated:YES];
 }
 
 #pragma mark - Table view data source
