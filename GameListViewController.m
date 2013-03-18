@@ -47,6 +47,11 @@ static NSString *CellIdentifier = @"Cell";
             detail.font = [UIFont systemFontOfSize:14];
             detail.numberOfLines = 0;
             [self.contentView addSubview:detail];
+            
+            UIImageView *inprogress = [[UIImageView alloc] initWithFrame:CGRectMake(self.contentView.frame.size.width-50, 50, 40, 40)];
+            inprogress.tag = 4;
+            inprogress.image = [UIImage imageNamed:@"inprogress.png"];
+            [self.contentView addSubview:inprogress];
         } else {
             self.contentView.backgroundColor = [UIColor whiteColor];
             
@@ -64,6 +69,11 @@ static NSString *CellIdentifier = @"Cell";
             detail.font = [UIFont systemFontOfSize:14];
             detail.numberOfLines = 0;
             [self.contentView addSubview:detail];
+            
+            UIImageView *inprogress = [[UIImageView alloc] initWithFrame:CGRectMake(self.contentView.frame.size.width-40, 5, 40, 40)];
+            inprogress.tag = 4;
+            inprogress.image = [UIImage imageNamed:@"inprogress.png"];
+            [self.contentView addSubview:inprogress];
         }
     }
     return self;
@@ -193,6 +203,7 @@ static NSString *CellIdentifier = @"Cell";
     UILabel *label = (UILabel *)[cell viewWithTag:1];
     UIImageView *image = (UIImageView *)[cell viewWithTag:2];
     UILabel *detail = (UILabel *)[cell viewWithTag:3];
+    UIImageView *inprogress = (UIImageView *)[cell viewWithTag:4];
     
     // Configure the cell...
     NSString *name = [NSString stringWithUTF8String:gamelist[indexPath.row]->name];
@@ -203,9 +214,7 @@ static NSString *CellIdentifier = @"Cell";
         iconname = @"rect";
     }
     image.image = [UIImage imageNamed:[iconname stringByAppendingString:@"-96d24.png"]];
-    if ([g_InProgress containsObject:name]) {
-        //cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    }
+    inprogress.hidden = ![g_InProgress containsObject:name];
     
     return cell;
 }
