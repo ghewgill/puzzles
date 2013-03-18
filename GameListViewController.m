@@ -14,6 +14,8 @@
 #include "puzzles.h"
 #include "descriptions.h"
 
+//#define LAUNCH_IMAGE
+
 NSMutableSet *g_InProgress;
 
 static NSString *CellIdentifier = @"Cell";
@@ -117,7 +119,9 @@ static NSString *CellIdentifier = @"Cell";
  
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+#ifndef LAUNCH_IMAGE
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
+#endif
     
     NSString *lastgame = [[NSUserDefaults standardUserDefaults] stringForKey:@"lastgame"];
     if (lastgame) {
@@ -170,6 +174,9 @@ static NSString *CellIdentifier = @"Cell";
 - (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView
 {
     // Return the number of sections.
+#ifdef LAUNCH_IMAGE
+    return 0;
+#endif
     return 1;
 }
 
