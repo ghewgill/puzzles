@@ -53,7 +53,8 @@ const int NBUTTONS = 10;
     NSTimer *timer;
     UIButton *buttons[NBUTTONS];
     int touchState;
-    int touchX, touchY;
+    int touchXpoints, touchYpoints;
+    int touchXpixels, touchYpixels;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
@@ -241,8 +242,10 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     touchTimer = [NSTimer timerWithTimeInterval:0.5 target:self selector:@selector(handleTouchTimer:) userInfo:nil repeats:NO];
     [[NSRunLoop currentRunLoop] addTimer:touchTimer forMode:NSDefaultRunLoopMode];
     touchState = 1;
-    touchX = p.x * self.contentScaleFactor;
-    touchY = p.y * self.contentScaleFactor;
+    touchXpoints = p.x;
+    touchYpoints = p.y;
+    touchXpixels = p.x * self.contentScaleFactor;
+    touchYpixels = p.y * self.contentScaleFactor;
     touchButton = 0;
 }
 
@@ -252,18 +255,20 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     CGPoint p = [touch locationInView:self];
     p.x -= game_rect.origin.x;
     p.y -= game_rect.origin.y;
-    int x = min(game_rect.size.width-1, max(0, p.x)) * self.contentScaleFactor;
-    int y = min(game_rect.size.height-1, max(0, p.y)) * self.contentScaleFactor;
+    int xpoints = min(game_rect.size.width-1, max(0, p.x));
+    int ypoints = min(game_rect.size.height-1, max(0, p.y));
+    int xpixels = xpoints * self.contentScaleFactor;
+    int ypixels = ypoints * self.contentScaleFactor;
     if (touchState == 1) {
-        if (abs(x - touchX) >= 10 || abs(y - touchY) >= 10) {
+        if (abs(xpoints - touchXpoints) >= 10 || abs(ypoints - touchYpoints) >= 10) {
             [touchTimer invalidate];
             touchTimer = nil;
-            midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
+            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
             touchState = 2;
         }
     }
     if (touchState == 2) {
-        midend_process_key(me, x, y, ButtonDrag[touchButton]);
+        midend_process_key(me, xpixels, ypixels, ButtonDrag[touchButton]);
     }
 }
 
@@ -273,12 +278,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     CGPoint p = [touch locationInView:self];
     p.x -= game_rect.origin.x;
     p.y -= game_rect.origin.y;
-    int x = min(game_rect.size.width-1, max(0, p.x)) * self.contentScaleFactor;
-    int y = min(game_rect.size.height-1, max(0, p.y)) * self.contentScaleFactor;
+    int xpixels = min(game_rect.size.width-1, max(0, p.x)) * self.contentScaleFactor;
+    int ypixels = min(game_rect.size.height-1, max(0, p.y)) * self.contentScaleFactor;
     if (touchState == 1) {
-        midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
+        midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
     }
-    midend_process_key(me, x, y, ButtonUp[touchButton]);
+    midend_process_key(me, xpixels, ypixels, ButtonUp[touchButton]);
     touchState = 0;
     [touchTimer invalidate];
     touchTimer = nil;
@@ -299,7 +304,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         } else {
             touchButton = 1; // right button
         }
-        midend_process_key(me, touchX, touchY, ButtonDown[touchButton]);
+        midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
         touchState = 2;
         AudioServicesPlaySystemSound(0x450); // standard key click
     }
