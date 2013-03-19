@@ -411,15 +411,19 @@ static void ios_draw_text(void *handle, int x, int y, int fonttype,
 {
     frontend *fe = (frontend *)handle;
     GameView *gv = (__bridge GameView *)(fe->gv);
-    NSMutableAttributedString *as = [[NSMutableAttributedString alloc] initWithString:[NSString stringWithUTF8String:text]];
-    UIFont *font = [UIFont fontWithName:@"Helvetica" size:fontsize];
-    NSRange range = NSMakeRange(0, as.length);
-    [as addAttribute:NSFontAttributeName value:font range:range];
-    [as addAttribute:NSForegroundColorAttributeName value:(id)[UIColor colorWithRed:fe->colours[colour][0] green:fe->colours[colour][1] blue:fe->colours[colour][2] alpha:1].CGColor range:range];
-    CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)as);
+    CFStringRef str = CFStringCreateWithBytes(NULL, (UInt8 *)text, strlen(text), kCFStringEncodingUTF8, false);
+    CTFontRef font = CTFontCreateWithName(CFSTR("Helvetica"), fontsize, NULL);
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGFloat components[] = {fe->colours[colour][0], fe->colours[colour][1], fe->colours[colour][2], 1};
+    CGColorRef color = CGColorCreate(cs, components);
+    CFStringRef attr_keys[] = {kCTFontAttributeName, kCTForegroundColorAttributeName};
+    CFTypeRef attr_values[] = {font,                 color};
+    CFDictionaryRef attributes = CFDictionaryCreate(NULL, (const void **)attr_keys, (const void **)attr_values, sizeof(attr_keys)/sizeof(attr_keys[0]), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CFAttributedStringRef as = CFAttributedStringCreate(NULL, str, attributes);
+    CTLineRef line = CTLineCreateWithAttributedString(as);
     CGContextSetTextMatrix(gv.bitmap, CGAffineTransformMake(1, 0, 0, -1, 0, 0));
     CGRect bounds = CTLineGetImageBounds(line, gv.bitmap);
-    CGFloat width = CTLineGetOffsetForStringIndex(line, as.length, NULL);
+    CGFloat width = CTLineGetOffsetForStringIndex(line, CFAttributedStringGetLength(as), NULL);
     CGFloat tx = x;
     CGFloat ty = y;
     switch (align & (ALIGN_HLEFT|ALIGN_HCENTRE|ALIGN_HRIGHT)) {
@@ -442,6 +446,12 @@ static void ios_draw_text(void *handle, int x, int y, int fonttype,
     CGContextSetTextPosition(gv.bitmap, tx, ty);
     CTLineDraw(line, gv.bitmap);
     CFRelease(line);
+    CFRelease(as);
+    CFRelease(attributes);
+    CGColorRelease(color);
+    CGColorSpaceRelease(cs);
+    CFRelease(font);
+    CFRelease(str);
 }
 
 static void ios_draw_rect(void *handle, int x, int y, int w, int h, int colour)
