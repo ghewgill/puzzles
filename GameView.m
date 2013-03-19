@@ -335,6 +335,11 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     midend_timer(me, 0.02);
 }
 
+- (void)drawGameRect:(CGRect)rect
+{
+    [self setNeedsDisplayInRect:CGRectOffset(CGRectMake(rect.origin.x/self.contentScaleFactor, rect.origin.y/self.contentScaleFactor, rect.size.width/self.contentScaleFactor, rect.size.height/self.contentScaleFactor), game_rect.origin.x, game_rect.origin.y)];
+}
+
 - (void)doGameMenu
 {
     if (!gameMenu) {
@@ -510,7 +515,7 @@ static void ios_draw_update(void *handle, int x, int y, int w, int h)
 {
     frontend *fe = (frontend *)handle;
     GameView *gv = (__bridge GameView *)(fe->gv);
-    [gv setNeedsDisplay];
+    [gv drawGameRect:CGRectMake(x, y, w, h)];
 }
 
 static void ios_clip(void *handle, int x, int y, int w, int h)
