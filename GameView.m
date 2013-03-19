@@ -32,6 +32,7 @@ extern const game filling;
 extern const game keen;
 extern const game map;
 extern const game net;
+extern const game pattern;
 extern const game solo;
 extern const game towers;
 extern const game undead;
@@ -113,6 +114,9 @@ static int saveGameRead(void *ctx, void *buf, int len)
                 midend_new_game(me);
             }
         } else {
+            if (ourgame == &pattern && [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+                midend_game_id(me, "5");
+            }
             midend_new_game(me);
         }
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
