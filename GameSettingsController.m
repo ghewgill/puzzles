@@ -119,7 +119,7 @@
                 }
                 case C_CHOICES: {
                     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-                    UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, 11, 65, 31)];
+                    UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-200-roffset, 11, 165, 31)];
                     label.enabled = NO;
                     label.textAlignment = NSTextAlignmentRight;
                     label.text = choiceText[indexPath.row][config_items[indexPath.row].ival];
