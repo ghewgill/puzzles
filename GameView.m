@@ -436,7 +436,6 @@ static void ios_draw_text(void *handle, int x, int y, int fonttype,
     CFAttributedStringRef as = CFAttributedStringCreate(NULL, str, attributes);
     CTLineRef line = CTLineCreateWithAttributedString(as);
     CGContextSetTextMatrix(gv.bitmap, CGAffineTransformMake(1, 0, 0, -1, 0, 0));
-    CGRect bounds = CTLineGetImageBounds(line, gv.bitmap);
     CGFloat width = CTLineGetOffsetForStringIndex(line, CFAttributedStringGetLength(as), NULL);
     CGFloat tx = x;
     CGFloat ty = y;
@@ -454,7 +453,7 @@ static void ios_draw_text(void *handle, int x, int y, int fonttype,
         case ALIGN_VNORMAL:
             break;
         case ALIGN_VCENTRE:
-            ty += bounds.size.height / 2;
+            ty += fontsize * 0.4;
             break;
     }
     CGContextSetTextPosition(gv.bitmap, tx, ty);
