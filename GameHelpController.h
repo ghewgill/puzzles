@@ -8,7 +8,7 @@
 
 #import <UIKit/UIKit.h>
 
-@interface GameHelpController : UIViewController
+@interface GameHelpController : UIViewController <UIWebViewDelegate>
 
 - (id)initWithFile:(NSString *)file;
 
