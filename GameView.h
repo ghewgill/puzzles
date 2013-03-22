@@ -8,9 +8,11 @@
 
 #import <UIKit/UIKit.h>
 
+#import "GameSettingsController.h"
+
 #include "puzzles.h"
 
-@interface GameView : UIView
+@interface GameView : UIView <UIActionSheetDelegate, GameSettingsDelegate>
 
 - (id)initWithFrame:(CGRect)frame nc:(UINavigationController *)nc game:(const game *)g saved:(NSString *)saved inprogress:(BOOL)inprogress;
 - (NSString *)saveGameState_inprogress:(BOOL *)inprogress;

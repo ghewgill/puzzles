@@ -147,7 +147,7 @@
     } else {
         char *wintitle;
         config_item *config = midend_get_config(me, CFG_SETTINGS, &wintitle);
-        [self.navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+        [self.navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config type:CFG_SETTINGS title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
         free(wintitle);
     }
 }

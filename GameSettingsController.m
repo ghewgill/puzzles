@@ -16,17 +16,19 @@
 
 @implementation GameSettingsController {
     config_item *config_items;
+    int type;
     id<GameSettingsDelegate> delegate;
     int num;
     NSArray *choiceText;
 }
 
-- (id)initWithConfig:(config_item *)config title:(NSString *)t delegate:(id<GameSettingsDelegate>)d
+- (id)initWithConfig:(config_item *)config type:(int)typ title:(NSString *)t delegate:(id<GameSettingsDelegate>)d
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
         config_items = config;
+        type = typ;
         delegate = d;
         self.title = t;
         NSMutableArray *choices = [[NSMutableArray alloc] init];
@@ -88,6 +90,16 @@
     }
 }
 
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+{
+    if (type != CFG_SETTINGS) {
+        if (section == 0) {
+            return [NSString stringWithUTF8String:config_items[0].name];
+        }
+    }
+    return nil;
+}
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     static NSString *CellIdentifier = @"Cell";
@@ -99,34 +111,42 @@
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     switch (indexPath.section) {
         case 0:
-            cell.textLabel.text = [NSString stringWithUTF8String:config_items[indexPath.row].name];
-            switch (config_items[indexPath.row].type) {
-                case C_STRING: {
-                    UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, 12, 80, 31)];
-                    text.tag = indexPath.row;
-                    [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
-                    text.textAlignment = NSTextAlignmentRight;
-                    text.text = [NSString stringWithUTF8String:config_items[indexPath.row].sval];
-                    [cell addSubview:text];
-                    break;
+            if (type == CFG_SETTINGS) {
+                cell.textLabel.text = [NSString stringWithUTF8String:config_items[indexPath.row].name];
+                switch (config_items[indexPath.row].type) {
+                    case C_STRING: {
+                        UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, 12, 80, 31)];
+                        text.tag = indexPath.row;
+                        [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
+                        text.textAlignment = NSTextAlignmentRight;
+                        text.text = [NSString stringWithUTF8String:config_items[indexPath.row].sval];
+                        [cell addSubview:text];
+                        break;
+                    }
+                    case C_BOOLEAN: {
+                        UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(self.view.frame.size.width-95-roffset, 9, 80, 31)];
+                        sw.tag = indexPath.row;
+                        [sw addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventValueChanged];
+                        sw.on = config_items[indexPath.row].ival;
+                        [cell addSubview:sw];
+                        break;
+                    }
+                    case C_CHOICES: {
+                        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                        UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-200-roffset, 11, 165, 31)];
+                        label.enabled = NO;
+                        label.textAlignment = NSTextAlignmentRight;
+                        label.text = choiceText[indexPath.row][config_items[indexPath.row].ival];
+                        [cell addSubview:label];
+                        break;
+                    }
                 }
-                case C_BOOLEAN: {
-                    UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(self.view.frame.size.width-95-roffset, 9, 80, 31)];
-                    sw.tag = indexPath.row;
-                    [sw addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventValueChanged];
-                    sw.on = config_items[indexPath.row].ival;
-                    [cell addSubview:sw];
-                    break;
-                }
-                case C_CHOICES: {
-                    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-                    UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-200-roffset, 11, 165, 31)];
-                    label.enabled = NO;
-                    label.textAlignment = NSTextAlignmentRight;
-                    label.text = choiceText[indexPath.row][config_items[indexPath.row].ival];
-                    [cell addSubview:label];
-                    break;
-                }
+            } else {
+                UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(20+roffset, 12, self.view.frame.size.width-(20+roffset)*2, 31)];
+                text.tag = indexPath.row;
+                [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
+                text.text = [NSString stringWithUTF8String:config_items[indexPath.row].sval];
+                [cell addSubview:text];
             }
             break;
         case 1:

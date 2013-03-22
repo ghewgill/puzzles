@@ -59,7 +59,7 @@ const int NBUTTONS = 10;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
-    UIPopoverController *gameMenu;
+    UIActionSheet *gameMenu;
 }
 
 @synthesize bitmap;
@@ -154,12 +154,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     } else {
         toolbar = [[UIToolbar alloc] initWithFrame:r];
         NSArray *items = @[
-            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStylePlain target:self action:@selector(doGameMenu)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStyleBordered target:self action:@selector(doGameMenu)],
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemUndo target:self action:@selector(doUndo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRedo target:self action:@selector(doRedo)],
-            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRewind target:self action:@selector(doRestart)],
-            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFastForward target:self action:@selector(doSolve)],
-            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStylePlain target:self action:@selector(doType)],
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil],
+            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStyleBordered target:self action:@selector(doType)],
         ];
         [toolbar setItems:items];
         [self addSubview:toolbar];
@@ -351,43 +351,67 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doGameMenu
 {
-    if (!gameMenu) {
-        gameMenu = [[UIPopoverController alloc] initWithContentViewController:[[GameMenuController alloc] initWithGameView:self midend:me]];
+    if (gameMenu) {
+        [gameMenu dismissWithClickedButtonIndex:gameMenu.cancelButtonIndex animated:YES];
+        gameMenu = nil;
+        return;
     }
-    gameMenu.popoverContentSize = CGSizeMake(280, 250);
-    [gameMenu presentPopoverFromBarButtonItem:toolbar.items[0] permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
-    gameMenu.passthroughViews = @[];
+    gameMenu = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:@"New game" otherButtonTitles:@"Specific game", @"Specific Random Seed", @"Restart", @"Solve", nil];
+    // Avoid doing this because on the iPad, the popover will automatically add the toolbar to the list of passthrough
+    // views, causing unwanted effects if you click on other toolbar buttons before the popover dismisses.
+    // See http://stackoverflow.com/questions/5448987/ipads-uiactionsheet-showing-multiple-times
+    //[gameMenu showFromBarButtonItem:toolbar.items[0] animated:YES];
+    [gameMenu showFromRect:CGRectIntersection(toolbar.frame, CGRectMake(0, 0, 60, self.frame.size.height)) inView:self animated:YES];
+}
+
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    switch (buttonIndex) {
+        case 0: [self doNewGame]; break;
+        case 1: [self doSpecificGame]; break;
+        case 2: [self doSpecificSeed]; break;
+        case 3: [self doRestart]; break;
+        case 4: [self doSolve]; break;
+    }
+}
+
+- (void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex
+{
+    gameMenu = nil;
 }
 
 - (void)doNewGame
 {
-    [gameMenu dismissPopoverAnimated:YES];
     midend_new_game(me);
     [self layoutSubviews];
 }
 
-- (void)doSpecificGame:(NSString *)gameid
+- (void)doSpecificGame
 {
-    [gameMenu dismissPopoverAnimated:YES];
-    const char *msg = midend_game_id(me, (char *)[gameid cStringUsingEncoding:NSUTF8StringEncoding]);
+    char *wintitle;
+    config_item *config = midend_get_config(me, CFG_DESC, &wintitle);
+    [navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config type:CFG_DESC title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+    free(wintitle);
+}
+
+- (void)doSpecificSeed
+{
+    char *wintitle;
+    config_item *config = midend_get_config(me, CFG_SEED, &wintitle);
+    [navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config type:CFG_SEED title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+    free(wintitle);
+}
+
+- (void)didApply:(config_item *)config
+{
+    const char *msg = midend_game_id(me, config[0].sval);
     if (msg) {
         [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
         return;
     }
     midend_new_game(me);
     [self layoutSubviews];
-}
-
-- (void)doSpecificSeed:(NSString *)seed
-{
-    [gameMenu dismissPopoverAnimated:YES];
-    const char *msg = midend_game_id(me, (char *)[seed cStringUsingEncoding:NSUTF8StringEncoding]);
-    if (msg) {
-        [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
-        return;
-    }
-    midend_new_game(me);
-    [self layoutSubviews];
+    [navigationController popViewControllerAnimated:YES];
 }
 
 - (void)doUndo

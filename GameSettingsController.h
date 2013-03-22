@@ -20,6 +20,6 @@
 
 @interface GameSettingsController : UITableViewController <GameSettingsChoiceDelegate>
 
-- (id)initWithConfig:(config_item *)config title:(NSString *)title delegate:(id<GameSettingsDelegate>)delegate;
+- (id)initWithConfig:(config_item *)config type:(int)type title:(NSString *)title delegate:(id<GameSettingsDelegate>)delegate;
 
 @end
