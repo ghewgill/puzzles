@@ -8,11 +8,18 @@
 
 #import <UIKit/UIKit.h>
 
-#import "GameView.h"
+#import "GameSettingsChoiceController.h"
 
-@interface GameSettingsController : UITableViewController
+#include "puzzles.h"
 
-- (id)initWithMidend:(midend *)me gameview:(GameView *)gv;
-- (void)setChoice:(int)index value:(int)value;
+@protocol GameSettingsDelegate <NSObject>
+
+- (void)didApply:(config_item *)config;
+
+@end
+
+@interface GameSettingsController : UITableViewController <GameSettingsChoiceDelegate>
+
+- (id)initWithConfig:(config_item *)config title:(NSString *)title delegate:(id<GameSettingsDelegate>)delegate;
 
 @end

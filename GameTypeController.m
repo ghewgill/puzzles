@@ -8,8 +8,6 @@
 
 #import "GameTypeController.h"
 
-#import "GameSettingsController.h"
-
 @interface GameTypeController ()
 
 @end
@@ -147,7 +145,23 @@
         // bit of a hack here, gameview.nextResponder is actually the view controller we want
         [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
     } else {
-        [self.navigationController pushViewController:[[GameSettingsController alloc] initWithMidend:me gameview:gameview] animated:YES];
+        char *wintitle;
+        config_item *config = midend_get_config(me, CFG_SETTINGS, &wintitle);
+        [self.navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+        free(wintitle);
+    }
+}
+
+- (void)didApply:(config_item *)config
+{
+    char *msg = midend_set_config(me, CFG_SETTINGS, config);
+    if (msg) {
+        [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
+    } else {
+        midend_new_game(me);
+        [gameview layoutSubviews];
+        // bit of a hack here, gameview.nextResponder is actually the view controller we want
+        [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
     }
 }
 

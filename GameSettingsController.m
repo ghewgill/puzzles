@@ -15,24 +15,20 @@
 @end
 
 @implementation GameSettingsController {
-    midend *me;
-    GameView *gameview;
     config_item *config_items;
+    id<GameSettingsDelegate> delegate;
     int num;
     NSArray *choiceText;
 }
 
-- (id)initWithMidend:(midend *)m gameview:(GameView *)gv;
+- (id)initWithConfig:(config_item *)config title:(NSString *)t delegate:(id<GameSettingsDelegate>)d
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
-        me = m;
-        gameview = gv;
-        char *wintitle;
-        config_items = midend_get_config(me, CFG_SETTINGS, &wintitle);
-        self.title = [NSString stringWithUTF8String:wintitle];
-        free(wintitle);
+        config_items = config;
+        delegate = d;
+        self.title = t;
         NSMutableArray *choices = [[NSMutableArray alloc] init];
         num = 0;
         while (config_items[num].type != C_END) {
@@ -47,6 +43,11 @@
         choiceText = choices;
     }
     return self;
+}
+
+- (void)dealloc
+{
+    free_cfg(config_items);
 }
 
 - (void)viewDidLoad
@@ -215,23 +216,15 @@
      */
     if (indexPath.section == 0) {
         if (config_items[indexPath.row].type == C_CHOICES) {
-            [self.navigationController pushViewController:[[GameSettingsChoiceController alloc] initWithIndex:indexPath.row choices:choiceText[indexPath.row] value:config_items[indexPath.row].ival title:[NSString stringWithUTF8String:config_items[indexPath.row].name]] animated:YES];
+            [self.navigationController pushViewController:[[GameSettingsChoiceController alloc] initWithIndex:indexPath.row choices:choiceText[indexPath.row] value:config_items[indexPath.row].ival title:[NSString stringWithUTF8String:config_items[indexPath.row].name] delegate:self] animated:YES];
         }
     }
     if (indexPath.section == 1 && indexPath.row == 0) {
-        char *msg = midend_set_config(me, CFG_SETTINGS, config_items);
-        if (msg) {
-            [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
-        } else {
-            midend_new_game(me);
-            [gameview layoutSubviews];
-            // bit of a hack here, gameview.nextResponder is actually the view controller we want
-            [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
-        }
+        [delegate didApply:config_items];
     }
 }
 
-- (void)setChoice:(int)index value:(int)value
+- (void)didSelectChoice:(int)index value:(int)value
 {
     config_items[index].ival = value;
     [self.tableView reloadData];

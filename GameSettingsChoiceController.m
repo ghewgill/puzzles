@@ -8,8 +8,6 @@
 
 #import "GameSettingsChoiceController.h"
 
-#import "GameSettingsController.h"
-
 @interface GameSettingsChoiceController ()
 
 @end
@@ -17,16 +15,18 @@
 @implementation GameSettingsChoiceController {
     int index;
     NSArray *choices;
+    id<GameSettingsChoiceDelegate> delegate;
     int value;
 }
 
-- (id)initWithIndex:(int)ind choices:(NSArray *)ch value:(int)val title:(NSString *)title;
+- (id)initWithIndex:(int)ind choices:(NSArray *)ch value:(int)val title:(NSString *)title delegate:(id<GameSettingsChoiceDelegate>)d
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
         index = ind;
         choices = ch;
+        delegate = d;
         value = val;
         self.title = title;
     }
@@ -129,7 +129,7 @@
      // Pass the selected object to the new view controller.
      [self.navigationController pushViewController:detailViewController animated:YES];
      */
-    [(GameSettingsController *)self.navigationController.viewControllers[self.navigationController.viewControllers.count-2] setChoice:index value:indexPath.row];
+    [delegate didSelectChoice:index value:indexPath.row];
     [self.navigationController popViewControllerAnimated:YES];
 }
 

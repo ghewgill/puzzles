@@ -8,9 +8,10 @@
 
 #import <UIKit/UIKit.h>
 
+#import "GameSettingsController.h"
 #import "GameView.h"
 
-@interface GameTypeController : UITableViewController
+@interface GameTypeController : UITableViewController <GameSettingsDelegate>
 
 - (id)initWithMidend:(midend *)me gameview:(GameView *)gv;
 
