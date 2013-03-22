@@ -94,7 +94,7 @@ static NSString *CellIdentifier = @"Cell";
 {
     PSUICollectionViewFlowLayout *layout = [[PSUICollectionViewFlowLayout alloc] init];
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
-        layout.itemSize = CGSizeMake(220, 31+96+50);
+        layout.itemSize = CGSizeMake(246, 31+96+50);
     } else {
         layout.itemSize = CGSizeMake(320, 100);
     }
