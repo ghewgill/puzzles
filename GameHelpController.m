@@ -8,6 +8,8 @@
 
 #import "GameHelpController.h"
 
+#include "puzzles.h"
+
 @interface GameHelpController ()
 
 @end
@@ -59,6 +61,10 @@
 {
     backButton.enabled = webview.canGoBack;
     forwardButton.enabled = webview.canGoForward;
+    if ([webView.request.URL.scheme isEqualToString:@"file"] && [webView.request.URL.lastPathComponent isEqualToString:@"help.html"]) {
+        [webView stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.getElementById('version').innerHTML = '%@';", [NSBundle mainBundle].infoDictionary[@"CFBundleVersion"]]];
+        [webView stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.getElementById('orig_version').innerHTML = '%s';", ver]];
+    }
 }
 
 @end
