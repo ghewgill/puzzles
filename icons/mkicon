@@ -1,0 +1,38 @@
+#!/bin/sh
+
+dosize() {
+    size=$1
+    fname=$2
+    hsize=`echo $size 2/p|dc`
+    sigma=`echo $size 50/5+p|dc`
+
+    convert -geometry ${size}x${size} magnets-ibase.png icon00.png
+    convert -size ${size}x${size} xc:black -fill white -draw "rectangle 0,0 ${hsize},${hsize}" -blur 0x${sigma} -alpha copy mask00.png
+    convert icon00.png mask00.png -alpha Off -compose CopyOpacity -composite icon00.png
+
+    convert -geometry ${size}x${size} net-ibase.png icon01.png
+    convert -size ${size}x${size} xc:black -fill white -draw "rectangle ${hsize},0 ${size},${hsize}" -blur 0x${sigma} -alpha copy mask01.png
+    convert icon01.png mask01.png -alpha Off -compose CopyOpacity -composite icon01.png
+
+    convert -geometry ${size}x${size} lightup-ibase.png icon10.png
+    convert -size ${size}x${size} xc:black -fill white -draw "rectangle 0,${hsize} ${hsize},${size}" -blur 0x${sigma} -alpha copy mask10.png
+    convert icon10.png mask10.png -alpha Off -compose CopyOpacity -composite icon10.png
+
+    convert -geometry ${size}x${size} undead-ibase.png icon11.png
+    convert -size ${size}x${size} xc:black -fill white -draw "rectangle ${hsize},${hsize} ${size},${size}" -blur 0x${sigma} -alpha copy mask11.png
+    convert icon11.png mask11.png -alpha Off -compose CopyOpacity -composite icon11.png
+
+    composite icon00.png icon01.png tmp.png
+    composite tmp.png icon10.png tmp.png
+    composite tmp.png icon11.png tmp.png
+
+    cp tmp.png ../$fname
+}
+
+dosize 1024 iTunesArtwork.png
+dosize 144  Icon-72@2x.png
+dosize 72   Icon-72.png
+dosize 114  Icon@2x.png
+dosize 57   Icon.png
+
+open Icon*.png
