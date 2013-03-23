@@ -253,6 +253,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     bitmap = CGBitmapContextCreate(NULL, w, h, 8, w*4, cs, kCGImageAlphaNoneSkipLast);
     CGColorSpaceRelease(cs);
     midend_force_redraw(me);
+    [self setNeedsDisplay];
 }
 
 - (void)drawRect:(CGRect)rect
