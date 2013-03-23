@@ -52,7 +52,7 @@ const int NBUTTONS = 10;
     CGRect usable_frame;
     CGRect game_rect;
     NSTimer *timer;
-    UIButton *buttons[NBUTTONS];
+    UIToolbar *game_toolbar;
     int touchState;
     int touchXpoints, touchYpoints;
     int touchXpixels, touchYpixels;
@@ -162,6 +162,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStyleBordered target:self action:@selector(doType)],
         ];
         [toolbar setItems:items];
+        toolbar.barStyle = UIBarStyleBlack;
         [self addSubview:toolbar];
     }
     if (midend_wants_statusbar(me)) {
@@ -186,35 +187,60 @@ static void saveGameWrite(void *ctx, void *buf, int len)
      || ourgame == &towers
      || ourgame == &undead
      || ourgame == &unequal) {
-        usable_height -= 40;
+        usable_height -= 44;
         int n = 9;
-        const char *labels = "123456789";
-        if (ourgame == &map) {
+        const char **labels = NULL;
+        if (ourgame == &keen) {
+            n = atoi(midend_get_game_id(me));
+        } else if (ourgame == &map) {
+            static const char *MapLabels[] = {"Labels"};
             n = 1;
-            labels = "L";
+            labels = MapLabels;
+        } else if (ourgame == &solo) {
+            const char *game_id = midend_get_game_id(me);
+            int x, y;
+            if (sscanf(game_id, "%dx%d", &x, &y) == 2) {
+                n = x * y;
+            }
+        } else if (ourgame == &towers) {
+            n = atoi(midend_get_game_id(me));
         } else if (ourgame == &undead) {
+            static const char *UndeadLabels[] = {"Ghost", "Vampire", "Zombie"};
             n = 3;
-            labels = "GVZ";
+            labels = UndeadLabels;
+        } else if (ourgame == &unequal) {
+            n = atoi(midend_get_game_id(me));
         }
+        CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 44);
+        if (game_toolbar == nil) {
+            game_toolbar = [[UIToolbar alloc] initWithFrame:r];
+        } else {
+            game_toolbar.frame = r;
+        }
+        UIBarButtonItemStyle style = ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone && n > 9) ? UIBarButtonItemStylePlain : UIBarButtonItemStyleBordered;
+        NSMutableArray *items = [[NSMutableArray alloc] init];
+        [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
+        [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         for (int i = 0; i < n; i++) {
-            CGRect r = CGRectMake(35*i, usable_height, 30, 40);
-            if (buttons[i]) {
-                [buttons[i] setFrame:r];
+            NSString *title = NULL;
+            if (labels) {
+                title = [NSString stringWithUTF8String:labels[i]];
             } else {
-                buttons[i] = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-                [buttons[i] addTarget:self action:@selector(keyButton:) forControlEvents:UIControlEventTouchUpInside];
-                [buttons[i] setFrame:r];
-                [self addSubview:buttons[i]];
-                [buttons[i] setTitle:[NSString stringWithFormat:@"%c", labels[i]] forState:UIControlStateNormal];
+                if (i < 9) {
+                    title = [NSString stringWithFormat:@"%d", 1+i];
+                } else {
+                    title = [NSString stringWithFormat:@"%c", 'a'+(i-9)];
+                }
             }
+            [items addObject:[[UIBarButtonItem alloc] initWithTitle:title style:style target:self action:@selector(keyButton:)]];
+            [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         }
+        [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
+        game_toolbar.items = items;
+        [self addSubview:game_toolbar];
     } else {
-        for (int i = 0; i < NBUTTONS; i++) {
-            if (buttons[i]) {
-                [buttons[i] removeFromSuperview];
-                buttons[i] = nil;
-            }
-        }
+        [game_toolbar removeFromSuperview];
+        game_toolbar = nil;
     }
     usable_frame = CGRectMake(0, 0, self.frame.size.width, usable_height);
     int fw = self.frame.size.width * self.contentScaleFactor;
@@ -314,14 +340,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     }
 }
 
-- (void)keyButton:(UIButton *)sender
+- (void)keyButton:(UIBarButtonItem *)sender
 {
-    for (int i = 0; i < NBUTTONS; i++) {
-        if (sender == buttons[i]) {
-            midend_process_key(me, -1, -1, [sender.currentTitle characterAtIndex:0]);
-            break;
-        }
-    }
+    midend_process_key(me, -1, -1, [sender.title characterAtIndex:0]);
 }
 
 - (void)activateTimer
