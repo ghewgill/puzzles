@@ -11,6 +11,8 @@ WEB = $(patsubst %,%-web.png,$(PUZZLES))
 
 IBASE = $(patsubst %,%-ibase.png,$(PUZZLES))
 IBASE4 = $(patsubst %,%-ibase4.png,$(PUZZLES))
+P192D24 = $(patsubst %,%-96d24@2x.png,$(PUZZLES))
+P96D24 = $(patsubst %,%-96d24.png,$(PUZZLES))
 P48D24 = $(patsubst %,%-48d24.png,$(PUZZLES))
 P48D8 = $(patsubst %,%-48d8.png,$(PUZZLES))
 P48D4 = $(patsubst %,%-48d4.png,$(PUZZLES))
@@ -29,7 +31,7 @@ PIC = ./
 
 base: $(BASE)
 web: $(WEB)
-pngicons: $(P48D24) $(P32D24) $(P16D24)
+pngicons: $(P192D24) $(P96D24) $(P48D24) $(P32D24) $(P16D24)
 winicons: $(ICONS) $(RC)
 gtkicons: $(CICONS)
 all: base web pngicons winicons gtkicons
@@ -95,6 +97,10 @@ $(IBASE4): %-ibase4.png: %-ibase.png
 	convert -colors 16 +dither -map $(PIC)win16pal.xpm $^ $@
 
 # Build the 24-bit PNGs for the icons, at three sizes.
+$(P192D24): %-96d24@2x.png: %-ibase.png
+	$(PIC)square.pl 192 4 $^ $@
+$(P96D24): %-96d24.png: %-ibase.png
+	$(PIC)square.pl 96 4 $^ $@
 $(P48D24): %-48d24.png: %-ibase.png
 	$(PIC)square.pl 48 4 $^ $@
 $(P32D24): %-32d24.png: %-ibase.png
