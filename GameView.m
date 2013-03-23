@@ -59,7 +59,6 @@ const int NBUTTONS = 10;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
-    UIActionSheet *gameMenu;
 }
 
 @synthesize bitmap;
@@ -373,12 +372,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doGameMenu
 {
-    if (gameMenu) {
-        [gameMenu dismissWithClickedButtonIndex:gameMenu.cancelButtonIndex animated:YES];
-        gameMenu = nil;
-        return;
-    }
-    gameMenu = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:@"New game" otherButtonTitles:@"Specific game", @"Specific Random Seed", @"Restart", @"Solve", nil];
+    UIActionSheet *gameMenu = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:@"New game" otherButtonTitles:@"Specific game", @"Specific Random Seed", @"Restart", @"Solve", nil];
     // Avoid doing this because on the iPad, the popover will automatically add the toolbar to the list of passthrough
     // views, causing unwanted effects if you click on other toolbar buttons before the popover dismisses.
     // See http://stackoverflow.com/questions/5448987/ipads-uiactionsheet-showing-multiple-times
@@ -395,11 +389,6 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         case 3: [self doRestart]; break;
         case 4: [self doSolve]; break;
     }
-}
-
-- (void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex
-{
-    gameMenu = nil;
 }
 
 - (void)doNewGame
