@@ -1,30 +1,22 @@
-#!/bin/sh
+#!/bin/sh -e
 
 dosize() {
     size=$1
     fname=$2
-    hsize=`echo $size 2/p|dc`
-    sigma=`echo $size 50/5+p|dc`
+    hsize=`echo $size 63*128/p|dc`
+    hoffset=`echo $size $hsize -p|dc`
 
-    convert -geometry ${size}x${size} magnets-ibase.png icon00.png
-    convert -size ${size}x${size} xc:black -fill white -draw "rectangle 0,0 ${hsize},${hsize}" -blur 0x${sigma} -alpha copy mask00.png
-    convert icon00.png mask00.png -alpha Off -compose CopyOpacity -composite icon00.png
+    convert -size ${size}x${size} xc:black tmp.png
 
-    convert -geometry ${size}x${size} net-ibase.png icon01.png
-    convert -size ${size}x${size} xc:black -fill white -draw "rectangle ${hsize},0 ${size},${hsize}" -blur 0x${sigma} -alpha copy mask01.png
-    convert icon01.png mask01.png -alpha Off -compose CopyOpacity -composite icon01.png
+    convert magnets-base.png -crop 68x68+34+98 -resize ${hsize}x${hsize} icon00.png
+    convert net-base.png -crop 62x62+80+80 -resize ${hsize}x${hsize} icon01.png
+    convert lightup-base.png -crop 64x64+176+144 -resize ${hsize}x${hsize} icon10.png
+    convert undead-base.png -crop 128x128+97+160 -resize ${hsize}x${hsize} icon11.png
 
-    convert -geometry ${size}x${size} lightup-ibase.png icon10.png
-    convert -size ${size}x${size} xc:black -fill white -draw "rectangle 0,${hsize} ${hsize},${size}" -blur 0x${sigma} -alpha copy mask10.png
-    convert icon10.png mask10.png -alpha Off -compose CopyOpacity -composite icon10.png
-
-    convert -geometry ${size}x${size} undead-ibase.png icon11.png
-    convert -size ${size}x${size} xc:black -fill white -draw "rectangle ${hsize},${hsize} ${size},${size}" -blur 0x${sigma} -alpha copy mask11.png
-    convert icon11.png mask11.png -alpha Off -compose CopyOpacity -composite icon11.png
-
-    composite icon00.png icon01.png tmp.png
-    composite tmp.png icon10.png tmp.png
-    composite tmp.png icon11.png tmp.png
+    composite -geometry +0+0 icon00.png tmp.png tmp.png
+    composite -geometry +${hoffset}+0 icon01.png tmp.png tmp.png
+    composite -geometry +0+${hoffset} icon10.png tmp.png tmp.png
+    composite -geometry +${hoffset}+${hoffset} icon11.png tmp.png tmp.png
 
     cp tmp.png ../$fname
 }
@@ -35,4 +27,4 @@ dosize 72   Icon-72.png
 dosize 114  Icon@2x.png
 dosize 57   Icon.png
 
-open Icon*.png
+open ../Icon*.png
