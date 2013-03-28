@@ -182,33 +182,54 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     if (ourgame == &filling
      || ourgame == &keen
      || ourgame == &map
+     || ourgame == &net
      || ourgame == &solo
      || ourgame == &towers
      || ourgame == &undead
      || ourgame == &unequal) {
         usable_height -= 44;
-        int n = 9;
+        int main_button_count = 9;
+        int extra_button_count = 0;
         const char **labels = NULL;
-        if (ourgame == &keen) {
-            n = atoi(midend_get_game_id(me));
+        const char **extra_labels = NULL;
+        if (ourgame == &filling) {
+            static const char *FillingLabels[] = {"0"};
+            extra_labels = FillingLabels;
+            extra_button_count = 1;
+        } else if (ourgame == &keen) {
+            static const char *KeenLabels[] = {"Marks"};
+            main_button_count = atoi(midend_get_game_id(me));
+            extra_labels = KeenLabels;
+            extra_button_count = 1;
         } else if (ourgame == &map) {
             static const char *MapLabels[] = {"Labels"};
-            n = 1;
+            main_button_count = 1;
             labels = MapLabels;
+        } else if (ourgame == &net) {
+            static const char *NetLabels[] = {"Jumble"};
+            main_button_count = 0;
+            extra_labels = NetLabels;
+            extra_button_count = 1;
         } else if (ourgame == &solo) {
             const char *game_id = midend_get_game_id(me);
             int x, y;
             if (sscanf(game_id, "%dx%d", &x, &y) == 2) {
-                n = x * y;
+                main_button_count = x * y;
             }
         } else if (ourgame == &towers) {
-            n = atoi(midend_get_game_id(me));
+            static const char *TowersLabels[] = {"Marks"};
+            main_button_count = atoi(midend_get_game_id(me));
+            extra_labels = TowersLabels;
+            extra_button_count = 1;
         } else if (ourgame == &undead) {
             static const char *UndeadLabels[] = {"Ghost", "Vampire", "Zombie"};
-            n = 3;
+            main_button_count = 3;
             labels = UndeadLabels;
         } else if (ourgame == &unequal) {
-            n = atoi(midend_get_game_id(me));
+            static const char *UnequalLabels[] = {"Marks", "Hints"};
+            main_button_count = atoi(midend_get_game_id(me));
+            extra_labels = UnequalLabels;
+            extra_button_count = 2;
         }
         CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 44);
         if (game_toolbar == nil) {
@@ -216,20 +237,24 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         } else {
             game_toolbar.frame = r;
         }
-        UIBarButtonItemStyle style = ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone && n > 9) ? UIBarButtonItemStylePlain : UIBarButtonItemStyleBordered;
+        UIBarButtonItemStyle style = ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone && (main_button_count + extra_button_count) > 9) ? UIBarButtonItemStylePlain : UIBarButtonItemStyleBordered;
         NSMutableArray *items = [[NSMutableArray alloc] init];
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < main_button_count + extra_button_count; i++) {
             NSString *title = NULL;
-            if (labels) {
-                title = [NSString stringWithUTF8String:labels[i]];
-            } else {
-                if (i < 9) {
-                    title = [NSString stringWithFormat:@"%d", 1+i];
+            if (i < main_button_count) {
+                if (labels) {
+                    title = [NSString stringWithUTF8String:labels[i]];
                 } else {
-                    title = [NSString stringWithFormat:@"%c", 'a'+(i-9)];
+                    if (i < 9) {
+                        title = [NSString stringWithFormat:@"%d", 1+i];
+                    } else {
+                        title = [NSString stringWithFormat:@"%c", 'a'+(i-9)];
+                    }
                 }
+            } else {
+                title = [NSString stringWithUTF8String:extra_labels[i - main_button_count]];
             }
             [items addObject:[[UIBarButtonItem alloc] initWithTitle:title style:style target:self action:@selector(keyButton:)]];
             [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
