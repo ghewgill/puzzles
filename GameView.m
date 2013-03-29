@@ -59,10 +59,21 @@ const int NBUTTONS = 10;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
+    NSMutableDictionary *buttons;
 }
 
 @synthesize bitmap;
 @synthesize statusbar;
+
+- (BOOL)net_centre_mode
+{
+    return ourgame == &net && ((UIBarButtonItem *)buttons[@"Centre"]).style == UIBarButtonItemStyleDone;
+}
+
+- (BOOL)net_shift_mode
+{
+    return ourgame == &net && ((UIBarButtonItem *)buttons[@"Shift"]).style == UIBarButtonItemStyleDone;
+}
 
 struct StringReadContext {
     void *save;
@@ -120,6 +131,7 @@ static int saveGameRead(void *ctx, void *buf, int len)
         }
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
         self.backgroundColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:1];
+        buttons = [[NSMutableDictionary alloc] init];
     }
     return self;
 }
@@ -179,6 +191,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             statusbar = nil;
         }
     }
+    [buttons removeAllObjects];
     if (ourgame == &filling
      || ourgame == &keen
      || ourgame == &map
@@ -206,10 +219,14 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             main_button_count = 1;
             labels = MapLabels;
         } else if (ourgame == &net) {
-            static const char *NetLabels[] = {"Jumble"};
+            static const char *NetLabels[] = {"Jumble", "Centre", "Shift"};
             main_button_count = 0;
             extra_labels = NetLabels;
-            extra_button_count = 1;
+            extra_button_count = 2;
+            // Shift only applies to wrapping games
+            if (strstr(midend_get_game_id(me), "w:")) {
+                extra_button_count = 3;
+            }
         } else if (ourgame == &solo) {
             const char *game_id = midend_get_game_id(me);
             int x, y;
@@ -256,7 +273,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             } else {
                 title = [NSString stringWithUTF8String:extra_labels[i - main_button_count]];
             }
-            [items addObject:[[UIBarButtonItem alloc] initWithTitle:title style:style target:self action:@selector(keyButton:)]];
+            UIBarButtonItem *button = [[UIBarButtonItem alloc] initWithTitle:title style:style target:self action:@selector(keyButton:)];
+            [items addObject:button];
+            buttons[title] = button;
             [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         }
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
@@ -302,6 +321,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     touchXpixels = p.x * self.contentScaleFactor;
     touchYpixels = p.y * self.contentScaleFactor;
     touchButton = 0;
+    if (self.net_centre_mode) {
+        midend_process_key(me, touchXpixels, touchYpixels, 0x03);
+    }
 }
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
@@ -314,16 +336,38 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     int ypoints = min(game_rect.size.height-1, max(0, p.y));
     int xpixels = xpoints * self.contentScaleFactor;
     int ypixels = ypoints * self.contentScaleFactor;
-    if (touchState == 1) {
-        if (abs(xpoints - touchXpoints) >= 10 || abs(ypoints - touchYpoints) >= 10) {
-            [touchTimer invalidate];
-            touchTimer = nil;
-            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
-            touchState = 2;
+    if (self.net_centre_mode) {
+        midend_process_key(me, xpixels, ypixels, 0x03);
+    } else if (self.net_shift_mode) {
+        int tilesize = midend_tilesize(me);
+        while (touchXpixels <= xpixels - tilesize) {
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_LEFT);
+            touchXpixels += tilesize;
         }
-    }
-    if (touchState == 2) {
-        midend_process_key(me, xpixels, ypixels, ButtonDrag[touchButton]);
+        while (touchXpixels >= xpixels + tilesize) {
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_RIGHT);
+            touchXpixels -= tilesize;
+        }
+        while (touchYpixels <= ypixels - tilesize) {
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_UP);
+            touchYpixels += tilesize;
+        }
+        while (touchYpixels >= ypixels + tilesize) {
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_DOWN);
+            touchYpixels -= tilesize;
+        }
+    } else {
+        if (touchState == 1) {
+            if (abs(xpoints - touchXpoints) >= 10 || abs(ypoints - touchYpoints) >= 10) {
+                [touchTimer invalidate];
+                touchTimer = nil;
+                midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+                touchState = 2;
+            }
+        }
+        if (touchState == 2) {
+            midend_process_key(me, xpixels, ypixels, ButtonDrag[touchButton]);
+        }
     }
 }
 
@@ -333,12 +377,18 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     CGPoint p = [touch locationInView:self];
     p.x -= game_rect.origin.x;
     p.y -= game_rect.origin.y;
-    int xpixels = min(game_rect.size.width-1, max(0, p.x)) * self.contentScaleFactor;
-    int ypixels = min(game_rect.size.height-1, max(0, p.y)) * self.contentScaleFactor;
-    if (touchState == 1) {
-        midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+    int xpoints = min(game_rect.size.width-1, max(0, p.x));
+    int ypoints = min(game_rect.size.height-1, max(0, p.y));
+    int xpixels = xpoints * self.contentScaleFactor;
+    int ypixels = ypoints * self.contentScaleFactor;
+    if (self.net_centre_mode || self.net_shift_mode) {
+        // nothing
+    } else {
+        if (touchState == 1) {
+            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+        }
+        midend_process_key(me, xpixels, ypixels, ButtonUp[touchButton]);
     }
-    midend_process_key(me, xpixels, ypixels, ButtonUp[touchButton]);
     touchState = 0;
     [touchTimer invalidate];
     touchTimer = nil;
@@ -353,20 +403,44 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)handleTouchTimer:(NSTimer *)timer
 {
-    if (touchState == 1) {
-        if (ourgame == &net) {
-            touchButton = 2; // middle button
-        } else {
-            touchButton = 1; // right button
+    if (self.net_centre_mode || self.net_shift_mode) {
+        // nothing
+    } else {
+        if (touchState == 1) {
+            if (ourgame == &net) {
+                touchButton = 2; // middle button
+            } else {
+                touchButton = 1; // right button
+            }
+            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+            touchState = 2;
+            AudioServicesPlaySystemSound(0x450); // standard key click
         }
-        midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
-        touchState = 2;
-        AudioServicesPlaySystemSound(0x450); // standard key click
     }
 }
 
 - (void)keyButton:(UIBarButtonItem *)sender
 {
+    if (ourgame == &net) {
+        if (sender == buttons[@"Centre"]) {
+            if (self.net_centre_mode) {
+                sender.style = UIBarButtonItemStyleBordered;
+            } else {
+                sender.style = UIBarButtonItemStyleDone;
+                ((UIBarButtonItem *)buttons[@"Shift"]).style = UIBarButtonItemStyleBordered;
+            }
+            return;
+        }
+        if (sender == buttons[@"Shift"]) {
+            if (self.net_shift_mode) {
+                sender.style = UIBarButtonItemStyleBordered;
+            } else {
+                sender.style = UIBarButtonItemStyleDone;
+                ((UIBarButtonItem *)buttons[@"Centre"]).style = UIBarButtonItemStyleBordered;
+            }
+            return;
+        }
+    }
     midend_process_key(me, -1, -1, [sender.title characterAtIndex:0]);
 }
 

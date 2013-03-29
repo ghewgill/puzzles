@@ -1929,7 +1929,8 @@ static char *interpret_move(game_state *state, game_ui *ui,
     int shift = button & MOD_SHFT, ctrl = button & MOD_CTRL;
     enum {
         NONE, ROTATE_LEFT, ROTATE_180, ROTATE_RIGHT, TOGGLE_LOCK, JUMBLE,
-        MOVE_ORIGIN, MOVE_SOURCE, MOVE_ORIGIN_AND_SOURCE, MOVE_CURSOR
+        MOVE_ORIGIN, MOVE_SOURCE, MOVE_ORIGIN_AND_SOURCE, MOVE_CURSOR,
+        SET_SOURCE
     } action;
 
     button &= ~MOD_MASK;
@@ -2105,6 +2106,8 @@ static char *interpret_move(game_state *state, game_ui *ui,
     } else if (button == 'j' || button == 'J') {
 	/* XXX should we have some mouse control for this? */
 	action = JUMBLE;
+    } else if (button == 0x03) {
+        action = SET_SOURCE;
     } else
 	return nullret;
 
@@ -2188,6 +2191,24 @@ static char *interpret_move(game_state *state, game_ui *ui,
             OFFSET(ui->cur_x, ui->cur_y, ui->cur_x, ui->cur_y, dir, state);
             ui->cur_visible = TRUE;
         }
+        return "";
+    } else if (action == SET_SOURCE) {
+	x -= WINDOW_OFFSET + TILE_BORDER;
+	y -= WINDOW_OFFSET + TILE_BORDER;
+	if (x < 0 || y < 0)
+	    return nullret;
+	tx = x / TILE_SIZE;
+	ty = y / TILE_SIZE;
+	if (tx >= state->width || ty >= state->height)
+	    return nullret;
+        /* Transform from physical to game coords */
+        tx = (tx + ui->org_x) % state->width;
+        ty = (ty + ui->org_y) % state->height;
+	if (x % TILE_SIZE >= TILE_SIZE - TILE_BORDER ||
+	    y % TILE_SIZE >= TILE_SIZE - TILE_BORDER)
+	    return nullret;
+        ui->cx = tx;
+        ui->cy = ty;
         return "";
     } else {
 	return NULL;
