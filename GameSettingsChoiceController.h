@@ -8,6 +8,8 @@
 
 #import <UIKit/UIKit.h>
 
+#include "puzzles.h"
+
 @protocol GameSettingsChoiceDelegate <NSObject>
 
 - (void)didSelectChoice:(int)index value:(int)value;
@@ -16,6 +18,6 @@
 
 @interface GameSettingsChoiceController : UITableViewController
 
-- (id)initWithIndex:(int)index choices:(NSArray *)choices value:(int)value title:(NSString *)title delegate:(id<GameSettingsChoiceDelegate>)delegate;
+- (id)initWithGame:(const game *)game index:(int)index choices:(NSArray *)choices value:(int)value title:(NSString *)title delegate:(id<GameSettingsChoiceDelegate>)delegate;
 
 @end

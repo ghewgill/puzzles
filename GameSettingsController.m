@@ -8,6 +8,7 @@
 
 #import "GameSettingsController.h"
 
+#import "GameHelpController.h"
 #import "GameSettingsChoiceController.h"
 
 @interface GameSettingsController ()
@@ -15,6 +16,7 @@
 @end
 
 @implementation GameSettingsController {
+    const game *thegame;
     config_item *config_items;
     int type;
     id<GameSettingsDelegate> delegate;
@@ -22,11 +24,12 @@
     NSArray *choiceText;
 }
 
-- (id)initWithConfig:(config_item *)config type:(int)typ title:(NSString *)t delegate:(id<GameSettingsDelegate>)d
+- (id)initWithGame:(const game *)game config:(config_item *)config type:(int)typ title:(NSString *)t delegate:(id<GameSettingsDelegate>)d
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
+        thegame = game;
         config_items = config;
         type = typ;
         delegate = d;
@@ -61,6 +64,8 @@
  
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
 }
 
 - (void)didReceiveMemoryWarning
@@ -223,6 +228,11 @@
     }
 }
 
+- (void)showHelp
+{
+    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:[NSString stringWithFormat:@"%s.html", thegame->htmlhelp_topic]] animated:YES];
+}
+
 #pragma mark - Table view delegate
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
@@ -236,7 +246,7 @@
      */
     if (indexPath.section == 0) {
         if (config_items[indexPath.row].type == C_CHOICES) {
-            [self.navigationController pushViewController:[[GameSettingsChoiceController alloc] initWithIndex:indexPath.row choices:choiceText[indexPath.row] value:config_items[indexPath.row].ival title:[NSString stringWithUTF8String:config_items[indexPath.row].name] delegate:self] animated:YES];
+            [self.navigationController pushViewController:[[GameSettingsChoiceController alloc] initWithGame:thegame index:indexPath.row choices:choiceText[indexPath.row] value:config_items[indexPath.row].ival title:[NSString stringWithUTF8String:config_items[indexPath.row].name] delegate:self] animated:YES];
         }
     }
     if (indexPath.section == 1 && indexPath.row == 0) {

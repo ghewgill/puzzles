@@ -8,22 +8,26 @@
 
 #import "GameSettingsChoiceController.h"
 
+#import "GameHelpController.h"
+
 @interface GameSettingsChoiceController ()
 
 @end
 
 @implementation GameSettingsChoiceController {
+    const game *thegame;
     int index;
     NSArray *choices;
     id<GameSettingsChoiceDelegate> delegate;
     int value;
 }
 
-- (id)initWithIndex:(int)ind choices:(NSArray *)ch value:(int)val title:(NSString *)title delegate:(id<GameSettingsChoiceDelegate>)d
+- (id)initWithGame:(const game *)game index:(int)ind choices:(NSArray *)ch value:(int)val title:(NSString *)title delegate:(id<GameSettingsChoiceDelegate>)d
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
+        thegame = game;
         index = ind;
         choices = ch;
         delegate = d;
@@ -42,6 +46,8 @@
  
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
 }
 
 - (void)didReceiveMemoryWarning
@@ -117,6 +123,11 @@
     return YES;
 }
 */
+
+- (void)showHelp
+{
+    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:[NSString stringWithFormat:@"%s.html", thegame->htmlhelp_topic]] animated:YES];
+}
 
 #pragma mark - Table view delegate
 

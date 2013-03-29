@@ -500,7 +500,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     char *wintitle;
     config_item *config = midend_get_config(me, CFG_DESC, &wintitle);
-    [navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config type:CFG_DESC title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+    [navigationController pushViewController:[[GameSettingsController alloc] initWithGame:ourgame config:config type:CFG_DESC title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
     free(wintitle);
 }
 
@@ -508,7 +508,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     char *wintitle;
     config_item *config = midend_get_config(me, CFG_SEED, &wintitle);
-    [navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config type:CFG_SEED title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+    [navigationController pushViewController:[[GameSettingsController alloc] initWithGame:ourgame config:config type:CFG_SEED title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
     free(wintitle);
 }
 
@@ -549,7 +549,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doType
 {
-    [navigationController pushViewController:[[GameTypeController alloc] initWithMidend:me gameview:self] animated:YES];
+    [navigationController pushViewController:[[GameTypeController alloc] initWithGame:ourgame midend:me gameview:self] animated:YES];
 }
 
 @end

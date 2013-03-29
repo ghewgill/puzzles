@@ -8,20 +8,24 @@
 
 #import "GameTypeController.h"
 
+#import "GameHelpController.h"
+
 @interface GameTypeController ()
 
 @end
 
 @implementation GameTypeController {
+    const game *thegame;
     midend *me;
     GameView *gameview;
 }
 
-- (id)initWithMidend:(midend *)m gameview:(GameView *)gv
+- (id)initWithGame:(const game *)game midend:(midend *)m gameview:(GameView *)gv
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
+        thegame = game;
         me = m;
         gameview = gv;
     }
@@ -38,6 +42,8 @@
  
     // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
     // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
 }
 
 - (void)didReceiveMemoryWarning
@@ -124,6 +130,11 @@
 }
 */
 
+- (void)showHelp
+{
+    [self.navigationController pushViewController:[[GameHelpController alloc] initWithFile:[NSString stringWithFormat:@"%s.html", thegame->htmlhelp_topic]] animated:YES];
+}
+
 #pragma mark - Table view delegate
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
@@ -147,7 +158,7 @@
     } else {
         char *wintitle;
         config_item *config = midend_get_config(me, CFG_SETTINGS, &wintitle);
-        [self.navigationController pushViewController:[[GameSettingsController alloc] initWithConfig:config type:CFG_SETTINGS title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
+        [self.navigationController pushViewController:[[GameSettingsController alloc] initWithGame:thegame config:config type:CFG_SETTINGS title:[NSString stringWithUTF8String:wintitle] delegate:self] animated:YES];
         free(wintitle);
     }
 }
