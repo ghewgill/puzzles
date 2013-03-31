@@ -1,6 +1,6 @@
 import urllib.request
 
-page = urllib.request.urlopen("http://www.chiark.greenend.org.uk/~sgtatham/puzzles/").read()
+page = urllib.request.urlopen("http://www.chiark.greenend.org.uk/~sgtatham/puzzles/").read().decode()
 puzzles = page.split("""<span class="puzzle">""")
 with open("descriptions.h", "w") as f:
     print("NSString *GameDescriptions[][2] = {", file=f)
