@@ -81,6 +81,9 @@ struct midend {
     int pressed_mouse_button;
 
     int preferred_tilesize, tilesize, winwidth, winheight;
+
+    void (*game_desc_change_notify_function)(void *);
+    void *game_desc_change_notify_ctx;
 };
 
 #define ensure(me) do { \
@@ -1079,12 +1082,20 @@ int midend_wants_statusbar(midend *me)
     return me->ourgame->wants_statusbar;
 }
 
+void midend_request_desc_changes(midend *me, void (*notify)(void *), void *ctx)
+{
+    me->game_desc_change_notify_function = notify;
+    me->game_desc_change_notify_ctx = ctx;
+}
+
 void midend_supersede_game_desc(midend *me, char *desc, char *privdesc)
 {
     sfree(me->desc);
     sfree(me->privdesc);
     me->desc = dupstr(desc);
     me->privdesc = privdesc ? dupstr(privdesc) : NULL;
+    if (me->game_desc_change_notify_function)
+        me->game_desc_change_notify_function(me->game_desc_change_notify_ctx);
 }
 
 config_item *midend_get_config(midend *me, int which, char **wintitle)
@@ -1300,6 +1311,21 @@ char *midend_get_game_id(midend *me)
     assert(me->desc);
     ret = snewn(strlen(parstr) + strlen(me->desc) + 2, char);
     sprintf(ret, "%s:%s", parstr, me->desc);
+    sfree(parstr);
+    return ret;
+}
+
+char *midend_get_random_seed(midend *me)
+{
+    char *parstr, *ret;
+
+    if (!me->seedstr)
+        return NULL;
+
+    parstr = me->ourgame->encode_params(me->curparams, TRUE);
+    assert(parstr);
+    ret = snewn(strlen(parstr) + strlen(me->seedstr) + 2, char);
+    sprintf(ret, "%s#%s", parstr, me->seedstr);
     sfree(parstr);
     return ret;
 }
