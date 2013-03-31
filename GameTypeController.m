@@ -151,8 +151,7 @@
         game_params *params;
         midend_fetch_preset(me, indexPath.row, &name, &params);
         midend_set_params(me, params);
-        midend_new_game(me);
-        [gameview layoutSubviews];
+        [gameview startNewGame];
         // bit of a hack here, gameview.nextResponder is actually the view controller we want
         [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
     } else {
@@ -169,8 +168,7 @@
     if (msg) {
         [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
     } else {
-        midend_new_game(me);
-        [gameview layoutSubviews];
+        [gameview startNewGame];
         // bit of a hack here, gameview.nextResponder is actually the view controller we want
         [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
     }

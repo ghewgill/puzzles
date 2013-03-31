@@ -111,6 +111,9 @@ static int saveGameRead(void *ctx, void *buf, int len)
             setenv(buf, value, 1);
         }
         me = midend_new(&fe, ourgame, &ios_drawing, &fe);
+        fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
+        self.backgroundColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:1];
+        buttons = [[NSMutableDictionary alloc] init];
         if (saved) {
             struct StringReadContext srctx;
             srctx.save = (__bridge void *)(saved);
@@ -118,27 +121,66 @@ static int saveGameRead(void *ctx, void *buf, int len)
             const char *msg = midend_deserialise(me, saveGameRead, &srctx);
             if (msg) {
                 [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil] show];
-                midend_new_game(me);
-            }
-            if (!inprogress) {
-                midend_new_game(me);
+                [self startNewGame];
+            } else if (!inprogress) {
+                [self startNewGame];
             }
         } else {
             if (ourgame == &pattern && [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
                 midend_game_id(me, "5");
             }
-            midend_new_game(me);
+            [self startNewGame];
         }
-        fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
-        self.backgroundColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:1];
-        buttons = [[NSMutableDictionary alloc] init];
     }
     return self;
 }
 
 - (void)dealloc
 {
-    midend_free(me);
+    if (me != NULL) {
+        midend_free(me);
+    }
+}
+
+- (void)startNewGame
+{
+    midend *m = me;
+    me = NULL;
+    
+    UIWindow *window = [UIApplication sharedApplication].windows[0];
+    
+    // Create full-screen transparent overlay to block touches while generating new game
+    UIView *overlay = [[UIView alloc] initWithFrame:window.rootViewController.view.bounds];
+    [window.rootViewController.view addSubview:overlay];
+    
+    UIView *box = [[UIView alloc] initWithFrame:CGRectMake((overlay.bounds.size.width-200)/2, (overlay.bounds.size.height-50)/2, 200, 50)];
+    box.backgroundColor = [UIColor blackColor];
+    box.hidden = YES;
+    [overlay addSubview:box];
+    
+    UIActivityIndicatorView *aiv = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+    CGFloat inset = (box.bounds.size.height-aiv.bounds.size.height) / 2;
+    aiv.frame = CGRectMake(inset, inset, aiv.bounds.size.width, aiv.bounds.size.height);
+    [box addSubview:aiv];
+    
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(inset*2+aiv.bounds.size.width, (box.bounds.size.height-20)/2, box.frame.size.width-inset*2-aiv.bounds.size.width, 20)];
+    label.backgroundColor = [UIColor blackColor];
+    label.textColor = [UIColor whiteColor];
+    label.text = @"Generating puzzle";
+    [box addSubview:label];
+    
+    [aiv startAnimating];
+    // Give game generation 250 ms to come up with something before we display the Generating Puzzle indicator
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.25e9), dispatch_get_current_queue(), ^{ box.hidden = NO; });
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        midend_new_game(m);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [aiv stopAnimating];
+            [overlay removeFromSuperview];
+            me = m;
+            [self layoutSubviews];
+        });
+    });
 }
 
 static void saveGameWrite(void *ctx, void *buf, int len)
@@ -149,6 +191,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (NSString *)saveGameState_inprogress:(BOOL *)inprogress
 {
+    if (me == NULL) {
+        return nil;
+    }
     *inprogress = midend_can_undo(me) && midend_status(me) == 0;
     NSMutableString *save = [[NSMutableString alloc] init];
     midend_serialise(me, saveGameWrite, (__bridge void *)(save));
@@ -157,6 +202,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)layoutSubviews
 {
+    if (me == NULL) {
+        return;
+    }
     int usable_height = self.frame.size.height;
     usable_height -= 44;
     CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 44);
@@ -301,6 +349,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)drawRect:(CGRect)rect
 {
+    if (me == NULL) {
+        return;
+    }
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGImageRef image = CGBitmapContextCreateImage(bitmap);
     CGContextDrawImage(context, game_rect, image);
@@ -492,8 +543,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doNewGame
 {
-    midend_new_game(me);
-    [self layoutSubviews];
+    [self startNewGame];
 }
 
 - (void)doSpecificGame
@@ -519,8 +569,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
         return;
     }
-    midend_new_game(me);
-    [self layoutSubviews];
+    [self startNewGame];
     [navigationController popViewControllerAnimated:YES];
 }
 

@@ -72,7 +72,9 @@
 {
     BOOL inprogress;
     NSString *save = [gameview saveGameState_inprogress:&inprogress];
-    [saver saveGame:name state:save inprogress:inprogress];
+    if (save != nil) {
+        [saver saveGame:name state:save inprogress:inprogress];
+    }
 }
 
 - (void)showHelp
