@@ -11,7 +11,6 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreText/CoreText.h>
 
-#import "GameMenuController.h"
 #import "GameTypeController.h"
 
 #include "puzzles.h"

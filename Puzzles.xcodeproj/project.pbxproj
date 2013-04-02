@@ -156,7 +156,6 @@
 		3701DD8B16F3997400896D7D /* unequal.html in Resources */ = {isa = PBXBuildFile; fileRef = 3701DD6216F3997400896D7D /* unequal.html */; };
 		3701DD8C16F3997400896D7D /* unruly.html in Resources */ = {isa = PBXBuildFile; fileRef = 3701DD6316F3997400896D7D /* unruly.html */; };
 		3701DD8D16F3997400896D7D /* untangle.html in Resources */ = {isa = PBXBuildFile; fileRef = 3701DD6416F3997400896D7D /* untangle.html */; };
-		3701DD9016F3A72C00896D7D /* GameMenuController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3701DD8F16F3A72A00896D7D /* GameMenuController.m */; };
 		371ADF9516F431A100A529A2 /* NSIndexPath+PSTCollectionViewAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 371ADF7A16F431A100A529A2 /* NSIndexPath+PSTCollectionViewAdditions.m */; };
 		371ADF9616F431A100A529A2 /* PSTCollectionView.m in Sources */ = {isa = PBXBuildFile; fileRef = 371ADF7C16F431A100A529A2 /* PSTCollectionView.m */; };
 		371ADF9716F431A100A529A2 /* PSTCollectionViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 371ADF7E16F431A100A529A2 /* PSTCollectionViewCell.m */; };
@@ -395,8 +394,6 @@
 		3701DD6216F3997400896D7D /* unequal.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = unequal.html; sourceTree = "<group>"; };
 		3701DD6316F3997400896D7D /* unruly.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = unruly.html; sourceTree = "<group>"; };
 		3701DD6416F3997400896D7D /* untangle.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = untangle.html; sourceTree = "<group>"; };
-		3701DD8E16F3A72900896D7D /* GameMenuController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GameMenuController.h; sourceTree = SOURCE_ROOT; };
-		3701DD8F16F3A72A00896D7D /* GameMenuController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GameMenuController.m; sourceTree = SOURCE_ROOT; };
 		371ADF7916F431A100A529A2 /* NSIndexPath+PSTCollectionViewAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "NSIndexPath+PSTCollectionViewAdditions.h"; path = "PSTCollectionView/PSTCollectionView/NSIndexPath+PSTCollectionViewAdditions.h"; sourceTree = SOURCE_ROOT; };
 		371ADF7A16F431A100A529A2 /* NSIndexPath+PSTCollectionViewAdditions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = "NSIndexPath+PSTCollectionViewAdditions.m"; path = "PSTCollectionView/PSTCollectionView/NSIndexPath+PSTCollectionViewAdditions.m"; sourceTree = SOURCE_ROOT; };
 		371ADF7B16F431A100A529A2 /* PSTCollectionView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PSTCollectionView.h; path = PSTCollectionView/PSTCollectionView/PSTCollectionView.h; sourceTree = SOURCE_ROOT; };
@@ -540,8 +537,6 @@
 				3701DCAD16E9DBC100896D7D /* GameViewController.m */,
 				3701DCA616E85D5D00896D7D /* GameView.h */,
 				3701DCA716E85D5D00896D7D /* GameView.m */,
-				3701DD8E16F3A72900896D7D /* GameMenuController.h */,
-				3701DD8F16F3A72A00896D7D /* GameMenuController.m */,
 				3701DD2D16EDBC9E00896D7D /* GameTypeController.h */,
 				3701DD2E16EDBC9E00896D7D /* GameTypeController.m */,
 				3701DD3016EDC7F100896D7D /* GameSettingsController.h */,
@@ -1097,7 +1092,6 @@
 				3701DD3216EDC7F200896D7D /* GameSettingsController.m in Sources */,
 				3701DD3516EEEC9A00896D7D /* GameSettingsChoiceController.m in Sources */,
 				3701DD3A16F3959400896D7D /* GameHelpController.m in Sources */,
-				3701DD9016F3A72C00896D7D /* GameMenuController.m in Sources */,
 				371ADF9516F431A100A529A2 /* NSIndexPath+PSTCollectionViewAdditions.m in Sources */,
 				371ADF9616F431A100A529A2 /* PSTCollectionView.m in Sources */,
 				371ADF9716F431A100A529A2 /* PSTCollectionViewCell.m in Sources */,
