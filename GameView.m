@@ -204,9 +204,13 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     if (me == NULL) {
         return;
     }
+    CGFloat toolbar_height = 44;
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone && UIInterfaceOrientationIsLandscape([UIDevice currentDevice].orientation)) {
+        toolbar_height = 32;
+    }
     int usable_height = self.frame.size.height;
-    usable_height -= 44;
-    CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 44);
+    usable_height -= toolbar_height;
+    CGRect r = CGRectMake(0, usable_height, self.frame.size.width, toolbar_height);
     if (toolbar) {
         [toolbar setFrame:r];
     } else {
@@ -247,7 +251,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
      || ourgame == &towers
      || ourgame == &undead
      || ourgame == &unequal) {
-        usable_height -= 44;
+        usable_height -= toolbar_height;
         int main_button_count = 9;
         int extra_button_count = 0;
         const char **labels = NULL;
@@ -295,7 +299,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             extra_labels = UnequalLabels;
             extra_button_count = 2;
         }
-        CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 44);
+        CGRect r = CGRectMake(0, usable_height, self.frame.size.width, toolbar_height);
         if (game_toolbar == nil) {
             game_toolbar = [[UIToolbar alloc] initWithFrame:r];
         } else {
