@@ -90,6 +90,8 @@
         cell.textLabel.text = @"Custom";
         if (midend_which_preset(me) < 0) {
             cell.accessoryType = UITableViewCellAccessoryCheckmark;
+        } else {
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
     }
     
