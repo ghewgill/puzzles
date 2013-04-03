@@ -117,6 +117,10 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
+    // Note that we are using a custom subview rather than accessoryView here because accessoryView:
+    //   - prevents the display of the disclosure indicator
+    //   - causes the table to truncate its text depending on the width of the accessoryView
+    // Using a (manually positioned) custom subview prevents these unwanted behaviours
     int roffset = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad ? 40 : 0;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     switch (indexPath.section) {
