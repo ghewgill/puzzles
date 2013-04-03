@@ -1019,7 +1019,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"char ver[] = \\\"Revision: r`git svn info|grep ^Revision:|awk '{print $2}'`\\\";\" >svnversion.c";
+			shellScript = "echo \"char ver[] = \\\"Revision: r`git log|grep git-svn-id|head -1|awk -F '[@ ]+' '{print $4}'`\\\";\" >svnversion.c";
 		};
 /* End PBXShellScriptBuildPhase section */
 
