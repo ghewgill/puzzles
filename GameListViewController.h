@@ -14,6 +14,7 @@
 
 @interface GameListViewController : PSUICollectionViewController <GameViewControllerSaver>
 
+- (GameViewController *)savedGameViewController;
 - (void)saveGame:(NSString *)name state:(NSString *)save inprogress:(BOOL)inprogress;
 
 @end

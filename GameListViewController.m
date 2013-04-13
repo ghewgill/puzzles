@@ -119,20 +119,9 @@ static NSString *CellIdentifier = @"Cell";
     return self;
 }
 
-- (void)viewDidLoad
+- (GameViewController *)savedGameViewController
 {
-    [super viewDidLoad];
-    [self.collectionView registerClass:[GameListViewCell class] forCellWithReuseIdentifier:CellIdentifier];
-
-    // Uncomment the following line to preserve selection between presentations.
-    // self.clearsSelectionOnViewWillAppear = NO;
- 
-    // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
-    // self.navigationItem.rightBarButtonItem = self.editButtonItem;
-#ifndef LAUNCH_IMAGE
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
-#endif
-    
+    GameViewController *gvc = nil;
     NSString *lastgame = [[NSUserDefaults standardUserDefaults] stringForKey:@"lastgame"];
     if (lastgame) {
         int i = gamecount-1;
@@ -143,9 +132,37 @@ static NSString *CellIdentifier = @"Cell";
             i--;
         }
         if (i >= 0) {
-            [self collectionView:self.collectionView didSelectItemAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]];
+            gvc = [self gameViewControllerForGame:gamelist[i]];
         }
     }
+    return gvc;
+}
+
+- (GameViewController *)gameViewControllerForGame:(const game *)game
+{
+    NSString *name = [NSString stringWithUTF8String:game->name];
+    BOOL inprogress = YES;
+    NSString *saved = [NSString stringWithContentsOfFile:[NSString stringWithFormat:@"%@/%@.save", path, name] encoding:NSUTF8StringEncoding error:NULL];
+    if (saved == nil) {
+        saved = [NSString stringWithContentsOfFile:[NSString stringWithFormat:@"%@/%@.new", path, name] encoding:NSUTF8StringEncoding error:NULL];
+        inprogress = NO;
+    }
+    return [[GameViewController alloc] initWithGame:game saved:saved inprogress:inprogress saver:self];
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    [self.collectionView registerClass:[GameListViewCell class] forCellWithReuseIdentifier:CellIdentifier];
+
+    // Uncomment the following line to preserve selection between presentations.
+    // self.clearsSelectionOnViewWillAppear = NO;
+
+    // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
+    // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+#ifndef LAUNCH_IMAGE
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
+#endif
 }
 
 - (void)didReceiveMemoryWarning
@@ -276,14 +293,8 @@ static NSString *CellIdentifier = @"Cell";
      */
     const game *game = gamelist[indexPath.row];
     NSString *name = [NSString stringWithUTF8String:game->name];
-    BOOL inprogress = YES;
-    NSString *saved = [NSString stringWithContentsOfFile:[NSString stringWithFormat:@"%@/%@.save", path, name] encoding:NSUTF8StringEncoding error:NULL];
-    if (saved == nil) {
-        saved = [NSString stringWithContentsOfFile:[NSString stringWithFormat:@"%@/%@.new", path, name] encoding:NSUTF8StringEncoding error:NULL];
-        inprogress = NO;
-    }
-    GameViewController *gv = [[GameViewController alloc] initWithGame:game saved:saved inprogress:inprogress saver:self];
-    [self.navigationController pushViewController:gv animated:YES];
+    GameViewController *gvc = [self gameViewControllerForGame:game];
+    [self.navigationController pushViewController:gvc animated:YES];
     [[NSUserDefaults standardUserDefaults] setObject:name forKey:@"lastgame"];
 }
 

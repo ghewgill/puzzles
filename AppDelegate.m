@@ -16,8 +16,12 @@
 {
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     // Override point for customization after application launch.
-    UIViewController *glvc = [[GameListViewController alloc] init];
+    GameListViewController *glvc = [[GameListViewController alloc] init];
     UINavigationController *nc = [[UINavigationController alloc] initWithRootViewController:glvc];
+    GameViewController *gvc = [glvc savedGameViewController];
+    if (gvc != nil) {
+        [nc setViewControllers:@[glvc, gvc] animated:NO];
+    }
     self.window.rootViewController = nc;
     [self.window makeKeyAndVisible];
     return YES;
