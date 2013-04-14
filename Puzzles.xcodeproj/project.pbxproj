@@ -227,7 +227,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		3701DC0516E730ED00896D7D /* Puzzles.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Puzzles.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3701DC0516E730ED00896D7D /* Puzzles-dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Puzzles-dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3701DC0816E730ED00896D7D /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		3701DC0A16E730ED00896D7D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		3701DC0C16E730ED00896D7D /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
@@ -511,7 +511,7 @@
 		3701DC0616E730ED00896D7D /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3701DC0516E730ED00896D7D /* Puzzles.app */,
+				3701DC0516E730ED00896D7D /* Puzzles-dev.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -834,7 +834,7 @@
 			);
 			name = Puzzles;
 			productName = Puzzles;
-			productReference = 3701DC0516E730ED00896D7D /* Puzzles.app */;
+			productReference = 3701DC0516E730ED00896D7D /* Puzzles-dev.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -1192,7 +1192,8 @@
 					COMBINED,
 				);
 				INFOPLIST_FILE = "Puzzles-Info.plist";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				OTHER_CFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)-dev";
 				WRAPPER_EXTENSION = app;
 			};
 			name = Debug;
