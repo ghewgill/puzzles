@@ -2,7 +2,11 @@
  * emcclib.js: one of the Javascript components of an Emscripten-based
  * web/Javascript front end for Puzzles.
  *
- * The other parts of this system live in emcc.c and emccpre.js.
+ * The other parts of this system live in emcc.c and emccpre.js. It
+ * also depends on being run in the context of a web page containing
+ * an appropriate collection of bits and pieces (a canvas, some
+ * buttons and links etc), which is generated for each puzzle by the
+ * script html/jspage.pl.
  *
  * This file contains a set of Javascript functions which we insert
  * into Emscripten's library object via the --js-library option; this
@@ -67,7 +71,7 @@ mergeInto(LibraryManager.library, {
      * case we need to do something special - see below.
      */
     js_add_preset: function(ptr) {
-        var name = (ptr == 0 ? "Custom" : Pointer_stringify(ptr));
+        var name = (ptr == 0 ? "Customise..." : Pointer_stringify(ptr));
         var value = gametypeoptions.length;
 
         var option = document.createElement("option");
@@ -77,31 +81,20 @@ mergeInto(LibraryManager.library, {
         gametypeoptions.push(option);
 
         if (ptr == 0) {
-            // Create a _second_ element called 'Custom', which is
-            // hidden.
-            //
-            // Hiding this element (that is, setting it display:none)
-            // has the effect of making it not show up when the
-            // drop-down list is actually opened, but still show up
-            // when the item is selected.
-            //
-            // So what happens is that there's one element marked
-            // 'Custom' that the _user_ selects, but a second one to
-            // which we reset the dropdown after the config box
-            // returns (if we don't then turn out to select a
-            // different preset anyway). The point is that if the user
-            // has 'Custom' selected, but then wants to customise
-            // their settings a second time, we still get an onchange
-            // event when they select the Custom option again, which
-            // we wouldn't get if the browser thought it was already
-            // the selected one. But here, it's _not_ the selected
-            // option already; its invisible evil twin is selected.
+            // The option we've just created is the one for inventing
+            // a new custom setup.
+            gametypenewcustom = option;
+            option.value = -1;
+
+            // Now create another element called 'Custom', which will
+            // be auto-selected by us to indicate the custom settings
+            // you've previously selected. However, we don't add it to
+            // the game type selector; it will only appear when the
+            // user actually has custom settings selected.
             option = document.createElement("option");
-            option.value = value;
-            option.appendChild(document.createTextNode(name));
-            option.style.display = "none";
-            gametypeselector.appendChild(option);
-            gametypehiddencustom = option;
+            option.value = -2;
+            option.appendChild(document.createTextNode("Custom"));
+            gametypethiscustom = option;
         }
     },
 
@@ -128,11 +121,31 @@ mergeInto(LibraryManager.library, {
      * which turn out to exactly match a preset).
      */
     js_select_preset: function(n) {
-        if (gametypeoptions[n].value == gametypehiddencustom.value) {
-            // If we're asked to select the visible Custom option,
-            // select the invisible one instead. See comment above in
-            // js_add_preset.
-            gametypehiddencustom.selected = true;
+        if (gametypethiscustom !== null) {
+            // Fiddle with the Custom/Customise options. If we're
+            // about to select the Custom option, then it should be in
+            // the menu, and the other one should read "Re-customise";
+            // if we're about to select another one, then the static
+            // Custom option should disappear and the other one should
+            // read "Customise".
+
+            if (gametypethiscustom.parentNode == gametypeselector)
+                gametypeselector.removeChild(gametypethiscustom);
+            if (gametypenewcustom.parentNode == gametypeselector)
+                gametypeselector.removeChild(gametypenewcustom);
+
+            if (n < 0) {
+                gametypeselector.appendChild(gametypethiscustom);
+                gametypenewcustom.lastChild.data = "Re-customise...";
+            } else {
+                gametypenewcustom.lastChild.data = "Customise...";
+            }
+            gametypeselector.appendChild(gametypenewcustom);
+            gametypenewcustom.selected = false;
+        }
+
+        if (n < 0) {
+            gametypethiscustom.selected = true;
         } else {
             gametypeoptions[n].selected = true;
         }
@@ -513,18 +526,20 @@ mergeInto(LibraryManager.library, {
      * back end turns out to want one.
      */
     js_canvas_make_statusbar: function() {
-        var statustd = document.getElementById("statusbarholder");
+        var statusholder = document.getElementById("statusbarholder");
         statusbar = document.createElement("div");
         statusbar.style.overflow = "hidden";
-        statusbar.style.width = onscreen_canvas.width - 4;
+        statusbar.style.width = (onscreen_canvas.width - 4) + "px";
+        statusholder.style.width = onscreen_canvas.width + "px";
         statusbar.style.height = "1.2em";
+        statusbar.style.textAlign = "left";
         statusbar.style.background = "#d8d8d8";
         statusbar.style.borderLeft = '2px solid #c8c8c8';
         statusbar.style.borderTop = '2px solid #c8c8c8';
         statusbar.style.borderRight = '2px solid #e8e8e8';
         statusbar.style.borderBottom = '2px solid #e8e8e8';
         statusbar.appendChild(document.createTextNode(" "));
-        statustd.appendChild(statusbar);
+        statusholder.appendChild(statusbar);
     },
 
     /*
@@ -548,8 +563,11 @@ mergeInto(LibraryManager.library, {
     js_canvas_set_size: function(w, h) {
         onscreen_canvas.width = w;
         offscreen_canvas.width = w;
-        if (statusbar !== null)
-            statusbar.style.width = w - 4;
+        if (statusbar !== null) {
+            statusbar.style.width = (w - 4) + "px";
+            document.getElementById("statusbarholder").style.width = w + "px";
+        }
+        resizable_div.style.width = w + "px";
 
         onscreen_canvas.height = h;
         offscreen_canvas.height = h;
@@ -575,15 +593,15 @@ mergeInto(LibraryManager.library, {
 
         // Now create a form which sits on top of that in turn.
         dlg_form = document.createElement("form");
-        dlg_form.style.width =  window.innerWidth * 2 / 3;
+        dlg_form.style.width = (window.innerWidth * 2 / 3) + "px";
         dlg_form.style.opacity = 1;
         dlg_form.style.background = '#ffffff';
         dlg_form.style.color = '#000000';
         dlg_form.style.position = 'absolute';
         dlg_form.style.border = "2px solid black";
-        dlg_form.style.padding = 20;
-        dlg_form.style.top = window.innerHeight / 10;
-        dlg_form.style.left = window.innerWidth / 6;
+        dlg_form.style.padding = "20px";
+        dlg_form.style.top = (window.innerHeight / 10) + "px";
+        dlg_form.style.left = (window.innerWidth / 6) + "px";
         dlg_form.style["z-index"] = 100;
 
         var title = document.createElement("p");
@@ -735,5 +753,5 @@ mergeInto(LibraryManager.library, {
      */
     js_focus_canvas: function() {
         onscreen_canvas.focus();
-    },
+    }
 });

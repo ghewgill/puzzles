@@ -2,7 +2,11 @@
  * emccpre.js: one of the Javascript components of an Emscripten-based
  * web/Javascript front end for Puzzles.
  *
- * The other parts of this system live in emcc.c and emcclib.js.
+ * The other parts of this system live in emcc.c and emcclib.js. It
+ * also depends on being run in the context of a web page containing
+ * an appropriate collection of bits and pieces (a canvas, some
+ * buttons and links etc), which is generated for each puzzle by the
+ * script html/jspage.pl.
  *
  * This file contains the Javascript code which is prefixed unmodified
  * to Emscripten's output via the --pre-js option. It declares all our
@@ -33,7 +37,7 @@ var update_xmin, update_xmax, update_ymin, update_ymax;
 // callbacks.
 var Module = {
     'noInitialRun': true,
-    'noExitRuntime': true,
+    'noExitRuntime': true
 };
 
 // Variables used by js_canvas_find_font_midpoint().
@@ -79,13 +83,18 @@ var dlg_return_sval, dlg_return_ival;
 // list of the <option> objects inside it. Used by js_add_preset(),
 // js_get_selected_preset() and js_select_preset().
 //
-// gametypehiddencustom is a second copy of the 'Custom' dropdown
-// element, set to display:none. This is used by a bodge in emcclib.js
-// (see comment in js_add_preset) to arrange that if the Custom
-// element is (apparently) already selected, we still find out if the
-// user selects it again.
+// gametypethiscustom is an option which indicates some custom game
+// params you've already set up, and which will be auto-selected on
+// return from the customisation dialog; gametypenewcustom is an
+// option which you select to indicate that you want to bring up the
+// customisation dialog and select a new configuration. Ideally I'd do
+// this with just one option serving both purposes, but instead we
+// have to do this a bit oddly because browsers don't send 'onchange'
+// events for a select element if you reselect the same one - so if
+// you've picked a custom setup and now want to change it, you need a
+// way to specify that.
 var gametypeselector = null, gametypeoptions = [];
-var gametypehiddencustom = null;
+var gametypethiscustom = null, gametypehiddencustom = null;
 
 // The two anchors used to give permalinks to the current puzzle. Used
 // by js_update_permalinks().
@@ -94,21 +103,32 @@ var permalink_seed, permalink_desc;
 // The undo and redo buttons. Used by js_enable_undo_redo().
 var undo_button, redo_button;
 
-// Helper function which is passed a mouse event object and a DOM
-// element, and returns the coordinates of the mouse event relative to
-// the top left corner of the element by iterating upwards through the
-// DOM finding each element's offset from its parent, and thus
-// calculating the page-relative position of the target element so
-// that we can subtract that from event.page{X,Y}.
-function relative_mouse_coords(event, element) {
+// A div element enclosing both the puzzle and its status bar, used
+// for positioning the resize handle.
+var resizable_div;
+
+// Helper function to find the absolute position of a given DOM
+// element on a page, by iterating upwards through the DOM finding
+// each element's offset from its parent, and thus calculating the
+// page-relative position of the target element.
+function element_coords(element) {
     var ex = 0, ey = 0;
     while (element.offsetParent) {
         ex += element.offsetLeft;
         ey += element.offsetTop;
         element = element.offsetParent;
     }
-    return {x: event.pageX - ex,
-            y: event.pageY - ey};
+    return {x: ex, y:ey};
+}
+
+// Helper function which is passed a mouse event object and a DOM
+// element, and returns the coordinates of the mouse event relative to
+// the top left corner of the element by subtracting element_coords
+// from event.page{X,Y}.
+function relative_mouse_coords(event, element) {
+    var ecoords = element_coords(element);
+    return {x: event.pageX - ecoords.x,
+            y: event.pageY - ecoords.y};
 }
 
 // Init function called from body.onload.
@@ -131,9 +151,7 @@ function initPuzzle() {
     buttons_down = 0;
     onscreen_canvas.onmousedown = function(event) {
         var xy = relative_mouse_coords(event, onscreen_canvas);
-        mousedown(xy.x - onscreen_canvas.offsetLeft,
-                  xy.y - onscreen_canvas.offsetTop,
-                  event.button);
+        mousedown(xy.x, xy.y, event.button);
         buttons_down |= 1 << event.button;
         onscreen_canvas.setCapture(true);
     };
@@ -142,9 +160,7 @@ function initPuzzle() {
     onscreen_canvas.onmousemove = function(event) {
         if (buttons_down) {
             var xy = relative_mouse_coords(event, onscreen_canvas);
-            mousemove(xy.x - onscreen_canvas.offsetLeft,
-                      xy.y - onscreen_canvas.offsetTop,
-                      buttons_down);
+            mousemove(xy.x, xy.y, buttons_down);
         }
     };
     mouseup = Module.cwrap('mouseup', 'void',
@@ -153,32 +169,25 @@ function initPuzzle() {
         if (buttons_down & (1 << event.button)) {
             buttons_down ^= 1 << event.button;
             var xy = relative_mouse_coords(event, onscreen_canvas);
-            mouseup(xy.x - onscreen_canvas.offsetLeft,
-                    xy.y - onscreen_canvas.offsetTop,
-                    event.button);
+            mouseup(xy.x, xy.y, event.button);
         }
     };
 
-    // Set up keyboard handlers. We expect ordinary keys (with a
-    // charCode) to be handled by onkeypress, but function keys
-    // (arrows etc) to be handled by onkeydown.
-    //
-    // We also call event.preventDefault() in both handlers. This
-    // means that while the canvas itself has focus, _all_ keypresses
-    // go only to the puzzle - so users of this puzzle collection in
-    // other media can indulge their instinct to press ^R for redo,
-    // for example, without accidentally reloading the page.
-    key = Module.cwrap('key', 'void',
-                       ['number', 'number', 'number', 'number']);
+    // Set up keyboard handlers. We do all the actual keyboard
+    // handling in onkeydown; but we also call event.preventDefault()
+    // in both the keydown and keypress handlers. This means that
+    // while the canvas itself has focus, _all_ keypresses go only to
+    // the puzzle - so users of this puzzle collection in other media
+    // can indulge their instinct to press ^R for redo, for example,
+    // without accidentally reloading the page.
+    key = Module.cwrap('key', 'void', ['number', 'number', 'string',
+                                       'string', 'number', 'number']);
     onscreen_canvas.onkeydown = function(event) {
-        key(event.keyCode, event.charCode,
+        key(event.keyCode, event.charCode, event.key, event.char,
             event.shiftKey ? 1 : 0, event.ctrlKey ? 1 : 0);
         event.preventDefault();
     };
     onscreen_canvas.onkeypress = function(event) {
-        if (event.charCode != 0)
-            key(event.keyCode, event.charCode,
-                event.shiftKey ? 1 : 0, event.ctrlKey ? 1 : 0);
         event.preventDefault();
     };
 
@@ -229,6 +238,12 @@ function initPuzzle() {
             command(2);
     };
 
+    // In IE, the canvas doesn't automatically gain focus on a mouse
+    // click, so make sure it does
+    onscreen_canvas.addEventListener("mousedown", function(event) {
+        onscreen_canvas.focus();
+    });
+
     // In our dialog boxes, Return and Escape should be like pressing
     // OK and Cancel respectively
     document.addEventListener("keydown", function(event) {
@@ -257,9 +272,93 @@ function initPuzzle() {
     // Default to giving keyboard focus to the puzzle.
     onscreen_canvas.focus();
 
-    // And run the C setup function, passing argv[1] as the fragment
+    // Create the resize handle.
+    var resize_handle = document.createElement("canvas");
+    resize_handle.width = 10;
+    resize_handle.height = 10;
+    {
+        var ctx = resize_handle.getContext("2d");
+        ctx.beginPath();
+        for (var i = 1; i <= 7; i += 3) {
+            ctx.moveTo(8.5, i + 0.5);
+            ctx.lineTo(i + 0.5, 8.5);
+        }
+        ctx.lineWidth = '1px';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+    }
+    resizable_div = document.getElementById("resizable");
+    resizable_div.appendChild(resize_handle);
+    resize_handle.style.position = 'absolute';
+    resize_handle.style.zIndex = 98;
+    resize_handle.style.bottom = "0";
+    resize_handle.style.right = "0";
+    resize_handle.style.cursor = "se-resize";
+    resize_handle.title = "Drag to resize the puzzle. Right-click to restore the default size.";
+    var resize_xbase = null, resize_ybase = null, restore_pending = false;
+    var resize_xoffset = null, resize_yoffset = null;
+    var resize_puzzle = Module.cwrap('resize_puzzle',
+                                     'void', ['number', 'number']);
+    var restore_puzzle_size = Module.cwrap('restore_puzzle_size', 'void', []);
+    resize_handle.oncontextmenu = function(event) { return false; }
+    resize_handle.onmousedown = function(event) {
+        if (event.button == 0) {
+            var xy = element_coords(onscreen_canvas);
+            resize_xbase = xy.x + onscreen_canvas.width / 2;
+            resize_ybase = xy.y;
+            resize_xoffset = xy.x + onscreen_canvas.width - event.pageX;
+            resize_yoffset = xy.y + onscreen_canvas.height - event.pageY;
+        } else {
+            restore_pending = true;
+        }
+        resize_handle.setCapture(true);
+        event.preventDefault();
+    };
+    window.addEventListener("mousemove", function(event) {
+        if (resize_xbase !== null && resize_ybase !== null) {
+            resize_puzzle((event.pageX + resize_xoffset - resize_xbase) * 2,
+                          (event.pageY + resize_yoffset - resize_ybase));
+            event.preventDefault();
+            // Chrome insists on selecting text during a resize drag
+            // no matter what I do
+            if (window.getSelection)
+                window.getSelection().removeAllRanges();
+            else
+                document.selection.empty();        }
+    });
+    window.addEventListener("mouseup", function(event) {
+        if (resize_xbase !== null && resize_ybase !== null) {
+            resize_xbase = null;
+            resize_ybase = null;
+            onscreen_canvas.focus(); // return focus to the puzzle
+        } else if (restore_pending) {
+            // If you have the puzzle at larger than normal size and
+            // then right-click to restore, I haven't found any way to
+            // stop Chrome and IE popping up a context menu on the
+            // revealed piece of document when you release the button
+            // except by putting the actual restore into a setTimeout.
+            // Gah.
+            setTimeout(function() {
+                restore_pending = false;
+                restore_puzzle_size();
+                onscreen_canvas.focus();
+            }, 20);
+        }
+        event.preventDefault();
+    });
+
+    // Run the C setup function, passing argv[1] as the fragment
     // identifier (so that permalinks of the form puzzle.html#game-id
     // can launch the specified id).
     Module.arguments = [location.hash];
     Module.run();
+
+    // And if we get here with everything having gone smoothly, i.e.
+    // we haven't crashed for one reason or another during setup, then
+    // it's probably safe to hide the 'sorry, no puzzle here' div and
+    // show the div containing the actual puzzle.
+    document.getElementById("apology").style.display = "none";
+    document.getElementById("puzzle").style.display = "inline";
 }

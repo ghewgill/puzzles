@@ -57,6 +57,7 @@ EOF
     }
 
     print $outpage <<EOF;
+<!DOCTYPE html>
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=ASCII" />
@@ -71,6 +72,7 @@ ${unfinishedheading}
 ${unfinishedpara}
 
 <hr>
+<div id="puzzle" style="display: none">
 <p align=center>
   <input type="button" id="new" value="New game">
   <input type="button" id="restart" value="Restart game">
@@ -81,23 +83,28 @@ ${unfinishedpara}
   <input type="button" id="random" value="Enter random seed">
   <select id="gametype"></select>
 </p>
-<p align=center>
-  <table cellpadding="0" cellspacing="0">
-    <tr>
-      <td>
-        <canvas id="puzzlecanvas" width="1" height="1" tabindex="1">
-      </td>
-    <tr>
-      <td id="statusbarholder">
-      </td>
-    </tr>
-  </table>
-</p>
-<p align=center>
-  Link to this puzzle:
-  <a id="permalink-desc">by game ID</a>
-  <a id="permalink-seed">by random seed</a>
-</p>
+<div align=center>
+  <div id="resizable" style="position:relative; left:0; top:0">
+  <canvas style="display: block" id="puzzlecanvas" width="1px" height="1px" tabindex="1">
+  </canvas>
+  <div id="statusbarholder" style="display: block">
+  </div>
+  </div>
+  <p>
+    Link to this puzzle:
+    <a id="permalink-desc">by game ID</a>
+    <a id="permalink-seed">by random seed</a>
+  </p>
+</div>
+</div>
+<div id="apology">
+Sorry, this Javascript puzzle doesn't seem to work in your web
+browser. Perhaps you have Javascript disabled, or perhaps your browser
+doesn't provide a feature that the puzzle code requires (such as
+<a href="https://developer.mozilla.org/en-US/docs/JavaScript/Typed_arrays">typed arrays</a>).
+These puzzles have been successfully run in Firefox 19, Chrome 26,
+Internet Explorer 10 and Safari 6.
+</div>
 <hr>
 
 ${instructions}

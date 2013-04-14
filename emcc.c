@@ -3,7 +3,10 @@
  * end for Puzzles.
  *
  * The Javascript parts of this system live in emcclib.js and
- * emccpre.js.
+ * emccpre.js. It also depends on being run in the context of a web
+ * page containing an appropriate collection of bits and pieces (a
+ * canvas, some buttons and links etc), which is generated for each
+ * puzzle by the script html/jspage.pl.
  */
 
 /*
@@ -17,12 +20,6 @@
  *    dialog box. Loading, more or less similarly, might be feasible
  *    by using the DOM File API to ask the user to select a file and
  *    permit us to see its contents.
- *
- *  - it ought to be possible to make the puzzle canvases resizable,
- *    by superimposing some kind of draggable resize handle. Also I
- *    quite like the idea of having a few buttons for standard sizes:
- *    reset to default size, maximise to the browser window dimensions
- *    (if we can find those out), and perhaps even go full-screen.
  *
  *  - I should think about whether these webified puzzles can support
  *    touchscreen-based tablet browsers (assuming there are any that
@@ -50,6 +47,7 @@
  *    that using whatever they normally use to print PDFs!)
  */
 
+#include <assert.h>
 #include <string.h>
 
 #include "puzzles.h"
@@ -135,6 +133,27 @@ void fatal(char *fmt, ...)
     js_error_box(buf);
 }
 
+void debug_printf(char *fmt, ...)
+{
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    js_debug(buf);
+}
+
+/*
+ * Helper function that makes it easy to test strings that might be
+ * NULL.
+ */
+int strnullcmp(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL)
+        return a != NULL ? +1 : b != NULL ? -1 : 0;
+    return strcmp(a, b);
+}
+
 /*
  * HTMLish names for the colours allocated by the puzzle.
  */
@@ -169,10 +188,12 @@ void timer_callback(double tplus)
 }
 
 /* ----------------------------------------------------------------------
- * Helper function to resize the canvas, and variables to remember its
- * size for other functions (e.g. trimming blitter rectangles).
+ * Helper functions to resize the canvas, and variables to remember
+ * its size for other functions (e.g. trimming blitter rectangles).
  */
 static int canvas_w, canvas_h;
+
+/* Called when we resize as a result of changing puzzle settings */
 static void resize(void)
 {
     int w, h;
@@ -181,6 +202,26 @@ static void resize(void)
     js_canvas_set_size(w, h);
     canvas_w = w;
     canvas_h = h;
+}
+
+/* Called from JS when the user uses the resize handle */
+void resize_puzzle(int w, int h)
+{
+    midend_size(me, &w, &h, TRUE);
+    if (canvas_w != w || canvas_h != h) { 
+        js_canvas_set_size(w, h);
+        canvas_w = w;
+        canvas_h = h;
+        midend_force_redraw(me);
+    }
+}
+
+/* Called from JS when the user uses the restore button */
+void restore_puzzle_size(int w, int h)
+{
+    midend_reset_tilesize(me);
+    resize();
+    midend_force_redraw(me);
 }
 
 /*
@@ -232,67 +273,64 @@ void mousemove(int x, int y, int buttons)
 /*
  * Keyboard handler called from JS.
  */
-void key(int keycode, int charcode, int shift, int ctrl)
+void key(int keycode, int charcode, const char *key, const char *chr,
+         int shift, int ctrl)
 {
     int keyevent = -1;
-    if (charcode != 0) {
-        keyevent = charcode & (ctrl ? 0x1F : 0xFF);
-    } else {
-        switch (keycode) {
-          case 8:
-            keyevent = '\177';         /* backspace */
-            break;
-          case 13:
-            keyevent = 13;             /* return */
-            break;
-          case 37:
-            keyevent = CURSOR_LEFT;
-            break;
-          case 38:
-            keyevent = CURSOR_UP;
-            break;
-          case 39:
-            keyevent = CURSOR_RIGHT;
-            break;
-          case 40:
-            keyevent = CURSOR_DOWN;
-            break;
-            /*
-             * We interpret Home, End, PgUp and PgDn as numeric keypad
-             * controls regardless of whether they're the ones on the
-             * numeric keypad (since we can't tell). The effect of
-             * this should only be that the non-numeric-pad versions
-             * of those keys generate directions in 8-way movement
-             * puzzles like Cube and Inertia.
-             */
-          case 35:                     /* End */
-            keyevent = MOD_NUM_KEYPAD | '1';
-            break;
-          case 34:                     /* PgDn */
-            keyevent = MOD_NUM_KEYPAD | '3';
-            break;
-          case 36:                     /* Home */
-            keyevent = MOD_NUM_KEYPAD | '7';
-            break;
-          case 33:                     /* PgUp */
-            keyevent = MOD_NUM_KEYPAD | '9';
-            break;
-          case 96: case 97: case 98: case 99: case 100:
-          case 101: case 102: case 103: case 104: case 105:
-            keyevent = MOD_NUM_KEYPAD | ('0' + keycode - 96);
-            break;
-          default:
-            /* not a key we care about */
-            return;
-        }
-    }
-    if (shift && keyevent >= 0x100)
-        keyevent |= MOD_SHFT;
-    if (ctrl && keyevent >= 0x100)
-        keyevent |= MOD_CTRL;
 
-    midend_process_key(me, 0, 0, keyevent);
-    update_undo_redo();
+    if (!strnullcmp(key, "Backspace") || !strnullcmp(key, "Del") ||
+        keycode == 8 || keycode == 46) {
+        keyevent = 127;                /* Backspace / Delete */
+    } else if (!strnullcmp(key, "Enter") || keycode == 13) {
+        keyevent = 13;             /* return */
+    } else if (!strnullcmp(key, "Left") || keycode == 37) {
+        keyevent = CURSOR_LEFT;
+    } else if (!strnullcmp(key, "Up") || keycode == 38) {
+        keyevent = CURSOR_UP;
+    } else if (!strnullcmp(key, "Right") || keycode == 39) {
+        keyevent = CURSOR_RIGHT;
+    } else if (!strnullcmp(key, "Down") || keycode == 40) {
+        keyevent = CURSOR_DOWN;
+    } else if (!strnullcmp(key, "End") || keycode == 35) {
+        /*
+         * We interpret Home, End, PgUp and PgDn as numeric keypad
+         * controls regardless of whether they're the ones on the
+         * numeric keypad (since we can't tell). The effect of
+         * this should only be that the non-numeric-pad versions
+         * of those keys generate directions in 8-way movement
+         * puzzles like Cube and Inertia.
+         */
+        keyevent = MOD_NUM_KEYPAD | '1';
+    } else if (!strnullcmp(key, "PageDown") || keycode==34) {
+        keyevent = MOD_NUM_KEYPAD | '3';
+    } else if (!strnullcmp(key, "Home") || keycode==36) {
+        keyevent = MOD_NUM_KEYPAD | '7';
+    } else if (!strnullcmp(key, "PageUp") || keycode==33) {
+        keyevent = MOD_NUM_KEYPAD | '9';
+    } else if (chr && chr[0] && !chr[1]) {
+        keyevent = chr[0] & 0xFF;
+    } else if (keycode >= 96 && keycode < 106) {
+        keyevent = MOD_NUM_KEYPAD | ('0' + keycode - 96);
+    } else if (keycode >= 65 && keycode <= 90) {
+        keyevent = keycode + (shift ? 0 : 32);
+    } else if (keycode >= 48 && keycode <= 57) {
+        keyevent = keycode;
+    }
+
+    if (keyevent >= 0) {
+        if (shift && keyevent >= 0x100)
+            keyevent |= MOD_SHFT;
+
+        if (ctrl) {
+            if (keyevent >= 0x100)
+                keyevent |= MOD_CTRL;
+            else
+                keyevent &= 0x1F;
+        }
+
+        midend_process_key(me, 0, 0, keyevent);
+        update_undo_redo();
+    }
 }
 
 /*
@@ -310,10 +348,10 @@ static void update_permalinks(void)
 }
 
 /*
- * Callback from the midend if Mines supersedes its game description,
- * so we can update the permalinks.
+ * Callback from the midend when the game ids change, so we can update
+ * the permalinks.
  */
-static void desc_changed(void *ignored)
+static void ids_changed(void *ignored)
 {
     update_permalinks();
 }
@@ -416,27 +454,30 @@ static void js_blitter_free(void *handle, blitter *bl)
 
 static void trim_rect(int *x, int *y, int *w, int *h)
 {
+    int x0, x1, y0, y1;
+
     /*
      * Reduce the size of the copied rectangle to stop it going
      * outside the bounds of the canvas.
      */
-    if (*x < 0) {
-        *w += *x;
-        *x = 0;
-    }
-    if (*y < 0) {
-        *h += *y;
-        *y = 0;
-    }
-    if (*w > canvas_w - *x)
-        *w = canvas_w - *x;
-    if (*h > canvas_h - *y)
-        *h = canvas_h - *y;
 
-    if (*w < 0)
-        *w = 0;
-    if (*h < 0)
-        *h = 0;
+    /* Transform from x,y,w,h form into coordinates of all edges */
+    x0 = *x;
+    y0 = *y;
+    x1 = *x + *w;
+    y1 = *y + *h;
+
+    /* Clip each coordinate at both extremes of the canvas */
+    x0 = (x0 < 0 ? 0 : x0 > canvas_w ? canvas_w : x0);
+    x1 = (x1 < 0 ? 0 : x1 > canvas_w ? canvas_w : x1);
+    y0 = (y0 < 0 ? 0 : y0 > canvas_h ? canvas_h : y0);
+    y1 = (y1 < 0 ? 0 : y1 > canvas_h ? canvas_h : y1); 
+
+    /* Transform back into x,y,w,h to return */
+    *x = x0;
+    *y = y0;
+    *w = x1 - x0;
+    *h = y1 - y0;
 }
 
 static void js_blitter_save(void *handle, blitter *bl, int x, int y)
@@ -458,7 +499,8 @@ static void js_blitter_load(void *handle, blitter *bl, int x, int y)
 static void js_draw_update(void *handle, int x, int y, int w, int h)
 {
     trim_rect(&x, &y, &w, &h);
-    js_canvas_draw_update(x, y, w, h);
+    if (w > 0 && h > 0)
+        js_canvas_draw_update(x, y, w, h);
 }
 
 static void js_end_draw(void *handle)
@@ -503,14 +545,14 @@ const struct drawing_api js_drawing = {
  * Presets and game-configuration dialog support.
  */
 static game_params **presets;
-static int custom_preset;
+static int npresets;
 int have_presets_dropdown;
 
 void select_appropriate_preset(void)
 {
     if (have_presets_dropdown) {
         int preset = midend_which_preset(me);
-        js_select_preset(preset < 0 ? custom_preset : preset);
+        js_select_preset(preset < 0 ? -1 : preset);
     }
 }
 
@@ -591,7 +633,6 @@ static void cfg_end(int use_results)
             midend_new_game(me);
             resize();
             midend_redraw(me);
-            update_permalinks();
             free_cfg(cfg);
             js_dialog_cleanup();
         }
@@ -632,7 +673,7 @@ void command(int n)
       case 2:                          /* game parameter dropdown changed */
         {
             int i = js_get_selected_preset();
-            if (i == custom_preset) {
+            if (i < 0) {
                 /*
                  * The user selected 'Custom', so launch the config
                  * box.
@@ -644,13 +685,14 @@ void command(int n)
                  * The user selected a preset, so just switch straight
                  * to that.
                  */
+                assert(i < npresets);
                 midend_set_params(me, presets[i]);
                 midend_new_game(me);
-                update_permalinks();
                 resize();
                 midend_redraw(me);
                 update_undo_redo();
                 js_focus_canvas();
+                select_appropriate_preset(); /* sort out Custom/Customise */
             }
         }
         break;
@@ -739,12 +781,10 @@ int main(int argc, char **argv)
 
     /*
      * Set up the game-type dropdown with presets and/or the Custom
-     * option. We remember the index of the Custom option (as
-     * custom_preset) so that we can easily treat it specially when
-     * it's selected.
+     * option.
      */
-    custom_preset = midend_num_presets(me);
-    if (custom_preset == 0) {
+    npresets = midend_num_presets(me);
+    if (npresets == 0) {
         /*
          * This puzzle doesn't have selectable game types at all.
          * Completely remove the drop-down list from the page.
@@ -754,8 +794,8 @@ int main(int argc, char **argv)
     } else {
         int preset;
 
-        presets = snewn(custom_preset, game_params *);
-        for (i = 0; i < custom_preset; i++) {
+        presets = snewn(npresets, game_params *);
+        for (i = 0; i < npresets; i++) {
             char *name;
             midend_fetch_preset(me, i, &name, &presets[i]);
             js_add_preset(name);
@@ -795,11 +835,11 @@ int main(int argc, char **argv)
     }
 
     /*
-     * Request notification if a puzzle (hopefully only ever Mines)
-     * supersedes its game description, so that we can proactively
-     * update the permalink.
+     * Request notification when the game ids change (e.g. if the user
+     * presses 'n', and also when Mines supersedes its game
+     * description), so that we can proactively update the permalink.
      */
-    midend_request_desc_changes(me, desc_changed, NULL);
+    midend_request_id_changes(me, ids_changed, NULL);
 
     /*
      * Draw the puzzle's initial state, and set up the permalinks and

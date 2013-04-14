@@ -97,7 +97,7 @@ static void free_params(game_params *params)
     sfree(params);
 }
 
-static game_params *dup_params(game_params *params)
+static game_params *dup_params(const game_params *params)
 {
     game_params *ret = snew(game_params);
     *ret = *params;		       /* structure copy */
@@ -119,7 +119,7 @@ static void decode_params(game_params *ret, char const *string)
     }
 }
 
-static char *encode_params(game_params *params, int full)
+static char *encode_params(const game_params *params, int full)
 {
     char ret[400];
     int len;
@@ -131,7 +131,7 @@ static char *encode_params(game_params *params, int full)
     return dupstr(ret);
 }
 
-static config_item *game_configure(game_params *params)
+static config_item *game_configure(const game_params *params)
 {
     config_item *ret;
     char buf[80];
@@ -158,7 +158,7 @@ static config_item *game_configure(game_params *params)
     return ret;
 }
 
-static game_params *custom_params(config_item *cfg)
+static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
@@ -168,7 +168,7 @@ static game_params *custom_params(config_item *cfg)
     return ret;
 }
 
-static char *validate_params(game_params *params, int full)
+static char *validate_params(const game_params *params, int full)
 {
     if (params->w <= 0 || params->h <= 0)
 	return "Width and height must both be greater than zero";
@@ -344,35 +344,76 @@ static int compute_rowdata(int *ret, unsigned char *start, int len, int step)
 int verbose = FALSE;
 #endif
 
-static void do_recurse(unsigned char *known, unsigned char *deduced,
-                       unsigned char *row, int *data, int len,
+static int do_recurse(unsigned char *known, unsigned char *deduced,
+                       unsigned char *row,
+		       unsigned char *minpos_done, unsigned char *maxpos_done,
+		       unsigned char *minpos_ok, unsigned char *maxpos_ok,
+		       int *data, int len,
                        int freespace, int ndone, int lowest)
 {
     int i, j, k;
 
+
+    /* This algorithm basically tries all possible ways the given rows of
+     * black blocks can be laid out in the row/column being examined.
+     * Special care is taken to avoid checking the tail of a row/column
+     * if the same conditions have already been checked during this recursion
+     * The algorithm also takes care to cut its losses as soon as an
+     * invalid (partial) solution is detected.
+     */
     if (data[ndone]) {
+	if (lowest >= minpos_done[ndone] && lowest <= maxpos_done[ndone]) {
+	    if (lowest >= minpos_ok[ndone] && lowest <= maxpos_ok[ndone]) {
+		for (i=0; i<lowest; i++)
+		    deduced[i] |= row[i];
+	    }
+	    return lowest >= minpos_ok[ndone] && lowest <= maxpos_ok[ndone];
+	} else {
+	    if (lowest < minpos_done[ndone]) minpos_done[ndone] = lowest;
+	    if (lowest > maxpos_done[ndone]) maxpos_done[ndone] = lowest;
+	}
 	for (i=0; i<=freespace; i++) {
 	    j = lowest;
-	    for (k=0; k<i; k++) row[j++] = DOT;
-	    for (k=0; k<data[ndone]; k++) row[j++] = BLOCK;
-	    if (j < len) row[j++] = DOT;
-	    do_recurse(known, deduced, row, data, len,
-                       freespace-i, ndone+1, j);
+	    for (k=0; k<i; k++) {
+		if (known[j] == BLOCK) goto next_iter;
+	        row[j++] = DOT;
+	    }
+	    for (k=0; k<data[ndone]; k++) {
+		if (known[j] == DOT) goto next_iter;
+	        row[j++] = BLOCK;
+	    }
+	    if (j < len) {
+		if (known[j] == BLOCK) goto next_iter;
+	        row[j++] = DOT;
+	    }
+	    if (do_recurse(known, deduced, row, minpos_done, maxpos_done,
+	                   minpos_ok, maxpos_ok, data, len, freespace-i, ndone+1, j)) {
+	        if (lowest < minpos_ok[ndone]) minpos_ok[ndone] = lowest;
+	        if (lowest + i > maxpos_ok[ndone]) maxpos_ok[ndone] = lowest + i;
+	        if (lowest + i > maxpos_done[ndone]) maxpos_done[ndone] = lowest + i;
+	    }
+	    next_iter:
+	    j++;
 	}
+	return lowest >= minpos_ok[ndone] && lowest <= maxpos_ok[ndone];
     } else {
-	for (i=lowest; i<len; i++)
+	for (i=lowest; i<len; i++) {
+	    if (known[i] == BLOCK) return FALSE;
 	    row[i] = DOT;
-	for (i=0; i<len; i++)
-	    if (known[i] && known[i] != row[i])
-		return;
+	    }
 	for (i=0; i<len; i++)
 	    deduced[i] |= row[i];
+	return TRUE;
     }
 }
 
+
 static int do_row(unsigned char *known, unsigned char *deduced,
                   unsigned char *row,
-                  unsigned char *start, int len, int step, int *data
+                  unsigned char *minpos_done, unsigned char *maxpos_done,
+		  unsigned char *minpos_ok, unsigned char *maxpos_ok,
+                  unsigned char *start, int len, int step, int *data,
+		  unsigned int *changed
 #ifdef STANDALONE_SOLVER
 		  , const char *rowcol, int index, int cluewid
 #endif
@@ -381,19 +422,26 @@ static int do_row(unsigned char *known, unsigned char *deduced,
     int rowlen, i, freespace, done_any;
 
     freespace = len+1;
-    for (rowlen = 0; data[rowlen]; rowlen++)
+    for (rowlen = 0; data[rowlen]; rowlen++) {
+	minpos_done[rowlen] = minpos_ok[rowlen] = len - 1;
+	maxpos_done[rowlen] = maxpos_ok[rowlen] = 0;
 	freespace -= data[rowlen]+1;
+    }
 
     for (i = 0; i < len; i++) {
 	known[i] = start[i*step];
 	deduced[i] = 0;
     }
+    for (i = len - 1; i >= 0 && known[i] == DOT; i--)
+        freespace--;
 
-    do_recurse(known, deduced, row, data, len, freespace, 0, 0);
+    do_recurse(known, deduced, row, minpos_done, maxpos_done, minpos_ok, maxpos_ok, data, len, freespace, 0, 0);
+
     done_any = FALSE;
     for (i=0; i<len; i++)
 	if (deduced[i] && deduced[i] != STILL_UNKNOWN && !known[i]) {
 	    start[i*step] = deduced[i];
+	    if (changed) changed[i]++;
 	    done_any = TRUE;
 	}
 #ifdef STANDALONE_SOLVER
@@ -420,16 +468,152 @@ static int do_row(unsigned char *known, unsigned char *deduced,
     return done_any;
 }
 
+static int solve_puzzle(const game_state *state, unsigned char *grid,
+                        int w, int h,
+			unsigned char *matrix, unsigned char *workspace,
+			unsigned int *changed_h, unsigned int *changed_w,
+			int *rowdata
+#ifdef STANDALONE_SOLVER
+			, int cluewid
+#else
+			, int dummy
+#endif
+			)
+{
+    int i, j, ok, max;
+    int max_h, max_w;
+
+    assert((state!=NULL) ^ (grid!=NULL));
+
+    max = max(w, h);
+
+    memset(matrix, 0, w*h);
+
+    /* For each column, compute how many squares can be deduced
+     * from just the row-data.
+     * Later, changed_* will hold how many squares were changed
+     * in every row/column in the previous iteration
+     * Changed_* is used to choose the next rows / cols to re-examine
+     */
+    for (i=0; i<h; i++) {
+	int freespace;
+	if (state) {
+            memcpy(rowdata, state->rowdata + state->rowsize*(w+i), max*sizeof(int));
+	    rowdata[state->rowlen[w+i]] = 0;
+	} else {
+	    rowdata[compute_rowdata(rowdata, grid+i*w, w, 1)] = 0;
+	}
+	for (j=0, freespace=w+1; rowdata[j]; j++) freespace -= rowdata[j] + 1;
+	for (j=0, changed_h[i]=0; rowdata[j]; j++)
+	    if (rowdata[j] > freespace)
+		changed_h[i] += rowdata[j] - freespace;
+    }
+    for (i=0,max_h=0; i<h; i++)
+	if (changed_h[i] > max_h)
+	    max_h = changed_h[i];
+    for (i=0; i<w; i++) {
+	int freespace;
+	if (state) {
+	    memcpy(rowdata, state->rowdata + state->rowsize*i, max*sizeof(int));
+	    rowdata[state->rowlen[i]] = 0;
+	} else {
+	    rowdata[compute_rowdata(rowdata, grid+i, h, w)] = 0;
+	}
+	for (j=0, freespace=h+1; rowdata[j]; j++) freespace -= rowdata[j] + 1;
+	for (j=0, changed_w[i]=0; rowdata[j]; j++)
+	    if (rowdata[j] > freespace)
+		changed_w[i] += rowdata[j] - freespace;
+    }
+    for (i=0,max_w=0; i<w; i++)
+	if (changed_w[i] > max_w)
+	    max_w = changed_w[i];
+
+    /* Solve the puzzle.
+     * Process rows/columns individually. Deductions involving more than one
+     * row and/or column at a time are not supported.
+     * Take care to only process rows/columns which have been changed since they
+     * were previously processed.
+     * Also, prioritize rows/columns which have had the most changes since their
+     * previous processing, as they promise the greatest benefit.
+     * Extremely rectangular grids (e.g. 10x20, 15x40, etc.) are not treated specially.
+     */
+    do {
+	for (; max_h && max_h >= max_w; max_h--) {
+	    for (i=0; i<h; i++) {
+		if (changed_h[i] >= max_h) {
+		    if (state) {
+			memcpy(rowdata, state->rowdata + state->rowsize*(w+i), max*sizeof(int));
+			rowdata[state->rowlen[w+i]] = 0;
+		    } else {
+			rowdata[compute_rowdata(rowdata, grid+i*w, w, 1)] = 0;
+		    }
+		    do_row(workspace, workspace+max, workspace+2*max,
+			   workspace+3*max, workspace+4*max,
+			   workspace+5*max, workspace+6*max,
+			   matrix+i*w, w, 1, rowdata, changed_w
+#ifdef STANDALONE_SOLVER
+			   , "row", i+1, cluewid
+#endif
+			   );
+		    changed_h[i] = 0;
+		}
+	    }
+	    for (i=0,max_w=0; i<w; i++)
+		if (changed_w[i] > max_w)
+		    max_w = changed_w[i];
+	}
+	for (; max_w && max_w >= max_h; max_w--) {
+	    for (i=0; i<w; i++) {
+		if (changed_w[i] >= max_w) {
+		    if (state) {
+			memcpy(rowdata, state->rowdata + state->rowsize*i, max*sizeof(int));
+			rowdata[state->rowlen[i]] = 0;
+		    } else {
+			rowdata[compute_rowdata(rowdata, grid+i, h, w)] = 0;
+		    }
+		    do_row(workspace, workspace+max, workspace+2*max,
+			   workspace+3*max, workspace+4*max,
+			   workspace+5*max, workspace+6*max,
+			   matrix+i, h, w, rowdata, changed_h
+#ifdef STANDALONE_SOLVER
+			   , "col", i+1, cluewid
+#endif
+			   );
+		    changed_w[i] = 0;
+		}
+	    }
+	    for (i=0,max_h=0; i<h; i++)
+		if (changed_h[i] > max_h)
+		    max_h = changed_h[i];
+	}
+    } while (max_h>0 || max_w>0);
+
+    ok = TRUE;
+    for (i=0; i<h; i++) {
+	for (j=0; j<w; j++) {
+	    if (matrix[i*w+j] == UNKNOWN)
+		ok = FALSE;
+	}
+    }
+
+    return ok;
+}
+
 static unsigned char *generate_soluble(random_state *rs, int w, int h)
 {
-    int i, j, done_any, ok, ntries, max;
+    int i, j, ok, ntries, max;
     unsigned char *grid, *matrix, *workspace;
+    unsigned int *changed_h, *changed_w;
     int *rowdata;
 
-    grid = snewn(w*h, unsigned char);
-    matrix = snewn(w*h, unsigned char);
     max = max(w, h);
-    workspace = snewn(max*3, unsigned char);
+
+    grid = snewn(w*h, unsigned char);
+    /* Allocate this here, to avoid having to reallocate it again for every geneerated grid */
+    matrix = snewn(w*h, unsigned char);
+    workspace = snewn(max*7, unsigned char);
+    changed_h = snewn(max+1, unsigned int);
+    changed_w = snewn(max+1, unsigned int);
     rowdata = snewn(max+1, int);
 
     ntries = 0;
@@ -467,46 +651,19 @@ static unsigned char *generate_soluble(random_state *rs, int w, int h)
         if (!ok)
             continue;
 
-        memset(matrix, 0, w*h);
-
-        do {
-            done_any = 0;
-            for (i=0; i<h; i++) {
-                rowdata[compute_rowdata(rowdata, grid+i*w, w, 1)] = 0;
-                done_any |= do_row(workspace, workspace+max, workspace+2*max,
-                                   matrix+i*w, w, 1, rowdata
-#ifdef STANDALONE_SOLVER
-				   , NULL, 0, 0 /* never do diagnostics here */
-#endif
-				   );
-            }
-            for (i=0; i<w; i++) {
-                rowdata[compute_rowdata(rowdata, grid+i, h, w)] = 0;
-                done_any |= do_row(workspace, workspace+max, workspace+2*max,
-                                   matrix+i, h, w, rowdata
-#ifdef STANDALONE_SOLVER
-				   , NULL, 0, 0 /* never do diagnostics here */
-#endif
-				   );
-            }
-        } while (done_any);
-
-        ok = TRUE;
-        for (i=0; i<h; i++) {
-            for (j=0; j<w; j++) {
-                if (matrix[i*w+j] == UNKNOWN)
-                    ok = FALSE;
-            }
-        }
+	ok = solve_puzzle(NULL, grid, w, h, matrix, workspace,
+			  changed_h, changed_w, rowdata, 0);
     } while (!ok);
 
     sfree(matrix);
     sfree(workspace);
+    sfree(changed_h);
+    sfree(changed_w);
     sfree(rowdata);
     return grid;
 }
 
-static char *new_game_desc(game_params *params, random_state *rs,
+static char *new_game_desc(const game_params *params, random_state *rs,
 			   char **aux, int interactive)
 {
     unsigned char *grid;
@@ -593,10 +750,10 @@ static char *new_game_desc(game_params *params, random_state *rs,
     return desc;
 }
 
-static char *validate_desc(game_params *params, char *desc)
+static char *validate_desc(const game_params *params, const char *desc)
 {
     int i, n, rowspace;
-    char *p;
+    const char *p;
 
     for (i = 0; i < params->w + params->h; i++) {
         if (i < params->w)
@@ -635,10 +792,11 @@ static char *validate_desc(game_params *params, char *desc)
     return NULL;
 }
 
-static game_state *new_game(midend *me, game_params *params, char *desc)
+static game_state *new_game(midend *me, const game_params *params,
+                            const char *desc)
 {
     int i;
-    char *p;
+    const char *p;
     game_state *state = snew(game_state);
 
     state->w = params->w;
@@ -670,7 +828,7 @@ static game_state *new_game(midend *me, game_params *params, char *desc)
     return state;
 }
 
-static game_state *dup_game(game_state *state)
+static game_state *dup_game(const game_state *state)
 {
     game_state *ret = snew(game_state);
 
@@ -702,15 +860,16 @@ static void free_game(game_state *state)
     sfree(state);
 }
 
-static char *solve_game(game_state *state, game_state *currstate,
-			char *ai, char **error)
+static char *solve_game(const game_state *state, const game_state *currstate,
+                        const char *ai, char **error)
 {
     unsigned char *matrix;
     int w = state->w, h = state->h;
     int i;
     char *ret;
-    int done_any, max;
+    int max, ok;
     unsigned char *workspace;
+    unsigned int *changed_h, *changed_w;
     int *rowdata;
 
     /*
@@ -719,47 +878,25 @@ static char *solve_game(game_state *state, game_state *currstate,
     if (ai)
         return dupstr(ai);
 
-    matrix = snewn(w*h, unsigned char);
     max = max(w, h);
-    workspace = snewn(max*3, unsigned char);
+    matrix = snewn(w*h, unsigned char);
+    workspace = snewn(max*7, unsigned char);
+    changed_h = snewn(max+1, unsigned int);
+    changed_w = snewn(max+1, unsigned int);
     rowdata = snewn(max+1, int);
 
-    memset(matrix, 0, w*h);
-
-    do {
-        done_any = 0;
-        for (i=0; i<h; i++) {
-            memcpy(rowdata, state->rowdata + state->rowsize*(w+i),
-                   max*sizeof(int));
-            rowdata[state->rowlen[w+i]] = 0;
-            done_any |= do_row(workspace, workspace+max, workspace+2*max,
-                               matrix+i*w, w, 1, rowdata
-#ifdef STANDALONE_SOLVER
-			       , NULL, 0, 0 /* never do diagnostics here */
-#endif
-			       );
-        }
-        for (i=0; i<w; i++) {
-            memcpy(rowdata, state->rowdata + state->rowsize*i, max*sizeof(int));
-            rowdata[state->rowlen[i]] = 0;
-            done_any |= do_row(workspace, workspace+max, workspace+2*max,
-                               matrix+i, h, w, rowdata
-#ifdef STANDALONE_SOLVER
-			       , NULL, 0, 0 /* never do diagnostics here */
-#endif
-			       );
-        }
-    } while (done_any);
+    ok = solve_puzzle(state, NULL, w, h, matrix, workspace,
+		      changed_h, changed_w, rowdata, 0);
 
     sfree(workspace);
+    sfree(changed_h);
+    sfree(changed_w);
     sfree(rowdata);
 
-    for (i = 0; i < w*h; i++) {
-        if (matrix[i] != BLOCK && matrix[i] != DOT) {
-            sfree(matrix);
-            *error = "Solving algorithm cannot complete this puzzle";
-            return NULL;
-        }
+    if (!ok) {
+	sfree(matrix);
+	*error = "Solving algorithm cannot complete this puzzle";
+	return NULL;
     }
 
     ret = snewn(w*h+2, char);
@@ -775,12 +912,12 @@ static char *solve_game(game_state *state, game_state *currstate,
     return ret;
 }
 
-static int game_can_format_as_text_now(game_params *params)
+static int game_can_format_as_text_now(const game_params *params)
 {
     return TRUE;
 }
 
-static char *game_text_format(game_state *state)
+static char *game_text_format(const game_state *state)
 {
     return NULL;
 }
@@ -795,7 +932,7 @@ struct game_ui {
     int cur_x, cur_y, cur_visible;
 };
 
-static game_ui *new_ui(game_state *state)
+static game_ui *new_ui(const game_state *state)
 {
     game_ui *ret;
 
@@ -811,17 +948,17 @@ static void free_ui(game_ui *ui)
     sfree(ui);
 }
 
-static char *encode_ui(game_ui *ui)
+static char *encode_ui(const game_ui *ui)
 {
     return NULL;
 }
 
-static void decode_ui(game_ui *ui, char *encoding)
+static void decode_ui(game_ui *ui, const char *encoding)
 {
 }
 
-static void game_changed_state(game_ui *ui, game_state *oldstate,
-                               game_state *newstate)
+static void game_changed_state(game_ui *ui, const game_state *oldstate,
+                               const game_state *newstate)
 {
 }
 
@@ -833,8 +970,9 @@ struct game_drawstate {
     int cur_x, cur_y;
 };
 
-static char *interpret_move(game_state *state, game_ui *ui, const game_drawstate *ds,
-			    int x, int y, int button)
+static char *interpret_move(const game_state *state, game_ui *ui,
+                            const game_drawstate *ds,
+                            int x, int y, int button)
 {
     button &= ~MOD_MASK;
 
@@ -967,7 +1105,7 @@ static char *interpret_move(game_state *state, game_ui *ui, const game_drawstate
     return NULL;
 }
 
-static game_state *execute_move(game_state *from, char *move)
+static game_state *execute_move(const game_state *from, const char *move)
 {
     game_state *ret;
     int x1, x2, y1, y2, xx, yy;
@@ -1144,7 +1282,7 @@ static int errcheck_found_run(struct errcheck_state *es, int r)
 #undef ROWDATA
 }
 
-static int check_errors(game_state *state, int i)
+static int check_errors(const game_state *state, int i)
 {
     int start, step, end, j;
     int val, runlen;
@@ -1201,8 +1339,8 @@ static int check_errors(game_state *state, int i)
  * Drawing routines.
  */
 
-static void game_compute_size(game_params *params, int tilesize,
-			      int *x, int *y)
+static void game_compute_size(const game_params *params, int tilesize,
+                              int *x, int *y)
 {
     /* Ick: fake up `ds->tilesize' for macro expansion purposes */
     struct { int tilesize; } ads, *ds = &ads;
@@ -1213,7 +1351,7 @@ static void game_compute_size(game_params *params, int tilesize,
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
-			  game_params *params, int tilesize)
+                          const game_params *params, int tilesize)
 {
     ds->tilesize = tilesize;
 }
@@ -1243,7 +1381,7 @@ static float *game_colours(frontend *fe, int *ncolours)
     return ret;
 }
 
-static game_drawstate *game_new_drawstate(drawing *dr, game_state *state)
+static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 {
     struct game_drawstate *ds = snew(struct game_drawstate);
 
@@ -1299,8 +1437,8 @@ static void grid_square(drawing *dr, game_drawstate *ds,
 /*
  * Draw the numbers for a single row or column.
  */
-static void draw_numbers(drawing *dr, game_drawstate *ds, game_state *state,
-			 int i, int erase, int colour)
+static void draw_numbers(drawing *dr, game_drawstate *ds,
+                         const game_state *state, int i, int erase, int colour)
 {
     int rowlen = state->rowlen[i];
     int *rowdata = state->rowdata + state->rowsize * i;
@@ -1359,8 +1497,9 @@ static void draw_numbers(drawing *dr, game_drawstate *ds, game_state *state,
     }
 }
 
-static void game_redraw(drawing *dr, game_drawstate *ds, game_state *oldstate,
-                        game_state *state, int dir, game_ui *ui,
+static void game_redraw(drawing *dr, game_drawstate *ds,
+                        const game_state *oldstate, const game_state *state,
+                        int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
     int i, j;
@@ -1459,14 +1598,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds, game_state *oldstate,
     }
 }
 
-static float game_anim_length(game_state *oldstate,
-			      game_state *newstate, int dir, game_ui *ui)
+static float game_anim_length(const game_state *oldstate,
+                              const game_state *newstate, int dir, game_ui *ui)
 {
     return 0.0F;
 }
 
-static float game_flash_length(game_state *oldstate,
-			       game_state *newstate, int dir, game_ui *ui)
+static float game_flash_length(const game_state *oldstate,
+                               const game_state *newstate, int dir, game_ui *ui)
 {
     if (!oldstate->completed && newstate->completed &&
 	!oldstate->cheated && !newstate->cheated)
@@ -1474,17 +1613,17 @@ static float game_flash_length(game_state *oldstate,
     return 0.0F;
 }
 
-static int game_status(game_state *state)
+static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(game_state *state, game_ui *ui)
+static int game_timing_state(const game_state *state, game_ui *ui)
 {
     return TRUE;
 }
 
-static void game_print_size(game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, float *x, float *y)
 {
     int pw, ph;
 
@@ -1496,7 +1635,7 @@ static void game_print_size(game_params *params, float *x, float *y)
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, int tilesize)
 {
     int w = state->w, h = state->h;
     int ink = print_mono_colour(dr, 0);
@@ -1635,16 +1774,17 @@ int main(int argc, char **argv)
     s = new_game(NULL, p, desc);
 
     {
-	int w = p->w, h = p->h, i, j, done_any, max, cluewid = 0;
+	int w = p->w, h = p->h, i, j, max, cluewid = 0;
 	unsigned char *matrix, *workspace;
+	unsigned int *changed_h, *changed_w;
 	int *rowdata;
 
 	matrix = snewn(w*h, unsigned char);
 	max = max(w, h);
-	workspace = snewn(max*3, unsigned char);
+	workspace = snewn(max*7, unsigned char);
+	changed_h = snewn(max+1, unsigned int);
+	changed_w = snewn(max+1, unsigned int);
 	rowdata = snewn(max+1, int);
-
-        memset(matrix, 0, w*h);
 
 	if (verbose) {
 	    int thiswid;
@@ -1662,30 +1802,8 @@ int main(int argc, char **argv)
 	    }
 	}
 
-        do {
-            done_any = 0;
-            for (i=0; i<h; i++) {
-		memcpy(rowdata, s->rowdata + s->rowsize*(w+i),
-		       max*sizeof(int));
-		rowdata[s->rowlen[w+i]] = 0;
-                done_any |= do_row(workspace, workspace+max, workspace+2*max,
-                                   matrix+i*w, w, 1, rowdata
-#ifdef STANDALONE_SOLVER
-				   , "row", i+1, cluewid
-#endif
-				   );
-            }
-            for (i=0; i<w; i++) {
-		memcpy(rowdata, s->rowdata + s->rowsize*i, max*sizeof(int));
-		rowdata[s->rowlen[i]] = 0;
-                done_any |= do_row(workspace, workspace+max, workspace+2*max,
-                                   matrix+i, h, w, rowdata
-#ifdef STANDALONE_SOLVER
-				   , "col", i+1, cluewid
-#endif
-				   );
-            }
-        } while (done_any);
+	solve_puzzle(s, NULL, w, h, matrix, workspace,
+		     changed_h, changed_w, rowdata, cluewid);
 
 	for (i = 0; i < h; i++) {
 	    for (j = 0; j < w; j++) {
