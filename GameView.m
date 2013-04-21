@@ -515,6 +515,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)timerFire:(NSTimer *)timer
 {
+    if (me == NULL) {
+        return;
+    }
     midend_timer(me, 0.02);
 }
 
