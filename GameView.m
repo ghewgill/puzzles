@@ -528,7 +528,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doGameMenu
 {
-    UIActionSheet *gameMenu = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:@"New game" otherButtonTitles:@"Specific game", @"Specific Random Seed", @"Restart", @"Solve", nil];
+    UIActionSheet *gameMenu;
+    if (ourgame->can_solve) {
+        gameMenu = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:@"New game" otherButtonTitles:@"Specific game", @"Specific Random Seed", @"Restart", @"Solve", nil];
+    } else {
+        gameMenu = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"Cancel" destructiveButtonTitle:@"New game" otherButtonTitles:@"Specific game", @"Specific Random Seed", @"Restart", nil];
+    }
     // Avoid doing this because on the iPad, the popover will automatically add the toolbar to the list of passthrough
     // views, causing unwanted effects if you click on other toolbar buttons before the popover dismisses.
     // See http://stackoverflow.com/questions/5448987/ipads-uiactionsheet-showing-multiple-times
@@ -543,7 +548,13 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         case 1: [self doSpecificGame]; break;
         case 2: [self doSpecificSeed]; break;
         case 3: [self doRestart]; break;
-        case 4: [self doSolve]; break;
+        case 4:
+            if (ourgame->can_solve) {
+                [self doSolve];
+            } else {
+                // index 4 referns to Cancel button
+            }
+            break;
     }
 }
 
