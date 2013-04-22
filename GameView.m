@@ -111,7 +111,7 @@ static int saveGameRead(void *ctx, void *buf, int len)
         }
         me = midend_new(&fe, ourgame, &ios_drawing, &fe);
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
-        self.backgroundColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:1];
+        self.backgroundColor = [UIColor colorWithRed:fe.colours[0][0] green:fe.colours[0][1] blue:fe.colours[0][2] alpha:1];
         buttons = [[NSMutableDictionary alloc] init];
         if (saved) {
             struct StringReadContext srctx;
