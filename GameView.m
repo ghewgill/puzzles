@@ -36,6 +36,7 @@ extern const game solo;
 extern const game towers;
 extern const game undead;
 extern const game unequal;
+extern const game untangle;
 
 const int ButtonDown[3] = {LEFT_BUTTON,  RIGHT_BUTTON,  MIDDLE_BUTTON};
 const int ButtonDrag[3] = {LEFT_DRAG,    RIGHT_DRAG,    MIDDLE_DRAG};
@@ -361,6 +362,17 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     CGImageRelease(image);
 }
 
+- (void)adjust_drag_position:(int *)xpixels ypixels:(int *)ypixels
+{
+    if (ourgame == &untangle) {
+        int ts = midend_tilesize(me);
+        *xpixels = max(ts/8, *xpixels);
+        *xpixels = min(CGRectGetWidth(game_rect)-ts/8, *xpixels);
+        *ypixels = max(ts/8, *ypixels);
+        *ypixels = min(CGRectGetHeight(game_rect)-ts/8, *ypixels);
+    }
+}
+
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
 {
     UITouch *touch = [touches anyObject];
@@ -374,6 +386,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     touchYpoints = p.y;
     touchXpixels = p.x * self.contentScaleFactor;
     touchYpixels = p.y * self.contentScaleFactor;
+    [self adjust_drag_position:&touchXpixels ypixels:&touchYpixels];
     touchButton = 0;
     if (self.net_centre_mode) {
         midend_process_key(me, touchXpixels, touchYpixels, 0x03);
@@ -390,6 +403,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     int ypoints = min(game_rect.size.height-1, max(0, p.y));
     int xpixels = xpoints * self.contentScaleFactor;
     int ypixels = ypoints * self.contentScaleFactor;
+    [self adjust_drag_position:&xpixels ypixels:&ypixels];
     if (self.net_centre_mode) {
         midend_process_key(me, xpixels, ypixels, 0x03);
     } else if (self.net_shift_mode) {
@@ -435,6 +449,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     int ypoints = min(game_rect.size.height-1, max(0, p.y));
     int xpixels = xpoints * self.contentScaleFactor;
     int ypixels = ypoints * self.contentScaleFactor;
+    [self adjust_drag_position:&xpixels ypixels:&ypixels];
     if (self.net_centre_mode || self.net_shift_mode) {
         // nothing
     } else {
