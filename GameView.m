@@ -367,9 +367,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     if (ourgame == &untangle) {
         int ts = midend_tilesize(me);
         *xpixels = max(ts/8, *xpixels);
-        *xpixels = min(CGRectGetWidth(game_rect)-ts/8, *xpixels);
+        *xpixels = min(CGRectGetWidth(game_rect)*self.contentScaleFactor-ts/8 - 1, *xpixels);
         *ypixels = max(ts/8, *ypixels);
-        *ypixels = min(CGRectGetHeight(game_rect)-ts/8, *ypixels);
+        *ypixels = min(CGRectGetHeight(game_rect)*self.contentScaleFactor-ts/8 - 1, *ypixels);
     }
 }
 
