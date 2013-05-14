@@ -1739,23 +1739,23 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         if (xi >= 0 && !state->common->fixed[xi]) {
             if (button == 'g' || button == 'G' || button == '1') {
                 sprintf(buf,"g%d",xi);
-                if (!ui->hcursor) ui->hpencil = ui->hshow = 0;
+                if (!ui->hcursor && !ui->hpencil) ui->hpencil = ui->hshow = 0;
                 return dupstr(buf);
             }
             if (button == 'v' || button == 'V' || button == '2') {
                 sprintf(buf,"v%d",xi);
-                if (!ui->hcursor) ui->hpencil = ui->hshow = 0;
+                if (!ui->hcursor && !ui->hpencil) ui->hpencil = ui->hshow = 0;
                 return dupstr(buf);
             }
             if (button == 'z' || button == 'Z' || button == '3') {
                 sprintf(buf,"z%d",xi);
-                if (!ui->hcursor) ui->hpencil = ui->hshow = 0;
+                if (!ui->hcursor && !ui->hpencil) ui->hpencil = ui->hshow = 0;
                 return dupstr(buf);
             }
             if (button == 'e' || button == 'E' || button == CURSOR_SELECT2 ||
                 button == '0' || button == '\b') {
                 sprintf(buf,"E%d",xi);
-                if (!ui->hcursor) ui->hpencil = ui->hshow = 0;
+                if (!ui->hcursor && !ui->hpencil) ui->hpencil = ui->hshow = 0;
                 return dupstr(buf);
             }
         }       
