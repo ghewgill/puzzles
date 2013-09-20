@@ -34,31 +34,34 @@ typedef NS_ENUM(NSUInteger, PSTCollectionElementCategory) {
     PSTCollectionElementCategoryDecorationView
 };
 
-/**
- Replacement for UICollectionView for iOS4/5.
- Only supports a subset of the features of UICollectionView.
- e.g. animations won't be handled.
- */
+/// Define the `PSTCollectionViewDisableForwardToUICollectionViewSentinel` to disable the automatic forwarding to UICollectionView on iOS 6+. (Copy below line into your AppDelegate.m)
+//@interface PSTCollectionViewDisableForwardToUICollectionViewSentinel : NSObject @end @implementation PSTCollectionViewDisableForwardToUICollectionViewSentinel @end
+
+/// API-compatible replacement for UICollectionView.
+/// Works on iOS 4.3 upwards (including iOS 6).
 @interface PSTCollectionView : UIScrollView
 
 - (id)initWithFrame:(CGRect)frame collectionViewLayout:(PSTCollectionViewLayout *)layout; // the designated initializer
 
 @property (nonatomic, strong) PSTCollectionViewLayout *collectionViewLayout;
-@property (nonatomic, assign) IBOutlet id <PSTCollectionViewDelegate> delegate;
-@property (nonatomic, assign) IBOutlet id <PSTCollectionViewDataSource> dataSource;
+@property (nonatomic, assign) IBOutlet id<PSTCollectionViewDelegate> delegate;
+@property (nonatomic, assign) IBOutlet id<PSTCollectionViewDataSource> dataSource;
 @property (nonatomic, strong) UIView *backgroundView; // will be automatically resized to track the size of the collection view and placed behind all cells and supplementary views.
 
 // For each reuse identifier that the collection view will use, register either a class or a nib from which to instantiate a cell.
 // If a nib is registered, it must contain exactly 1 top level object which is a PSTCollectionViewCell.
 // If a class is registered, it will be instantiated via alloc/initWithFrame:
 - (void)registerClass:(Class)cellClass forCellWithReuseIdentifier:(NSString *)identifier;
+
 - (void)registerClass:(Class)viewClass forSupplementaryViewOfKind:(NSString *)elementKind withReuseIdentifier:(NSString *)identifier;
+
 - (void)registerNib:(UINib *)nib forCellWithReuseIdentifier:(NSString *)identifier;
 
 // TODO: implement!
 - (void)registerNib:(UINib *)nib forSupplementaryViewOfKind:(NSString *)kind withReuseIdentifier:(NSString *)identifier;
 
 - (id)dequeueReusableCellWithReuseIdentifier:(NSString *)identifier forIndexPath:(NSIndexPath *)indexPath;
+
 - (id)dequeueReusableSupplementaryViewOfKind:(NSString *)elementKind withReuseIdentifier:(NSString *)identifier forIndexPath:(NSIndexPath *)indexPath;
 
 // These properties control whether items can be selected, and if so, whether multiple items can be simultaneously selected.
@@ -67,6 +70,7 @@ typedef NS_ENUM(NSUInteger, PSTCollectionElementCategory) {
 
 - (NSArray *)indexPathsForSelectedItems; // returns nil or an array of selected index paths
 - (void)selectItemAtIndexPath:(NSIndexPath *)indexPath animated:(BOOL)animated scrollPosition:(PSTCollectionViewScrollPosition)scrollPosition;
+
 - (void)deselectItemAtIndexPath:(NSIndexPath *)indexPath animated:(BOOL)animated;
 
 - (void)reloadData; // discard the dataSource and delegate data and requery as necessary
@@ -76,16 +80,21 @@ typedef NS_ENUM(NSUInteger, PSTCollectionElementCategory) {
 // Information about the current state of the collection view.
 
 - (NSInteger)numberOfSections;
+
 - (NSInteger)numberOfItemsInSection:(NSInteger)section;
 
 - (PSTCollectionViewLayoutAttributes *)layoutAttributesForItemAtIndexPath:(NSIndexPath *)indexPath;
+
 - (PSTCollectionViewLayoutAttributes *)layoutAttributesForSupplementaryElementOfKind:(NSString *)kind atIndexPath:(NSIndexPath *)indexPath;
 
 - (NSIndexPath *)indexPathForItemAtPoint:(CGPoint)point;
+
 - (NSIndexPath *)indexPathForCell:(PSTCollectionViewCell *)cell;
 
 - (PSTCollectionViewCell *)cellForItemAtIndexPath:(NSIndexPath *)indexPath;
+
 - (NSArray *)visibleCells;
+
 - (NSArray *)indexPathsForVisibleItems;
 
 // Interacting with the collection view.
@@ -97,18 +106,15 @@ typedef NS_ENUM(NSUInteger, PSTCollectionElementCategory) {
 - (void)deleteSections:(NSIndexSet *)sections;
 - (void)reloadSections:(NSIndexSet *)sections;
 - (void)moveSection:(NSInteger)section toSection:(NSInteger)newSection;
-
 - (void)insertItemsAtIndexPaths:(NSArray *)indexPaths;
 - (void)deleteItemsAtIndexPaths:(NSArray *)indexPaths;
 - (void)reloadItemsAtIndexPaths:(NSArray *)indexPaths;
 - (void)moveItemAtIndexPath:(NSIndexPath *)indexPath toIndexPath:(NSIndexPath *)newIndexPath;
-
 - (void)performBatchUpdates:(void (^)(void))updates completion:(void (^)(BOOL finished))completion; // allows multiple insert/delete/reload/move calls to be animated simultaneously. Nestable.
 
 @end
 
 // To dynamically switch between PSTCollectionView and UICollectionView, use the PSUICollectionView* classes.
-#if __IPHONE_OS_VERSION_MIN_REQUIRED < 60000
 #define PSUICollectionView PSUICollectionView_
 #define PSUICollectionViewCell PSUICollectionViewCell_
 #define PSUICollectionReusableView PSUICollectionReusableView_
@@ -128,16 +134,3 @@ typedef NS_ENUM(NSUInteger, PSTCollectionElementCategory) {
 @protocol PSUICollectionViewDelegateFlowLayout_ <PSTCollectionViewDelegateFlowLayout> @end
 @interface PSUICollectionViewLayoutAttributes_ : PSTCollectionViewLayoutAttributes @end
 @interface PSUICollectionViewController_ : PSTCollectionViewController <PSUICollectionViewDelegate, PSUICollectionViewDataSource> @end
-
-#else
-#define PSUICollectionView UICollectionView
-#define PSUICollectionViewCell UICollectionViewCell
-#define PSUICollectionReusableView UICollectionReusableView
-#define PSUICollectionViewDelegate UICollectionViewDelegate
-#define PSUICollectionViewDataSource UICollectionViewDataSource
-#define PSUICollectionViewLayout UICollectionViewLayout
-#define PSUICollectionViewFlowLayout UICollectionViewFlowLayout
-#define PSUICollectionViewDelegateFlowLayout UICollectionViewDelegateFlowLayout
-#define PSUICollectionViewLayoutAttributes UICollectionViewLayoutAttributes
-#define PSUICollectionViewController UICollectionViewController
-#endif

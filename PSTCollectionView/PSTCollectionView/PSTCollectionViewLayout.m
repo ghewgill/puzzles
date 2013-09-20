@@ -6,39 +6,38 @@
 //
 
 #import "PSTCollectionView.h"
-#import "PSTCollectionViewLayout.h"
 #import "PSTCollectionViewItemKey.h"
 #import "PSTCollectionViewData.h"
-#import "PSTCollectionViewUpdateItem.h"
 
-@interface PSTCollectionView()
+@interface PSTCollectionView ()
 - (id)currentUpdate;
 - (NSDictionary *)visibleViewsDict;
 - (PSTCollectionViewData *)collectionViewData;
 - (CGRect)visibleBoundRects; // visibleBounds is flagged as private API (wtf)
 @end
 
-@interface PSTCollectionReusableView()
+@interface PSTCollectionReusableView ()
 - (void)setIndexPath:(NSIndexPath *)indexPath;
 @end
 
-@interface PSTCollectionViewUpdateItem()
+@interface PSTCollectionViewUpdateItem ()
 - (BOOL)isSectionOperation;
 @end
 
-@interface PSTCollectionViewLayoutAttributes() {
+@interface PSTCollectionViewLayoutAttributes () {
     struct {
         unsigned int isCellKind:1;
         unsigned int isDecorationView:1;
         unsigned int isHidden:1;
-    } _layoutFlags;
+    }_layoutFlags;
+    char filler[20]; // [HACK] Our class needs to be larger than Apple's class for the superclass change to work.
 }
+@property (nonatomic) PSTCollectionViewItemType elementCategory;
 @property (nonatomic, copy) NSString *elementKind;
-@property (nonatomic, copy) NSString *reuseIdentifier;
 @end
 
-@interface PSTCollectionViewUpdateItem()
--(NSIndexPath*) indexPath;
+@interface PSTCollectionViewUpdateItem ()
+- (NSIndexPath *)indexPath;
 @end
 
 @implementation PSTCollectionViewLayoutAttributes
@@ -49,21 +48,23 @@
 + (instancetype)layoutAttributesForCellWithIndexPath:(NSIndexPath *)indexPath {
     PSTCollectionViewLayoutAttributes *attributes = [self new];
     attributes.elementKind = PSTCollectionElementKindCell;
+    attributes.elementCategory = PSTCollectionViewItemTypeCell;
     attributes.indexPath = indexPath;
     return attributes;
 }
 
 + (instancetype)layoutAttributesForSupplementaryViewOfKind:(NSString *)elementKind withIndexPath:(NSIndexPath *)indexPath {
     PSTCollectionViewLayoutAttributes *attributes = [self new];
+    attributes.elementCategory = PSTCollectionViewItemTypeSupplementaryView;
     attributes.elementKind = elementKind;
     attributes.indexPath = indexPath;
     return attributes;
 }
 
-+ (instancetype)layoutAttributesForDecorationViewOfKind:(NSString *)kind withIndexPath:(NSIndexPath *)indexPath {
++ (instancetype)layoutAttributesForDecorationViewOfKind:(NSString *)elementKind withIndexPath:(NSIndexPath *)indexPath {
     PSTCollectionViewLayoutAttributes *attributes = [self new];
-    attributes.elementKind = PSTCollectionElementKindDecorationView;
-    attributes.reuseIdentifier = kind;
+    attributes.elementCategory = PSTCollectionViewItemTypeDecorationView;
+    attributes.elementKind = elementKind;
     attributes.indexPath = indexPath;
     return attributes;
 }
@@ -72,7 +73,7 @@
 #pragma mark - NSObject
 
 - (id)init {
-    if((self = [super init])) {
+    if ((self = [super init])) {
         _alpha = 1.f;
         _transform3D = CATransform3DIdentity;
     }
@@ -84,9 +85,9 @@
 }
 
 - (BOOL)isEqual:(id)other {
-    if ([other isKindOfClass:[self class]]) {
+    if ([other isKindOfClass:self.class]) {
         PSTCollectionViewLayoutAttributes *otherLayoutAttributes = (PSTCollectionViewLayoutAttributes *)other;
-        if ([_elementKind isEqual:otherLayoutAttributes.elementKind] && [_indexPath isEqual:otherLayoutAttributes.indexPath]) {
+        if (_elementCategory == otherLayoutAttributes.elementCategory && [_elementKind isEqual:otherLayoutAttributes.elementKind] && [_indexPath isEqual:otherLayoutAttributes.indexPath]) {
             return YES;
         }
     }
@@ -94,20 +95,14 @@
 }
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"<%@: %p frame:%@ indexPath:%@ elementKind:%@>", NSStringFromClass([self class]), self, NSStringFromCGRect(self.frame), self.indexPath, self.elementKind];
+    return [NSString stringWithFormat:@"<%@: %p frame:%@ indexPath:%@ elementKind:%@>", NSStringFromClass(self.class), self, NSStringFromCGRect(self.frame), self.indexPath, self.elementKind];
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 #pragma mark - Public
 
 - (PSTCollectionViewItemType)representedElementCategory {
-    if ([self.elementKind isEqualToString:PSTCollectionElementKindCell]) {
-        return PSTCollectionViewItemTypeCell;
-    }else if([self.elementKind isEqualToString:PSTCollectionElementKindDecorationView]) {
-        return PSTCollectionViewItemTypeDecorationView;
-    }else {
-        return PSTCollectionViewItemTypeSupplementaryView;
-    }
+    return _elementCategory;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -149,10 +144,10 @@
 #pragma mark - NSCopying
 
 - (id)copyWithZone:(NSZone *)zone {
-    PSTCollectionViewLayoutAttributes *layoutAttributes = [[self class] new];
+    PSTCollectionViewLayoutAttributes *layoutAttributes = [self.class new];
     layoutAttributes.indexPath = self.indexPath;
     layoutAttributes.elementKind = self.elementKind;
-    layoutAttributes.reuseIdentifier = self.reuseIdentifier;
+    layoutAttributes.elementCategory = self.elementCategory;
     layoutAttributes.frame = self.frame;
     layoutAttributes.center = self.center;
     layoutAttributes.size = self.size;
@@ -169,7 +164,7 @@
 #import <objc/runtime.h>
 - (NSMethodSignature *)methodSignatureForSelector:(SEL)selector {
     NSMethodSignature *signature = [super methodSignatureForSelector:selector];
-    if(!signature) {
+    if (!signature) {
         NSString *selString = NSStringFromSelector(selector);
         if ([selString hasPrefix:@"_"]) {
             SEL cleanedSelector = NSSelectorFromString([selString substringFromIndex:1]);
@@ -195,7 +190,7 @@
 @end
 
 
-@interface PSTCollectionViewLayout() {
+@interface PSTCollectionViewLayout () {
     __unsafe_unretained PSTCollectionView *_collectionView;
     CGSize _collectionViewBoundsSize;
     NSMutableDictionary *_initialAnimationLayoutAttributesDict;
@@ -205,11 +200,12 @@
     NSMutableDictionary *_decorationViewClassDict;
     NSMutableDictionary *_decorationViewNibDict;
     NSMutableDictionary *_decorationViewExternalObjectsTables;
+    char filler[200]; // [HACK] Our class needs to be larger than Apple's class for the superclass change to work.
 }
 @property (nonatomic, unsafe_unretained) PSTCollectionView *collectionView;
-@property (nonatomic,copy,readonly) NSDictionary *decorationViewClassDict;
-@property (nonatomic,copy,readonly) NSDictionary *decorationViewNibDict;
-@property (nonatomic,copy,readonly) NSDictionary *decorationViewExternalObjectsTables;
+@property (nonatomic, copy, readonly) NSDictionary *decorationViewClassDict;
+@property (nonatomic, copy, readonly) NSDictionary *decorationViewNibDict;
+@property (nonatomic, copy, readonly) NSDictionary *decorationViewExternalObjectsTables;
 @end
 
 @implementation PSTCollectionViewLayout
@@ -217,7 +213,7 @@
 #pragma mark - NSObject
 
 - (id)init {
-    if((self = [super init])) {
+    if ((self = [super init])) {
         _decorationViewClassDict = [NSMutableDictionary new];
         _decorationViewNibDict = [NSMutableDictionary new];
         _decorationViewExternalObjectsTables = [NSMutableDictionary new];
@@ -249,7 +245,7 @@
 
 - (BOOL)shouldInvalidateLayoutForBoundsChange:(CGRect)newBounds {
     // not sure about his..
-    if ((self.collectionView.bounds.size.width != newBounds.size.width ) || (self.collectionView.bounds.size.height != newBounds.size.height )) {
+    if ((self.collectionView.bounds.size.width != newBounds.size.width) || (self.collectionView.bounds.size.height != newBounds.size.height)) {
         return YES;
     }
     return NO;
@@ -259,7 +255,7 @@
 #pragma mark - Providing Layout Attributes
 
 + (Class)layoutAttributesClass {
-  return [PSTCollectionViewLayoutAttributes class];
+    return PSTCollectionViewLayoutAttributes.class;
 }
 
 - (void)prepareLayout {
@@ -277,7 +273,7 @@
     return nil;
 }
 
-- (PSTCollectionViewLayoutAttributes *)layoutAttributesForDecorationViewOfKind:(NSString*)kind atIndexPath:(NSIndexPath *)indexPath {
+- (PSTCollectionViewLayoutAttributes *)layoutAttributesForDecorationViewOfKind:(NSString *)kind atIndexPath:(NSIndexPath *)indexPath {
     return nil;
 }
 
@@ -294,35 +290,32 @@
 #pragma mark - Responding to Collection View Updates
 
 - (void)prepareForCollectionViewUpdates:(NSArray *)updateItems {
-    NSDictionary* update = [_collectionView currentUpdate];
+    NSDictionary *update = [_collectionView currentUpdate];
 
     for (PSTCollectionReusableView *view in [[_collectionView visibleViewsDict] objectEnumerator]) {
         PSTCollectionViewLayoutAttributes *attr = [view.layoutAttributes copy];
-        if (attr.isCell) {
-            
-            NSInteger index = [update[@"oldModel"] globalIndexForItemAtIndexPath:[attr indexPath]];
-            
-            if(index != NSNotFound) {
-                index = [update[@"oldToNewIndexMap"][index] intValue];
-                if(index != NSNotFound) {
-                    [attr setIndexPath:[update[@"newModel"] indexPathForItemAtGlobalIndex:index]];
+        if (attr) {
+            if (attr.isCell) {
+                NSInteger index = [update[@"oldModel"] globalIndexForItemAtIndexPath:[attr indexPath]];
+                if (index != NSNotFound) {
+                    [attr setIndexPath:[attr indexPath]];
                 }
             }
+            _initialAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForLayoutAttributes:attr]] = attr;
         }
-        _initialAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForLayoutAttributes:attr]] = attr;
     }
 
-    PSTCollectionViewData* collectionViewData = [_collectionView collectionViewData];
+    PSTCollectionViewData *collectionViewData = [_collectionView collectionViewData];
 
     CGRect bounds = [_collectionView visibleBoundRects];
 
-    for (PSTCollectionViewLayoutAttributes* attr in [collectionViewData layoutAttributesForElementsInRect:bounds]) {
+    for (PSTCollectionViewLayoutAttributes *attr in [collectionViewData layoutAttributesForElementsInRect:bounds]) {
         if (attr.isCell) {
             NSInteger index = [collectionViewData globalIndexForItemAtIndexPath:attr.indexPath];
-            
+
             index = [update[@"newToOldIndexMap"][index] intValue];
-            if(index != NSNotFound) {
-                PSTCollectionViewLayoutAttributes* finalAttrs = [attr copy];
+            if (index != NSNotFound) {
+                PSTCollectionViewLayoutAttributes *finalAttrs = [attr copy];
                 [finalAttrs setIndexPath:[update[@"oldModel"] indexPathForItemAtGlobalIndex:index]];
                 [finalAttrs setAlpha:0];
                 _finalAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForLayoutAttributes:finalAttrs]] = finalAttrs;
@@ -330,11 +323,11 @@
         }
     }
 
-    for(PSTCollectionViewUpdateItem* updateItem in updateItems) {
+    for (PSTCollectionViewUpdateItem *updateItem in updateItems) {
         PSTCollectionUpdateAction action = updateItem.updateAction;
 
-        if([updateItem isSectionOperation]) {
-            if(action == PSTCollectionUpdateActionReload) {
+        if ([updateItem isSectionOperation]) {
+            if (action == PSTCollectionUpdateActionReload) {
                 [_deletedSectionsSet addIndex:[[updateItem indexPathBeforeUpdate] section]];
                 [_insertedSectionsSet addIndex:[updateItem indexPathAfterUpdate].section];
             }
@@ -344,23 +337,23 @@
             }
         }
         else {
-            if(action == PSTCollectionUpdateActionDelete) {
+            if (action == PSTCollectionUpdateActionDelete) {
                 PSTCollectionViewItemKey *key = [PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:
-                                                 [updateItem indexPathBeforeUpdate]];
+                        [updateItem indexPathBeforeUpdate]];
 
-                PSTCollectionViewLayoutAttributes *attrs = [_finalAnimationLayoutAttributesDict[key]copy];
+                PSTCollectionViewLayoutAttributes *attrs = [_finalAnimationLayoutAttributesDict[key] copy];
 
-                if(attrs) {
+                if (attrs) {
                     [attrs setAlpha:0];
                     _finalAnimationLayoutAttributesDict[key] = attrs;
                 }
             }
-            else if(action == PSTCollectionUpdateActionReload || action == PSTCollectionUpdateActionInsert) {
+            else if (action == PSTCollectionUpdateActionReload || action == PSTCollectionUpdateActionInsert) {
                 PSTCollectionViewItemKey *key = [PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:
-                                                 [updateItem indexPathAfterUpdate]];
+                        [updateItem indexPathAfterUpdate]];
                 PSTCollectionViewLayoutAttributes *attrs = [_initialAnimationLayoutAttributesDict[key] copy];
 
-                if(attrs) {
+                if (attrs) {
                     [attrs setAlpha:0];
                     _initialAnimationLayoutAttributesDict[key] = attrs;
                 }
@@ -369,10 +362,10 @@
     }
 }
 
-- (PSTCollectionViewLayoutAttributes *)initialLayoutAttributesForAppearingItemAtIndexPath:(NSIndexPath*)itemIndexPath {
-    PSTCollectionViewLayoutAttributes* attrs = _initialAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:itemIndexPath]];
+- (PSTCollectionViewLayoutAttributes *)initialLayoutAttributesForAppearingItemAtIndexPath:(NSIndexPath *)itemIndexPath {
+    PSTCollectionViewLayoutAttributes *attrs = _initialAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:itemIndexPath]];
 
-    if([_insertedSectionsSet containsIndex:[itemIndexPath section]]) {
+    if ([_insertedSectionsSet containsIndex:[itemIndexPath section]]) {
         attrs = [attrs copy];
         [attrs setAlpha:0];
     }
@@ -380,9 +373,9 @@
 }
 
 - (PSTCollectionViewLayoutAttributes *)finalLayoutAttributesForDisappearingItemAtIndexPath:(NSIndexPath *)itemIndexPath {
-    PSTCollectionViewLayoutAttributes* attrs = _finalAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:itemIndexPath]];
+    PSTCollectionViewLayoutAttributes *attrs = _finalAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:itemIndexPath]];
 
-    if([_deletedSectionsSet containsIndex:[itemIndexPath section]]) {
+    if ([_deletedSectionsSet containsIndex:[itemIndexPath section]]) {
         attrs = [attrs copy];
         [attrs setAlpha:0];
     }
@@ -391,9 +384,9 @@
 }
 
 - (PSTCollectionViewLayoutAttributes *)initialLayoutAttributesForInsertedSupplementaryElementOfKind:(NSString *)elementKind atIndexPath:(NSIndexPath *)elementIndexPath {
-    PSTCollectionViewLayoutAttributes* attrs = _initialAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:elementIndexPath]];
-    
-    if([_insertedSectionsSet containsIndex:[elementIndexPath section]]) {
+    PSTCollectionViewLayoutAttributes *attrs = _initialAnimationLayoutAttributesDict[[PSTCollectionViewItemKey collectionItemKeyForCellWithIndexPath:elementIndexPath]];
+
+    if ([_insertedSectionsSet containsIndex:[elementIndexPath section]]) {
         attrs = [attrs copy];
         [attrs setAlpha:0];
     }
@@ -416,11 +409,11 @@
 #pragma mark - Registering Decoration Views
 
 - (void)registerClass:(Class)viewClass forDecorationViewOfKind:(NSString *)kind {
-    [_decorationViewClassDict setObject:viewClass forKey:kind];
+    _decorationViewClassDict[kind] = viewClass;
 }
 
 - (void)registerNib:(UINib *)nib forDecorationViewOfKind:(NSString *)kind {
-    [_decorationViewNibDict setObject:nib forKey:kind];
+    _decorationViewNibDict[kind] = nib;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -434,7 +427,7 @@
 #pragma mark - NSCoding
 
 - (id)initWithCoder:(NSCoder *)coder {
-    if((self = [self init])) {
+    if ((self = [self init])) {
     }
     return self;
 }
@@ -465,11 +458,11 @@
         SEL cleanedSelector = NSSelectorFromString([selString substringFromIndex:1]);
         if ([self respondsToSelector:cleanedSelector]) {
             // dynamically add method for faster resolving
-            Method newMethod = class_getInstanceMethod([self class], [inv selector]);
-            IMP underscoreIMP = imp_implementationWithBlock(PSBlockImplCast(^(id _self) {
+            Method newMethod = class_getInstanceMethod(self.class, [inv selector]);
+            IMP underscoreIMP = imp_implementationWithBlock(^(id _self) {
                 return objc_msgSend(_self, cleanedSelector);
-            }));
-            class_addMethod([self class], [inv selector], underscoreIMP, method_getTypeEncoding(newMethod));
+            });
+            class_addMethod(self.class, [inv selector], underscoreIMP, method_getTypeEncoding(newMethod));
             // invoke now
             inv.selector = cleanedSelector;
             [inv invokeWithTarget:self];
