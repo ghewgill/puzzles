@@ -8,6 +8,7 @@
 
 #import "GameSettingsController.h"
 
+#import "AppDelegate.h"
 #import "GameHelpController.h"
 #import "GameSettingsChoiceController.h"
 
@@ -121,7 +122,7 @@
     //   - prevents the display of the disclosure indicator
     //   - causes the table to truncate its text depending on the width of the accessoryView
     // Using a (manually positioned) custom subview prevents these unwanted behaviours
-    int roffset = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad ? 40 : 0;
+    int roffset = !IOS7() && [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad ? 40 : 0;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     switch (indexPath.section) {
         case 0:
@@ -129,7 +130,7 @@
                 cell.textLabel.text = [NSString stringWithUTF8String:config_items[indexPath.row].name];
                 switch (config_items[indexPath.row].type) {
                     case C_STRING: {
-                        UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, 12, 80, 31)];
+                        UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-100-roffset, IOS7() ? 8 : 12, 80, 31)];
                         text.tag = indexPath.row;
                         [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
                         text.textAlignment = NSTextAlignmentRight;
@@ -147,7 +148,7 @@
                     }
                     case C_CHOICES: {
                         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-                        UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-200-roffset, 11, 165, 31)];
+                        UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-200-roffset, IOS7() ? 7 : 11, 165, 31)];
                         label.enabled = NO;
                         label.textAlignment = NSTextAlignmentRight;
                         label.text = choiceText[indexPath.row][config_items[indexPath.row].ival];
