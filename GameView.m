@@ -11,6 +11,7 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreText/CoreText.h>
 
+#import "AppDelegate.h"
 #import "GameTypeController.h"
 
 #include "puzzles.h"
@@ -209,9 +210,11 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone && UIInterfaceOrientationIsLandscape([UIDevice currentDevice].orientation)) {
         toolbar_height = 32;
     }
+    int top_margin = IOS7() ? (20+44) : 0;
     int usable_height = self.frame.size.height;
+    usable_height -= top_margin;
     usable_height -= toolbar_height;
-    CGRect r = CGRectMake(0, usable_height, self.frame.size.width, toolbar_height);
+    CGRect r = CGRectMake(0, top_margin+usable_height, self.frame.size.width, toolbar_height);
     if (toolbar) {
         [toolbar setFrame:r];
     } else {
@@ -225,12 +228,14 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStyleBordered target:self action:@selector(doType)],
         ];
         [toolbar setItems:items];
-        toolbar.barStyle = UIBarStyleBlack;
+        if (!IOS7()) {
+            toolbar.barStyle = UIBarStyleBlack;
+        }
         [self addSubview:toolbar];
     }
     if (midend_wants_statusbar(me)) {
         usable_height -= 20;
-        CGRect r = CGRectMake(0, usable_height, self.frame.size.width, 20);
+        CGRect r = CGRectMake(0, top_margin+usable_height, self.frame.size.width, 20);
         if (statusbar) {
             [statusbar setFrame:r];
         } else {
@@ -300,7 +305,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             extra_labels = UnequalLabels;
             extra_button_count = 2;
         }
-        CGRect r = CGRectMake(0, usable_height, self.frame.size.width, toolbar_height);
+        CGRect r = CGRectMake(0, top_margin+usable_height, self.frame.size.width, toolbar_height);
         if (game_toolbar == nil) {
             game_toolbar = [[UIToolbar alloc] initWithFrame:r];
         } else {
@@ -337,13 +342,14 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         [game_toolbar removeFromSuperview];
         game_toolbar = nil;
     }
-    usable_frame = CGRectMake(0, 0, self.frame.size.width, usable_height);
+    usable_frame = CGRectMake(0, top_margin, self.frame.size.width, usable_height);
     int fw = self.frame.size.width * self.contentScaleFactor;
     int fh = usable_height * self.contentScaleFactor;
     int w = fw;
     int h = fh;
     midend_size(me, &w, &h, FALSE);
     game_rect = CGRectMake((fw - w)/2/self.contentScaleFactor, (fh - h)/2/self.contentScaleFactor, w/self.contentScaleFactor, h/self.contentScaleFactor);
+    game_rect.origin.y += top_margin;
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
     bitmap = CGBitmapContextCreate(NULL, w, h, 8, w*4, cs, kCGImageAlphaNoneSkipLast);
     CGColorSpaceRelease(cs);

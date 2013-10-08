@@ -255,7 +255,11 @@
      */
     if (indexPath.section == 0) {
         if (config_items[indexPath.row].type == C_CHOICES) {
-            [self.navigationController pushViewController:[[GameSettingsChoiceController alloc] initWithGame:thegame index:indexPath.row choices:choiceText[indexPath.row] value:config_items[indexPath.row].ival title:[NSString stringWithUTF8String:config_items[indexPath.row].name] delegate:self] animated:YES];
+            NSArray *choices = choiceText[indexPath.row];
+            int value = config_items[indexPath.row].ival;
+            NSString *title = [NSString stringWithUTF8String:config_items[indexPath.row].name];
+            GameSettingsChoiceController *gscc = [[GameSettingsChoiceController alloc] initWithGame:thegame index:indexPath.row choices:choices value:value title:title delegate:self];
+            [self.navigationController pushViewController:gscc animated:YES];
         }
     }
     if (indexPath.section == 1 && indexPath.row == 0) {
