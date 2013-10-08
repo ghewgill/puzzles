@@ -22,8 +22,11 @@ dosize() {
 }
 
 dosize 1024 iTunesArtwork.png
+dosize 152  Icon-76@2x.png
+dosize 76   Icon-76.png
 dosize 144  Icon-72@2x.png
 dosize 72   Icon-72.png
+dosize 120  Icon-120.png
 dosize 114  Icon@2x.png
 dosize 57   Icon.png
 
