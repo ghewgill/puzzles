@@ -606,12 +606,16 @@ static int abcd_solver_runs(game_state *state, int *remaining, int horizontal, c
 	int n = state->n;
 	
 	int x = 0, y = 0;
-	int a,b,amx,bmx,i;
+	int a,b,amx,bmx,i,point;
 	
 	int action = FALSE;
+	int *rslen;
+	int *rspos;
 	
 	amx = (horizontal ? h : w);
 	bmx = (horizontal ? w : h);
+	rslen = snewn(bmx, int);
+	rspos = snewn(bmx, int);
 	
 	for (a = 0; a < amx; a++)
 	{
@@ -625,11 +629,7 @@ static int abcd_solver_runs(game_state *state, int *remaining, int horizontal, c
 		if(req == NO_NUMBER || req == 0)
 			continue;
 		
-		int *rslen;
-		int *rspos;
-		int point = 0;
-		rslen = snewn(bmx, int);
-		rspos = snewn(bmx, int);
+		point = 0;
 		memset(rslen, 0, bmx*sizeof(int));
 		memset(rspos, 0, bmx*sizeof(int));
 		
@@ -694,10 +694,10 @@ if(solver_verbose)
 		}
 		
 		/* TODO techniques involving diagonal adjacency */
-		
-		sfree(rslen);
-		sfree(rspos);
 	}
+	
+	sfree(rslen);
+	sfree(rspos);
 	
 	return action;
 }
@@ -1031,7 +1031,8 @@ char *debug;
 	game_state *state = NULL;
 	game_state *solved = NULL;
 	
-	char *ret, *p;
+	char *ret, *p, *point;
+	char letters[9];
 	
 	int x, y, i;
 	
@@ -1055,8 +1056,6 @@ char *debug;
 	{
 		for (x = 0; x < w; x++)
 		{
-			char *letters, *point;
-			letters = snewn(n, char);
 			point = letters;
 			
 			/* Get all possibilities */
@@ -1074,8 +1073,6 @@ char *debug;
 			char let = letters[rl];
 
 			abcd_place_letter(state, x, y, let, NULL);
-			
-			sfree(letters);
 		}
 	}
 
