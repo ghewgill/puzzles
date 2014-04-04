@@ -84,8 +84,8 @@ struct game_params {
 struct game_state {
 	game_params *params;
 	
-	char *borderclues;
-	char *gridclues;
+	digit *borderclues;
+	digit *gridclues;
 	
 	digit *grid;
 	
@@ -278,12 +278,12 @@ static game_state *blank_game(const game_params *params)
 	*(state->params) = *params;		       /* structure copy */
 	state->grid = snewn(o2, digit);
 	state->holes = snewn(o2, char);
-	state->borderclues = snewn(o*4, char);
-	state->gridclues = snewn(o2, char);
-	state->marks = snewn(o2, int);
+	state->borderclues = snewn(o*4, digit);
+	state->gridclues = snewn(o2, digit);
+	state->marks = snewn(o2, unsigned int);
 	state->completed = state->cheated = FALSE;
 	
-	memset(state->marks, 0, o2 * sizeof(int));
+	memset(state->marks, 0, o2 * sizeof(unsigned int));
 	
 	return state;
 }
@@ -296,9 +296,9 @@ static game_state *dup_game(const game_state *state)
 
 	memcpy(ret->grid, state->grid, o2 * sizeof(digit));
 	memcpy(ret->holes, state->holes, o2 * sizeof(char));
-	memcpy(ret->borderclues, state->borderclues, o*4 * sizeof(char));
-	memcpy(ret->gridclues, state->gridclues, o2 * sizeof(char));
-	memcpy(ret->marks, state->marks, o2 * sizeof(int));
+	memcpy(ret->borderclues, state->borderclues, o*4 * sizeof(digit));
+	memcpy(ret->gridclues, state->gridclues, o2 * sizeof(digit));
+	memcpy(ret->marks, state->marks, o2 * sizeof(unsigned int));
 	
 	ret->completed = state->completed;
 	ret->cheated = state->cheated;
@@ -788,7 +788,7 @@ static game_state *load_game(const game_params *params, const char *desc, char *
 	memset(ret->grid, 0, o2 * sizeof(digit));
 	memset(ret->holes, 0, o2 * sizeof(char));
 	memset(ret->borderclues, 0, ox4 * sizeof(char));
-	memset(ret->gridclues, 0, o2 * sizeof(char));
+	memset(ret->gridclues, 0, o2 * sizeof(digit));
 	
 	const char *p = desc;
 	/* Read border clues */
@@ -936,7 +936,7 @@ static int salad_solver_easy(struct latin_solver *solver, void *vctx)
 	return nchanged;
 }
 
-static char salad_scan_dir(char *grid, char *holes, int si, int di, int ei, int direct)
+static digit salad_scan_dir(digit *grid, char *holes, int si, int di, int ei, int direct)
 {
 	int i;
 	for(i = si; i != ei; i+=di)
@@ -1099,7 +1099,7 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 	return state;
 }
 
-static char *salad_serialize(const char *input, int s, char base)
+static char *salad_serialize(const digit *input, int s, char base)
 {
 	char *ret, *p;
 	ret = snewn(s + 1, char);
@@ -1177,11 +1177,12 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	return ret;
 }
 
-static void salad_strip_clues(game_state *state, random_state *rs, char *clues, int max, int diff)
+static void salad_strip_clues(game_state *state, random_state *rs, digit *clues, int max, int diff)
 {
 	int o = state->params->order;
 	int o2 = o*o;
-	int i, j, temp;
+	int i, j;
+	digit temp;
 	
 	int spaces[max];
 	for(i = 0; i < max; i++) spaces[i] = i;

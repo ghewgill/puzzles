@@ -1073,14 +1073,14 @@ static char crossing_generate(struct crossing_puzzle *puzzle, random_state *rs, 
 	char *grid;
 	char ret = TRUE;
 	
-	int w = params->w;
-	int h = params->h;
-	
 	if(!crossing_gen_walls(puzzle, rs, params->sym))
 		return FALSE;
 	
 	grid = crossing_gen_grid(puzzle, rs);
 	/*
+	int w = params->w;
+	int h = params->h;
+	
 	int x,y;
 	for(y=0;y<h;y++){
 		for(x=0;x<w;x++) printf("%s", puzzle->walls[y*w+x] ? "#" : ".");
