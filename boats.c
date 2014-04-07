@@ -21,9 +21,6 @@
  */
 
 /*
- * TODO configuration:
- * - Non-standard fleet configuration?
- * 
  * TODO solver:
  * - Watch for smaller runs that cannot fit any boat, and fill them with water
  * - Recursion?
@@ -33,6 +30,8 @@
  *
  * TODO ui:
  * - Error highlighting when fleet count is invalid
+ * - User interface for custom fleet
+ * - Certain custom fleets don't fit in the UI
  */
 
 #include <stdio.h>
@@ -208,9 +207,10 @@ static game_params *dup_params(const game_params *params)
 
 static void decode_params(game_params *params, char const *string)
 {
+	int i;
+	char const *p = string;
 	params->fleet = 4;
 	params->strip = FALSE;
-	char const *p = string;
 	
 	/* Find width */
 	params->w = params->h = atoi(p);
@@ -247,20 +247,48 @@ static void decode_params(game_params *params, char const *string)
     }
 	
 	if(*p == 'S')
+	{
 		params->strip = TRUE;
+		p++;
+	}
 	
-	params->fleetdata = boats_default_fleet(params->fleet);
+	if(params->fleetdata)
+		sfree(params->fleetdata);
+	
+	if(*p == ',')
+	{
+		/* Custom fleet */
+		params->fleetdata = snewn(params->fleet, int);
+		for(i = 0; i < params->fleet; i++)
+		{
+			if(*p == ',') p++;
+			if(*p)
+			{
+				params->fleetdata[i] = atoi(p);
+				while (*p && isdigit((unsigned char) *p)) ++p;
+			}
+			else
+				params->fleetdata[i] = 0;
+		}
+	}
+	else
+		params->fleetdata = boats_default_fleet(params->fleet);
 }
 
 static char *encode_params(const game_params *params, int full)
 {
 	char data[256];
-	sprintf(data, "%dx%df%d", params->w, params->h, params->fleet);
+	char *p = data;
+	int i;
+	
+	p += sprintf(p, "%dx%df%d", params->w, params->h, params->fleet);
 	if(full)
-		sprintf(data + strlen(data), "d%c", boats_diffchars[params->diff]);
+		p += sprintf(p, "d%c", boats_diffchars[params->diff]);
 	if(full && params->strip)
-		sprintf(data + strlen(data), "S");
-		
+		p += sprintf(p, "S");
+	for(i = 0; i < params->fleet; i++)
+		p += sprintf(p, ",%d", params->fleetdata[i]);
+	
 	return dupstr(data);
 }
 
@@ -2182,8 +2210,8 @@ static char *validate_params(const game_params *params, int full)
 		return "Width is too high";
 	if(h > 99)
 		return "Height is too high.";
-	if(fleet < 2)
-		return "Fleet size must be at least 2";
+	if(fleet < 1)
+		return "Fleet size must be at least 1";
 	if(fleet > w && fleet > h)
 		return "Fleet size must be smaller than the width and height";
 	if(fleet > 9)
@@ -2203,6 +2231,8 @@ static char *validate_params(const game_params *params, int full)
 
 #ifdef STANDALONE_SOLVER
 	int temp_steps = solver_steps;
+	int temp_verbose = solver_verbose;
+	solver_verbose = FALSE;
 	solver_steps = FALSE;
 #endif
 	
@@ -2210,6 +2240,7 @@ static char *validate_params(const game_params *params, int full)
 		ret = "Fleet does not fit into the grid";
 
 #ifdef STANDALONE_SOLVER
+	solver_verbose = temp_verbose;
 	solver_steps = temp_steps;
 #endif
 		
