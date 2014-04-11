@@ -1350,6 +1350,44 @@ static int boats_solver_check_counts(game_state *state, int *blankcounts, int *s
 	return ret;
 }
 
+static int boats_solver_remove_singles(game_state *state, int *fleetcount)
+{
+	/* 
+	 * If all boats of size 1 are placed, fill every square surrounded
+	 * by water with more water.
+	 */
+	int ret = 0;
+	int x, y;
+	int w = state->w;
+	int h = state->h;
+	
+	/* Sanity check */
+	if(fleetcount[0] != state->fleetdata[0])
+		return 0;
+		
+	for(x = 0; x < w; x++)
+	for(y = 0; y < h; y++)
+	{
+		if(state->grid[y*w+x] != EMPTY)
+			continue;
+		
+		if( (x == 0 || state->grid[y*w+(x-1)] == WATER) &&
+			(x == w-1 || state->grid[y*w+(x+1)] == WATER) &&
+			(y == 0 || state->grid[(y-1)*w+x] == WATER) &&
+			(y == h-1 || state->grid[(y+1)*w+x] == WATER))
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Single square at %i,%i cannot contain boat\n", x, y);
+			}
+#endif
+			ret += boats_solver_place_water(state, x, y);
+		}
+	}
+	
+	return ret;
+}
+
 static int boats_solver_centers_trivial(game_state *state, char *hascenters)
 {
 	/*
@@ -1990,6 +2028,10 @@ static int boats_solve_game(game_state *state, int maxdiff)
 			continue;
 		
 		if(hascenters && boats_solver_centers_trivial(state, &hascenters))
+			continue;
+		
+		if(fleetcount[0] == state->fleetdata[0] && 
+			boats_solver_remove_singles(state, fleetcount))
 			continue;
 		
 		/* Normal techniques */
