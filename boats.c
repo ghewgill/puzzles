@@ -29,7 +29,7 @@
  * - Check for unfinished boats that are too large
  *
  * TODO ui:
- * - Error highlighting when fleet count is invalid
+ * - Error highlighting when a boat does not appear in the fleet
  * - User interface for custom fleet
  * - Certain custom fleets don't fit in the UI
  */
@@ -3082,10 +3082,11 @@ static int boats_draw_fleet(drawing *dr, int w, int y, int fleet,
 			/* Draw a stripe through boats that have been placed already */
 			if(dr && print == -1 && fleetcount && j < fleetcount[i])
 			{
+				bgcol = (fleetdata[i] >= fleetcount[i] ? COL_SHIP_FLEET_STRIPE : COL_COUNT_ERROR);
+				
 				draw_thick_line(dr, 2,
 					ofx * tilesize + 2, (y + FLEET_SIZE) * tilesize - 2,
-					fx * tilesize - 2, y * tilesize + 2,
-					COL_SHIP_FLEET_STRIPE);
+					fx * tilesize - 2, y * tilesize + 2, bgcol);
 			}
 			
 			fx += FLEET_MARGIN;
