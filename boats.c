@@ -1063,6 +1063,9 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
 	{
+		if(state->grid[y*w+x] == SHIP_VAGUE && ret != STATUS_INVALID)
+			ret = STATUS_INCOMPLETE;
+		
 		if(state->gridclues[y*w+x] == EMPTY)
 		{
 			if(errs)
@@ -1079,9 +1082,6 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 		}
 		else if(errs)
 			errs[y*w+x] &= ~FE_MISMATCH;
-		
-		if(state->grid[y*w+x] == SHIP_VAGUE && ret != STATUS_INVALID)
-			ret = STATUS_INCOMPLETE;
 	}
 	
 	return ret;
