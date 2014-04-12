@@ -1736,6 +1736,9 @@ static int boats_solver_attempt_ship_rows(game_state *state, char *tmpgrid, int 
 				{
 					boats_solver_place_water(state, x, y);
 					boats_solver_fill_row(state, 0, y, w-1, y, SHIP_VAGUE);
+					/* Also fill the column if this square is at an intersection */
+					if(state->borderclues[x] != NO_CLUE && (h - (state->borderclues[x] + watercounts[x])) == 1)
+						boats_solver_fill_row(state, x, 0, x, h-1, SHIP_VAGUE);
 					
 					if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
 					{
@@ -1764,6 +1767,10 @@ static int boats_solver_attempt_ship_rows(game_state *state, char *tmpgrid, int 
 		{
 			for(y = 0; y < h; y++)
 			{
+				/* Already tried this in the previous loop */
+				if(state->borderclues[y+w] != NO_CLUE && (w - (state->borderclues[y+w] + watercounts[y+w])) == 1)
+					continue;
+				
 				if(state->grid[y*w+x] == EMPTY)
 				{
 					boats_solver_place_water(state, x, y);
@@ -1828,6 +1835,8 @@ static int boats_solver_attempt_water_rows(game_state *state, char *tmpgrid, int
 				{
 					boats_solver_place_ship(state, x, y);
 					boats_solver_fill_row(state, 0, y, w-1, y, WATER);
+					if(state->borderclues[x] != NO_CLUE && state->borderclues[x] - shipcounts[x] == 1)
+						boats_solver_fill_row(state, x, 0, x, h-1, WATER);
 					
 					if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
 					{
@@ -1856,6 +1865,9 @@ static int boats_solver_attempt_water_rows(game_state *state, char *tmpgrid, int
 		{
 			for(y = 0; y < h; y++)
 			{
+				if(state->borderclues[y+w] != NO_CLUE && state->borderclues[y+w] - shipcounts[y+w] == 1)
+					continue;
+				
 				if(state->grid[y*w+x] == EMPTY)
 				{
 					boats_solver_place_ship(state, x, y);
