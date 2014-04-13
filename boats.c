@@ -29,7 +29,6 @@
  * - Check for unfinished boats that are too large
  *
  * TODO ui:
- * - Error highlighting when a boat does not appear in the fleet
  * - User interface for custom fleet
  * - Certain custom fleets don't fit in the UI
  */
@@ -633,7 +632,8 @@ enum { STATUS_COMPLETE, STATUS_INCOMPLETE, STATUS_INVALID };
 
 #define FE_COLLISION 0x01 
 #define FE_MISMATCH  0x02
-#define FD_CURSOR    0x04
+#define FE_FLEET     0x04
+#define FD_CURSOR    0x08
 
 struct boats_run 
 {
@@ -837,17 +837,18 @@ static char boats_check_collision(const game_state *state, int *grid)
 	return ret;
 }
 
-static char boats_check_fleet(const game_state *state, int *fleetcount)
+static char boats_check_fleet(const game_state *state, int *fleetcount, int *errs)
 {
 	/*
 	 * Count all confirmed ships (without SHIP_VAGUE).
 	 * Optionally fills an array of ships with the actual counts.
+	 * Can also mark boats that don't appear in the fleet.
 	 */
 	
 	int fleet = state->fleet;
 	int w = state->w;
 	int h = state->h;
-	int x, y, len;
+	int x, y, i, len;
 	char hasfleetcount = fleetcount != NULL;
 	char ret = STATUS_COMPLETE;
 	char inship;
@@ -857,12 +858,23 @@ static char boats_check_fleet(const game_state *state, int *fleetcount)
 	
 	memset(fleetcount, 0, fleet * sizeof(int));
 	
+	if(errs)
+	{
+		for(i = 0; i < w*h; i++)
+			errs[i] &= ~FE_FLEET;
+	}
+	
 	/* Count singles */
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
 	{
 		if(fleet >= 1 && state->grid[y*w+x] == SHIP_SINGLE)
+		{
+			if(errs && state->fleetdata[0] == 0)
+				errs[y*w+x] |= FE_FLEET;
+			
 			fleetcount[0]++;
+		}
 	}
 	
 	/* Count vertical ships */
@@ -884,10 +896,19 @@ static char boats_check_fleet(const game_state *state, int *fleetcount)
 				if(len > fleet)
 				{
 					ret = STATUS_INVALID;
+					if(errs) errs[y*w+x] |= FE_FLEET;
 				}
 				else if (len > 0)
 				{
 					fleetcount[len - 1]++;
+					if(errs && state->fleetdata[len - 1] == 0)
+						errs[y*w+x] |= FE_FLEET;
+				}
+				
+				if(errs && errs[y*w+x] & FE_FLEET)
+				{
+					for(i = 1; i < len; i++)
+						errs[(y-i)*w+x] |= FE_FLEET;
 				}
 				len = 0;
 			}
@@ -918,10 +939,18 @@ static char boats_check_fleet(const game_state *state, int *fleetcount)
 				if(len > fleet)
 				{
 					ret = STATUS_INVALID;
+					if(errs) errs[y*w+x] |= FE_FLEET;
 				}
 				else if (len > 0)
 				{
 					fleetcount[len - 1]++;
+					if(errs && state->fleetdata[len - 1] == 0)
+						errs[y*w+x] |= FE_FLEET;
+				}
+				if(errs && errs[y*w+x] & FE_FLEET)
+				{
+					for(i = 1; i < len; i++)
+						errs[y*w+x-i] |= FE_FLEET;
 				}
 				len = 0;
 			}
@@ -1107,7 +1136,7 @@ static char boats_validate_state(game_state *state, int *blankcounts, int *shipc
 	
 	boats_adjust_ships(state);
 	
-	status = max(status, boats_check_fleet(state, fleetcount));
+	status = max(status, boats_check_fleet(state, fleetcount, NULL));
 	status = max(status, boats_validate_gridclues(state, NULL));
 	
 	return status;
@@ -3140,6 +3169,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	}
 	
 	boats_count_ships(state, NULL, NULL, ds->border);
+	boats_check_fleet(state, ds->fleetcount, ds->gridfs);
 	
 	/* Draw column numbers */
 	ty = (h+1)*tilesize + (0.5 * tilesize);
@@ -3260,6 +3290,12 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 				  FONT_VARIABLE, tilesize/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
 				  COL_GRID, "~");
 			}
+			if(IS_SHIP(ship) && ds->gridfs[y*w+x] & FE_FLEET)
+			{
+				draw_text(dr, tx + tilesize/2, ty + tilesize/2,
+				  FONT_VARIABLE, tilesize/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
+				  COL_COUNT_ERROR, "?");
+			}
 			
 			if(ds->gridfs[y*w+x] & FD_CURSOR)
 			{
@@ -3284,7 +3320,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	}
 	
 	/* Draw fleet */
-	boats_check_fleet(state, ds->fleetcount);
 	boats_draw_fleet(dr, w, h+2, state->fleet, state->fleetdata, 
 		ds->fleetcount, ds->oldfleetcount, redraw, tilesize, -1);
 	
