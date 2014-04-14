@@ -851,7 +851,7 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 	int x, y, i, len;
 	char hasfleetcount = fleetcount != NULL;
 	char ret = STATUS_COMPLETE;
-	char inship;
+	char inship, iserror;
 	
 	if(!hasfleetcount)
 		fleetcount = snewn(fleet, int);
@@ -884,6 +884,7 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 		inship = FALSE;
 		for(y = 0; y < h; y++)
 		{
+			iserror = FALSE;
 			if(state->grid[y*w+x] == SHIP_TOP)
 				inship = TRUE;
 			
@@ -896,18 +897,18 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 				if(len > fleet)
 				{
 					ret = STATUS_INVALID;
-					if(errs) errs[y*w+x] |= FE_FLEET;
+					iserror = TRUE;
 				}
 				else if (len > 0)
 				{
 					fleetcount[len - 1]++;
-					if(errs && state->fleetdata[len - 1] == 0)
-						errs[y*w+x] |= FE_FLEET;
+					if(state->fleetdata[len - 1] == 0)
+						iserror = TRUE;
 				}
 				
-				if(errs && errs[y*w+x] & FE_FLEET)
+				if(errs && iserror)
 				{
-					for(i = 1; i < len; i++)
+					for(i = 0; i < len; i++)
 						errs[(y-i)*w+x] |= FE_FLEET;
 				}
 				len = 0;
@@ -927,6 +928,7 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 		inship = FALSE;
 		for(x = 0; x < w; x++)
 		{
+			iserror = FALSE;
 			if(state->grid[y*w+x] == SHIP_LEFT)
 				inship = TRUE;
 			
@@ -939,17 +941,17 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 				if(len > fleet)
 				{
 					ret = STATUS_INVALID;
-					if(errs) errs[y*w+x] |= FE_FLEET;
+					iserror = TRUE;
 				}
 				else if (len > 0)
 				{
 					fleetcount[len - 1]++;
-					if(errs && state->fleetdata[len - 1] == 0)
-						errs[y*w+x] |= FE_FLEET;
+					if(state->fleetdata[len - 1] == 0)
+						iserror = TRUE;
 				}
-				if(errs && errs[y*w+x] & FE_FLEET)
+				if(errs && iserror)
 				{
-					for(i = 1; i < len; i++)
+					for(i = 0; i < len; i++)
 						errs[y*w+x-i] |= FE_FLEET;
 				}
 				len = 0;
