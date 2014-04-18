@@ -741,13 +741,16 @@ static int boats_count_ships(const game_state *state, int *blankcounts, int *shi
 	return ret;
 }
 
-static void boats_adjust_ships(game_state *state)
+static int boats_adjust_ships(game_state *state)
 {	
 	int w = state->w;
 	int h = state->h;
 	int x, y, i;
 	int maxships = 0;
 	int shipsum = 0;
+	int watersum = 0;
+	int ret = STATUS_COMPLETE;
+	char sleft, sright, sup, sdown;
 	
 	/* Count the current and required amount of ships */
 	for(i = 0; i < state->fleet; i++)
@@ -756,9 +759,14 @@ static void boats_adjust_ships(game_state *state)
 	{
 		if(IS_SHIP(state->grid[i]))
 			shipsum++;
+		else if(state->grid[i] == WATER)
+			watersum++;
 	}
 	
-	char sleft, sright, sup, sdown;
+	if(shipsum < maxships)
+		ret = STATUS_INCOMPLETE;
+	else if(shipsum > maxships || (w*h) - watersum < maxships)
+		ret = STATUS_INVALID;
 	
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
@@ -804,6 +812,8 @@ static void boats_adjust_ships(game_state *state)
 		else
 			state->grid[y*w+x] = SHIP_VAGUE;
 	}
+	
+	return ret;
 }
 
 static char boats_check_collision(const game_state *state, int *grid)
@@ -1126,7 +1136,7 @@ static char boats_validate_state(game_state *state, int *blankcounts, int *shipc
 	 * and the fleet count.
 	 */
 	
-	char status;
+	char status, adjuststatus;
 	
 	status = boats_count_ships(state, blankcounts, shipcounts, NULL);
 	if(status == STATUS_INVALID)
@@ -1136,10 +1146,15 @@ static char boats_validate_state(game_state *state, int *blankcounts, int *shipc
 		return STATUS_INVALID;
 	}
 	
-	boats_adjust_ships(state);
+	adjuststatus = boats_adjust_ships(state);
 	
 	status = max(status, boats_check_fleet(state, fleetcount, NULL));
 	status = max(status, boats_validate_gridclues(state, NULL));
+	
+	/* When all ships are placed, everything else must be complete */
+	if(adjuststatus == STATUS_INVALID || 
+		(adjuststatus == STATUS_COMPLETE && status != STATUS_COMPLETE))
+		return STATUS_INVALID;
 	
 	return status;
 }
