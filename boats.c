@@ -2640,7 +2640,7 @@ restart:
 	 * Ensure difficulty by making sure the puzzle is not solvable
 	 * at a lower difficulty level. 
 	 */
-	if(diff > 0 && boats_solve_game(state, diff - 1) >= 0)
+	if(boats_solve_game(state, diff) != diff)
 		goto restart;
 	
 	/* Serialize border clues */
