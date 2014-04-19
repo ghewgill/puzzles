@@ -661,9 +661,6 @@ static int boats_count_ships(const game_state *state, int *blankcounts, int *shi
 	/* Column counts */
 	for(x = 0; x < w; x++)
 	{
-		if(state->borderclues[x] == NO_CLUE)
-			continue;
-		
 		blanks = 0;
 		ships = 0;
 		
@@ -681,6 +678,9 @@ static int boats_count_ships(const game_state *state, int *blankcounts, int *shi
 			blankcounts[x] = blanks;
 		if(shipcounts)
 			shipcounts[x] = ships;
+		
+		if(state->borderclues[x] == NO_CLUE)
+			continue;
 		
 		/* Too many ships or blank squares */
 		if(ships > state->borderclues[x] || blanks > (h - state->borderclues[x]))
@@ -703,9 +703,6 @@ static int boats_count_ships(const game_state *state, int *blankcounts, int *shi
 	/* Row counts */
 	for(y = 0; y < h; y++)
 	{
-		if(state->borderclues[y+w] == NO_CLUE)
-			continue;
-		
 		blanks = 0;
 		ships = 0;
 		
@@ -721,6 +718,9 @@ static int boats_count_ships(const game_state *state, int *blankcounts, int *shi
 			blankcounts[y+w] = blanks;
 		if(shipcounts)
 			shipcounts[y+w] = ships;
+		
+		if(state->borderclues[y+w] == NO_CLUE)
+			continue;
 		
 		if(ships > state->borderclues[y+w] || blanks > (w - state->borderclues[y+w]))
 		{
@@ -2032,10 +2032,126 @@ static int boats_solver_centers_attempt(game_state *state, char *tmpgrid)
 	return ret;
 }
 
+static char boats_solver_borderclues_fill(game_state *state, int *blankcounts, int *shipcounts)
+{
+	/*
+	 * When a row or column is filled completely, add the corresponding clue.
+	 */
+	int w = state->w;
+	int h = state->h;
+	int i;
+	char found = FALSE;
+	
+	for(i = 0; i < w; i++)
+	{
+		if(state->borderclues[i] != NO_CLUE)
+			continue;
+		
+		found = TRUE;
+		if(shipcounts[i] + blankcounts[i] == h)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Column %d is finished, add clue %d\n", i, shipcounts[i]);
+			}
+#endif
+			state->borderclues[i] = shipcounts[i];
+		}
+	}
+	
+	for(i = 0; i < h; i++)
+	{
+		if(state->borderclues[i+w] != NO_CLUE)
+			continue;
+		
+		found = TRUE;
+		if(shipcounts[i+w] + blankcounts[i+w] == w)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Row %d is finished, add clue %d\n", i, shipcounts[i+w]);
+			}
+#endif
+			state->borderclues[i+w] = shipcounts[i+w];
+		}
+	}
+	
+	return found;
+}
+
+static int boats_solver_borderclues_last(game_state *state)
+{
+	/*
+	 * If all but one border clues are placed, calculate the last one.
+	 */
+	int maxships = 0;
+	int ret = 0;
+	int w = state->w;
+	int h = state->h;
+	int i, found, shipcount;
+	
+	for(i = 0; i < state->fleet; i++)
+		maxships += state->fleetdata[i] * (i+1);
+	
+	/* Column clues */
+	found = -1, shipcount = 0;
+	for(i = 0; i < w; i++)
+	{
+		if(state->borderclues[i] != NO_CLUE)
+		{
+			shipcount += state->borderclues[i];
+			continue;
+		}
+		if(found == -1)
+			found = i;
+		else
+			found = -2;
+	}
+	
+	if(found >= 0)
+	{
+#ifdef STANDALONE_SOLVER
+		if (solver_verbose) {
+			printf("Last Column clue is at %d, add clue %d\n", found, maxships - shipcount);
+		}
+#endif
+		state->borderclues[found] = maxships - shipcount;
+		ret++;
+	}
+	
+	found = -1, shipcount = 0;
+	for(i = 0; i < h; i++)
+	{
+		if(state->borderclues[i+w] != NO_CLUE)
+		{
+			shipcount += state->borderclues[i+w];
+			continue;
+		}
+		if(found == -1)
+			found = i;
+		else
+			found = -2;
+	}
+	
+	if(found >= 0)
+	{
+#ifdef STANDALONE_SOLVER
+		if (solver_verbose) {
+			printf("Last Row clue is at %d, add clue %d\n", found, maxships - shipcount);
+		}
+#endif
+		state->borderclues[found+w] = maxships - shipcount;
+		ret++;
+	}
+	
+	return ret;
+}
+
 static int boats_solve_game(game_state *state, int maxdiff)
 {
 	int w = state->w;
 	int h = state->h;
+	int i;
 	
 #ifdef STANDALONE_SOLVER
 	char *debug;
@@ -2044,6 +2160,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	struct boats_run *runs = NULL;
 	char *tmpgrid = NULL;
 	int runcount = 0;
+	int *borderclues = NULL;
 	int diff = DIFF_EASY;
 	
 	/*
@@ -2051,6 +2168,10 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	 * don't try techniques which only relate to CENTER clues.
 	 */
 	char hascenters = TRUE;
+	/*
+	 * This optimization flag is for finding missing border numbers.
+	 */
+	char hasnoclue = FALSE;
 	int status;
 	
 	int *blankcounts = snewn(w+h, int);
@@ -2059,6 +2180,28 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	
 	if(maxdiff >= DIFF_NORMAL)
 		runs = snewn(w*h*2, struct boats_run);
+	if(maxdiff >= DIFF_TRICKY)
+	{
+		/*
+		 * When a puzzle contains missing border clues, try to fill in the missing
+		 * numbers. This is done in the state itself. When the solver finishes,
+		 * the puzzle must be restored to its original state.
+		 */
+		for(i = 0; i < w+h && !borderclues; i++)
+		{
+			if(state->borderclues[i] == NO_CLUE)
+			{
+#ifdef STANDALONE_SOLVER
+				if (solver_verbose) {
+					printf("Missing border clues detected\n");
+				}
+#endif
+				borderclues = snewn(w+h, int);
+				memcpy(borderclues, state->borderclues, (w+h)*sizeof(int));
+				hasnoclue = TRUE;
+			}
+		}
+	}
 	if(maxdiff >= DIFF_HARD)
 		tmpgrid = snewn(w*h, char);
 	boats_solver_initial(state);
@@ -2111,6 +2254,14 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		if(maxdiff < DIFF_TRICKY) break;
 		diff = max(diff, DIFF_TRICKY);
 		
+		if(hasnoclue)
+		{
+			hasnoclue = boats_solver_borderclues_fill(state, blankcounts, shipcounts);
+			
+			if(boats_solver_borderclues_last(state))
+				continue;
+		}
+		
 		if(boats_solver_shared_diagonals(state, blankcounts))
 			continue;
 		
@@ -2141,11 +2292,15 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	if(status == STATUS_INVALID)
 		diff = -2;
 	
+	if(borderclues)
+		memcpy(state->borderclues, borderclues, (w+h)*sizeof(int));
+	
 	sfree(blankcounts);
 	sfree(shipcounts);
 	sfree(fleetcount);
 	sfree(runs);
 	sfree(tmpgrid);
+	sfree(borderclues);
 	
 	return diff;
 }
