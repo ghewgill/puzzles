@@ -89,12 +89,15 @@ struct game_params {
 /* Used to stop the error highlighting from spinning indefinitely */
 #define FE_LOOPSTART 0x0200
 
-#define FD_CURSOR    0x0400 /* Cursor position */
-#define FD_TOGOAL    0x0800 /* Leads to a goal */
-#define FD_ENTRY     0x1000 /* Holding down the mouse button */
+#define FD_CURSOR    0x0400 /* Cursor moving */
+#define FD_PLACE     0x0800 /* Cursor before placing arrow */
+#define FD_PENCIL    0x1000 /* Cursor before placing mark */
+#define FD_TOGOAL    0x2000 /* Leads to a goal */
+#define FD_ENTRY     0x4000 /* Holding down the mouse button */
 
 #define FM_ARROWMASK (FM_UP|FM_DOWN|FM_LEFT|FM_RIGHT)
 #define FE_MASK (FE_LOOP|FE_LOOPSTART|FE_BOUNDS|FE_DOUBLE)
+#define FD_KBMASK (FD_CURSOR|FD_PLACE|FD_PENCIL)
 
 typedef int cell;
 
@@ -1975,7 +1978,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 				p |= FD_ENTRY;
 		}
 		if(ui->kmode != KEYMODE_OFF && ui->hx == x && ui->hy == y)
-			c |= FD_CURSOR; // TODO do an update when kmode changes
+			c |= ui->kmode == KEYMODE_PLACE ? FD_PLACE :
+				ui->kmode == KEYMODE_PENCIL ? FD_PENCIL : FD_CURSOR;
 		
 		if(!ds->redraw && flash == ds->oldflash && 
 			ds->oldgrid[i1] == c && ds->oldpencil[i1] == p)
@@ -2035,7 +2039,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 				COL_HIGHLIGHT, "?");
 		}
 		
-		if(c == EMPTY || c == FD_CURSOR)
+		if((c & FD_KBMASK) == c)
 		{
 			if(p & FM_UP)
 				rome_draw_arrow(dr, (x+1)*tilesize, (y+0.75)*tilesize,
