@@ -1595,6 +1595,8 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		{
 			if(state->gridclues[pos] == LATINH_NOT && ui->hpencil)
 				return NULL;
+			if(state->grid[pos] != 0 && ui->hpencil)
+				return NULL;
 			
 			sprintf(buf, "%c%d,%d,%c", (char)(ui->hpencil ? 'P'	: 'R'),
 				ui->hx, ui->hy, 'O');
