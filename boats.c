@@ -1694,7 +1694,7 @@ static int boats_solver_find_max_fleet(game_state *state, int *shipcounts,
 	return ret;
 }
 
-static int boats_solver_shared_diagonals(game_state *state, int *watercounts)
+static int boats_solver_shared_diagonals(game_state *state, int *watercounts, int *shipcounts)
 {
 	/*
 	 * In each row and column, find two empty spaces with are separated by
@@ -1707,17 +1707,26 @@ static int boats_solver_shared_diagonals(game_state *state, int *watercounts)
 	int w = state->w;
 	int h = state->h;
 	int x, y;
+	int target;
+	char front, center, back;
 	
 	/* Rows */
 	for(y = 0; y < h; y++)
 	{
-		if((w - (state->borderclues[y+w] + watercounts[y+w])) != 1)
+		if(state->borderclues[y+w] == NO_CLUE) continue;
+		
+		target = w - (state->borderclues[y+w] + watercounts[y+w]);
+		if(target != 1 && target != 2)
 			continue;
 		
 		for(x = 1; x < w-1; x++)
 		{
-			if(state->grid[y*w+(x-1)] == EMPTY && 
-				state->grid[y*w+(x+1)] == EMPTY)
+			front = state->grid[y*w+(x-1)] == EMPTY ? 1 : 0;
+			center = state->grid[y*w+x] == EMPTY && 
+				state->borderclues[x] - shipcounts[x] == 1 ? 1 : 0;
+			back = state->grid[y*w+(x+1)] == EMPTY ? 1 : 0;
+			
+			if(front + center + back > target)
 			{
 				ret += boats_solver_place_water(state, x, y-1);
 				ret += boats_solver_place_water(state, x, y+1);
@@ -1728,13 +1737,20 @@ static int boats_solver_shared_diagonals(game_state *state, int *watercounts)
 	/* Columns */
 	for(x = 0; x < w; x++)
 	{
-		if((h - (state->borderclues[x] + watercounts[x])) != 1)
+		if(state->borderclues[x] == NO_CLUE) continue;
+		
+		target = h - (state->borderclues[x] + watercounts[x]);
+		if(target != 1 && target != 2)
 			continue;
 		
 		for(y = 1; y < h-1; y++)
 		{
-			if(state->grid[(y-1)*w+x] == EMPTY && 
-				state->grid[(y+1)*w+x] == EMPTY)
+			front = state->grid[(y-1)*w+x] == EMPTY ? 1 : 0;
+			center = state->grid[y*w+x] == EMPTY && 
+				state->borderclues[y+w] - shipcounts[y+w] == 1 ? 1 : 0;
+			back = state->grid[(y+1)*w+x] == EMPTY ? 1 : 0;
+			
+			if(front + center + back > target)
 			{
 				ret += boats_solver_place_water(state, x-1, y);
 				ret += boats_solver_place_water(state, x+1, y);
@@ -2262,7 +2278,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 				continue;
 		}
 		
-		if(boats_solver_shared_diagonals(state, blankcounts))
+		if(boats_solver_shared_diagonals(state, blankcounts, shipcounts))
 			continue;
 		
 		if(boats_solver_find_max_fleet(state, shipcounts, fleetcount,
