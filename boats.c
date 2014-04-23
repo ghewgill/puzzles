@@ -751,6 +751,7 @@ static int boats_adjust_ships(game_state *state)
 	int watersum = 0;
 	int ret = STATUS_COMPLETE;
 	char sleft, sright, sup, sdown;
+	char edge;
 	
 	/* Count the current and required amount of ships */
 	for(i = 0; i < state->fleet; i++)
@@ -783,6 +784,10 @@ static int boats_adjust_ships(game_state *state)
 		sdown = y == h-1 ? WATER 
 			: state->grid[(y+1)*w+x];
 		
+		edge = IS_SHIP(state->gridclues[y*w+x]) && 
+			state->gridclues[y*w+x] != SHIP_VAGUE && 
+			state->gridclues[y*w+x] != SHIP_CENTER;
+		
 		/* 
 		 * If there is exactly enough ships in the grid,
 		 * assume all other squares are water 
@@ -798,13 +803,13 @@ static int boats_adjust_ships(game_state *state)
 		if(sleft == WATER && sright == WATER && 
 			sup == WATER && sdown == WATER)
 			state->grid[y*w+x] = SHIP_SINGLE;
-		else if(sleft == WATER && IS_SHIP(sright))
+		else if((edge || sleft == WATER) && IS_SHIP(sright))
 			state->grid[y*w+x] = SHIP_LEFT;
-		else if(sright == WATER && IS_SHIP(sleft))
+		else if((edge || sright == WATER) && IS_SHIP(sleft))
 			state->grid[y*w+x] = SHIP_RIGHT;
-		else if(sup == WATER && IS_SHIP(sdown))
+		else if((edge || sup == WATER) && IS_SHIP(sdown))
 			state->grid[y*w+x] = SHIP_TOP;
-		else if(sdown == WATER && IS_SHIP(sup))
+		else if((edge || sdown == WATER) && IS_SHIP(sup))
 			state->grid[y*w+x] = SHIP_BOTTOM;
 		else if((IS_SHIP(sleft) && IS_SHIP(sright)) || 
 			(IS_SHIP(sup) && IS_SHIP(sdown)))
