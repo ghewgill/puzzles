@@ -803,6 +803,9 @@ static int boats_adjust_ships(game_state *state)
 		if(sleft == WATER && sright == WATER && 
 			sup == WATER && sdown == WATER)
 			state->grid[y*w+x] = SHIP_SINGLE;
+		else if((IS_SHIP(sleft) && IS_SHIP(sright)) || 
+			(IS_SHIP(sup) && IS_SHIP(sdown)))
+			state->grid[y*w+x] = SHIP_CENTER;
 		else if((edge || sleft == WATER) && IS_SHIP(sright))
 			state->grid[y*w+x] = SHIP_LEFT;
 		else if((edge || sright == WATER) && IS_SHIP(sleft))
@@ -811,9 +814,6 @@ static int boats_adjust_ships(game_state *state)
 			state->grid[y*w+x] = SHIP_TOP;
 		else if((edge || sdown == WATER) && IS_SHIP(sup))
 			state->grid[y*w+x] = SHIP_BOTTOM;
-		else if((IS_SHIP(sleft) && IS_SHIP(sright)) || 
-			(IS_SHIP(sup) && IS_SHIP(sdown)))
-			state->grid[y*w+x] = SHIP_CENTER;
 		else
 			state->grid[y*w+x] = SHIP_VAGUE;
 	}
@@ -1105,6 +1105,8 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 	int h = state->h;
 	int x, y;
 	char ret = STATUS_COMPLETE;
+	char sleft, sright, sup, sdown;
+	char error;
 	
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
@@ -1119,8 +1121,38 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 			continue;
 		}
 		
+		error = FALSE;
 		if(state->gridclues[y*w+x] != SHIP_VAGUE && state->grid[y*w+x] != SHIP_VAGUE 
 			&& state->gridclues[y*w+x] != state->grid[y*w+x])
+		{
+			error = TRUE;
+		}
+		else
+		{
+			sleft = x == 0 ? WATER 
+				: state->grid[y*w+(x-1)];
+			sright = x == w-1 ? WATER 
+				: state->grid[y*w+(x+1)];
+			sup = y == 0 ? WATER 
+				: state->grid[(y-1)*w+x];
+			sdown = y == h-1 ? WATER 
+				: state->grid[(y+1)*w+x];
+			
+			if(state->gridclues[y*w+x] == SHIP_LEFT && sright == WATER)
+				error = TRUE;
+			else if(state->gridclues[y*w+x] == SHIP_RIGHT && sleft == WATER)
+				error = TRUE;
+			else if(state->gridclues[y*w+x] == SHIP_TOP && sdown == WATER)
+				error = TRUE;
+			else if(state->gridclues[y*w+x] == SHIP_BOTTOM && sup == WATER)
+				error = TRUE;
+			else if(state->gridclues[y*w+x] == SHIP_CENTER &&
+				(sleft == WATER || sright == WATER) &&
+				(sup == WATER || sdown == WATER))
+				error = TRUE;
+		}
+		
+		if(error)
 		{
 			ret = STATUS_INVALID;
 			if(errs)
