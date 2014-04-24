@@ -1437,12 +1437,14 @@ static int boats_solver_remove_singles(game_state *state, int *fleetcount)
 {
 	/* 
 	 * If all boats of size 1 are placed, fill every square surrounded
-	 * by water with more water.
+	 * by water with more water. Single ships adjacent to one empty space
+	 * must extend in that direction.
 	 */
 	int ret = 0;
 	int x, y;
 	int w = state->w;
 	int h = state->h;
+	char sleft, sright, sup, sdown;
 	
 	/* Sanity check */
 	if(fleetcount[0] != state->fleetdata[0])
@@ -1451,13 +1453,21 @@ static int boats_solver_remove_singles(game_state *state, int *fleetcount)
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
 	{
-		if(state->grid[y*w+x] != EMPTY)
+		if(state->grid[y*w+x] == WATER)
 			continue;
 		
-		if( (x == 0 || state->grid[y*w+(x-1)] == WATER) &&
-			(x == w-1 || state->grid[y*w+(x+1)] == WATER) &&
-			(y == 0 || state->grid[(y-1)*w+x] == WATER) &&
-			(y == h-1 || state->grid[(y+1)*w+x] == WATER))
+		sleft = x == 0 ? WATER 
+			: state->grid[y*w+(x-1)];
+		sright = x == w-1 ? WATER 
+			: state->grid[y*w+(x+1)];
+		sup = y == 0 ? WATER 
+			: state->grid[(y-1)*w+x];
+		sdown = y == h-1 ? WATER 
+			: state->grid[(y+1)*w+x];
+		
+		if( sleft == WATER && sright == WATER &&
+			sup == WATER && sdown == WATER &&
+			state->grid[y*w+x] == EMPTY)
 		{
 #ifdef STANDALONE_SOLVER
 			if (solver_verbose) {
@@ -1465,6 +1475,49 @@ static int boats_solver_remove_singles(game_state *state, int *fleetcount)
 			}
 #endif
 			ret += boats_solver_place_water(state, x, y);
+		}
+		
+		if(state->grid[y*w+x] != SHIP_VAGUE)
+			continue;
+		
+		if(sleft == WATER && sright == WATER && sup == WATER && sdown == EMPTY)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Single ship at %i,%i must extend downward\n", x, y);
+			}
+#endif
+			ret += boats_solver_place_ship(state, x, y+1);
+		}
+		
+		else if(sleft == WATER && sright == WATER && sdown == WATER && sup == EMPTY)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Single ship at %i,%i must extend upward\n", x, y);
+			}
+#endif
+			ret += boats_solver_place_ship(state, x, y-1);
+		}
+		
+		else if(sdown == WATER && sright == WATER && sup == WATER && sleft == EMPTY)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Single ship at %i,%i must extend to the left\n", x, y);
+			}
+#endif
+			ret += boats_solver_place_ship(state, x-1, y);
+		}
+		
+		else if(sdown == WATER && sleft == WATER && sup == WATER && sright == EMPTY)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Single ship at %i,%i must extend to the right\n", x, y);
+			}
+#endif
+			ret += boats_solver_place_ship(state, x+1, y);
 		}
 	}
 	
