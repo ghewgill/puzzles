@@ -2925,9 +2925,16 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	int gx = FROMCOORD(ox);
 	int gy = FROMCOORD(oy);
 	
+	/* 
+	 * Since users will often want to fill an entire line, increase
+	 * the click target around the edges.
+	 */
+	if(gx == w) gx = w-1;
+	if(gy == h) gy = h-1;
+	
 	if(button == LEFT_BUTTON || button == MIDDLE_BUTTON || button == RIGHT_BUTTON)
 	{
-		if(gx >= 0 && gy >= 0 && gx < state->w && gy < state->h)
+		if(gx >= 0 && gy >= 0 && gx < w && gy < h)
 		{
 			from = IS_SHIP(state->grid[gy*w+gx]) ? 'B' : 
 				state->grid[gy*w+gx] == WATER ? 'W' : '-';
