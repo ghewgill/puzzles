@@ -1809,12 +1809,12 @@ static int boats_solver_shared_diagonals(game_state *state, int *watercounts, in
 		if(target != 1 && target != 2)
 			continue;
 		
-		for(x = 1; x < w-1; x++)
+		for(x = 0; x < w; x++)
 		{
-			front = state->grid[y*w+(x-1)] == EMPTY ? 1 : 0;
+			front = x > 0 && state->grid[y*w+(x-1)] == EMPTY ? 1 : 0;
 			center = state->grid[y*w+x] == EMPTY && 
 				state->borderclues[x] - shipcounts[x] == 1 ? 1 : 0;
-			back = state->grid[y*w+(x+1)] == EMPTY ? 1 : 0;
+			back = x < w-1 && state->grid[y*w+(x+1)] == EMPTY ? 1 : 0;
 			
 			if(front + center + back > target)
 			{
@@ -1833,12 +1833,12 @@ static int boats_solver_shared_diagonals(game_state *state, int *watercounts, in
 		if(target != 1 && target != 2)
 			continue;
 		
-		for(y = 1; y < h-1; y++)
+		for(y = 0; y < h; y++)
 		{
-			front = state->grid[(y-1)*w+x] == EMPTY ? 1 : 0;
+			front = y > 0 && state->grid[(y-1)*w+x] == EMPTY ? 1 : 0;
 			center = state->grid[y*w+x] == EMPTY && 
 				state->borderclues[y+w] - shipcounts[y+w] == 1 ? 1 : 0;
-			back = state->grid[(y+1)*w+x] == EMPTY ? 1 : 0;
+			back = y < h-1 && state->grid[(y+1)*w+x] == EMPTY ? 1 : 0;
 			
 			if(front + center + back > target)
 			{
