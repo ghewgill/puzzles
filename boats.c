@@ -2740,6 +2740,9 @@ restart:
 				state->borderclues[j] = tempb;
 			}
 		}
+		
+		/* Don't generate puzzles with only one clue missing */
+		boats_solver_borderclues_last(state);
 	}
 	
 	/* 
