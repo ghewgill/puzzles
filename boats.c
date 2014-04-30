@@ -23,10 +23,8 @@
 /*
  * TODO solver:
  * - Watch for smaller runs that cannot fit any boat, and fill them with water
+ * - Check for unfinished boat that must extend in a direction
  * - Recursion?
- *
- * TODO validator:
- * - Check for unfinished boats that are too large
  *
  * TODO ui:
  * - User interface for custom fleet
@@ -1165,12 +1163,81 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 	return ret;
 }
 
-static char boats_validate_state(game_state *state, int *blankcounts, int *shipcounts, int *fleetcount)
+static char boats_check_dsf(game_state *state, int *dsf, int *fleetcount)
+{
+	/* 
+	 * Build a dsf of all unfinished boats. Finished boats, water and empty
+	 * spaces are all put into one large set. Index w*h is part of this set.
+	 */
+	 
+	int w = state->w;
+	int h = state->h;
+	int end = w*h;
+	int x, y, i;
+	int *tempfleet = snewn(state->fleet, int);
+	char ret = STATUS_COMPLETE;
+	
+	memcpy(tempfleet, fleetcount, sizeof(int)*state->fleet);
+	dsf_init(dsf, (w*h)+1);
+	for(y = 0; y < h; y++)
+	for(x = 0; x < w; x++)
+	{
+		i = y*w+x;
+		if (state->grid[i] == EMPTY || state->grid[i] == WATER)
+		{
+			dsf_merge(dsf, i, end);
+			continue;
+		}
+		
+		if(x < w-1 && IS_SHIP(state->grid[i]) && IS_SHIP(state->grid[y*w+x+1]))
+			dsf_merge(dsf, i, y*w+x+1);
+		if(y < h-1 && IS_SHIP(state->grid[i]) && IS_SHIP(state->grid[(y+1)*w+x]))
+			dsf_merge(dsf, i, (y+1)*w+x);
+		
+		if(state->grid[i] == SHIP_SINGLE)
+			dsf_merge(dsf, i, end);
+		/* The canonical index always points to the first square of a boat */
+		else if(state->grid[i] == SHIP_RIGHT && state->grid[dsf_canonify(dsf, i)] == SHIP_LEFT)
+			dsf_merge(dsf, i, end);
+		else if(state->grid[i] == SHIP_BOTTOM && state->grid[dsf_canonify(dsf, i)] == SHIP_TOP)
+			dsf_merge(dsf, i, end);
+	}
+	for(y = 0; y < h; y++)
+	for(x = 0; x < w; x++)
+	{
+		i = y*w+x;
+		if(dsf_canonify(dsf, i) == dsf_canonify(dsf, end))
+			continue;
+		
+		if(i == dsf_canonify(dsf, i))
+		{
+			if(ret != STATUS_INVALID) ret = STATUS_INCOMPLETE;
+			if(dsf_size(dsf, i) > state->fleet)
+				ret = STATUS_INVALID;
+			else
+				tempfleet[dsf_size(dsf, i) - 1]++;
+		}
+	}
+	
+	for(i = state->fleet - 1; i >= 0; i--)
+	{
+		if(fleetcount[i] < state->fleetdata[i])
+			break;
+		
+		if(tempfleet[i] > state->fleetdata[i])
+			ret = STATUS_INVALID;
+	}
+	
+	sfree(tempfleet);
+	return ret;
+}
+
+static char boats_validate_full_state(game_state *state, int *blankcounts, int *shipcounts, int *fleetcount, int *dsf)
 {
 	/*
 	 * Check if the current state is complete, incomplete, or contains errors.
-	 * Optionally fills the counts for blank spaces, ships, 
-	 * and the fleet count.
+	 * Optionally fills the counts for blank spaces, ships, and the fleet count.
+	 * Will only validate unfinished boats if dsf is non-NULL.
 	 */
 	
 	char status, adjuststatus;
@@ -1188,12 +1255,21 @@ static char boats_validate_state(game_state *state, int *blankcounts, int *shipc
 	status = max(status, boats_check_fleet(state, fleetcount, NULL));
 	status = max(status, boats_validate_gridclues(state, NULL));
 	
+	if(status != STATUS_INVALID && dsf)
+		status = max(status, boats_check_dsf(state, dsf, fleetcount));
+	
 	/* When all ships are placed, everything else must be complete */
 	if(adjuststatus == STATUS_INVALID || 
 		(adjuststatus == STATUS_COMPLETE && status != STATUS_COMPLETE))
 		return STATUS_INVALID;
 	
 	return status;
+}
+
+static char boats_validate_state(game_state *state)
+{
+	/* Short version of boats_validate_full_state */
+	return boats_validate_full_state(state, NULL, NULL, NULL, NULL);
 }
 
 /* ****** *
@@ -1644,6 +1720,57 @@ static int boats_solver_centers_normal(game_state *state, int *shipcounts)
 	return ret;
 }
 
+static int boats_solver_max_expand_dsf(game_state *state, int *fleetcount, int *dsf)
+{
+	/* 
+	 * See if an unfinished boat becomes too large when expanding into
+	 * a certain direction, merging with other boats when necessary.
+	 */
+	
+	int i, x, y;
+	int w = state->w;
+	int h = state->h;
+	int ret = 0;
+	int max = -1;
+	int count;
+	
+	/* Determine ship size to find */
+	for(i = 0; i < state->fleet; i++)
+	{
+		if((state->fleetdata[i] - fleetcount[i]) != 0)
+			max = i;
+	}
+	
+	for(y = 0; y < h; y++)
+	for(x = 0; x < w; x++)
+	{
+		if(state->grid[y*w+x] != EMPTY)
+			continue;
+		
+		count = 1;
+		if(x > 0 && state->grid[y*w+x-1] == SHIP_VAGUE)
+			count += dsf_size(dsf, y*w+x-1);
+		if(x < w-1 && state->grid[y*w+x+1] == SHIP_VAGUE)
+			count += dsf_size(dsf, y*w+x+1);
+		if(y > 0 && state->grid[(y-1)*w+x] == SHIP_VAGUE)
+			count += dsf_size(dsf, (y-1)*w+x);
+		if(y < h-1 && state->grid[(y+1)*w+x] == SHIP_VAGUE)
+			count += dsf_size(dsf, (y+1)*w+x);
+		
+		if(count > max+1)
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Ship at %d,%d will result in boat of size %d\n", x, y, count);
+			}
+#endif
+			ret += boats_solver_place_water(state, x, y);
+		}
+	}
+	
+	return ret;
+}
+
 static int boats_solver_find_max_fleet(game_state *state, int *shipcounts, 
 	int *fleetcount, struct boats_run *runs, int runcount, char simple)
 {	
@@ -1892,7 +2019,7 @@ static int boats_solver_attempt_ship_rows(game_state *state, char *tmpgrid, int 
 					if(state->borderclues[x] != NO_CLUE && (h - (state->borderclues[x] + watercounts[x])) == 1)
 						boats_solver_fill_row(state, x, 0, x, h-1, SHIP_VAGUE);
 					
-					if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
+					if(boats_validate_state(state) == STATUS_INVALID)
 					{
 #ifdef STANDALONE_SOLVER
 						if (temp_verbose) {
@@ -1928,7 +2055,7 @@ static int boats_solver_attempt_ship_rows(game_state *state, char *tmpgrid, int 
 					boats_solver_place_water(state, x, y);
 					boats_solver_fill_row(state, x, 0, x, h-1, SHIP_VAGUE);
 					
-					if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
+					if(boats_validate_state(state) == STATUS_INVALID)
 					{
 #ifdef STANDALONE_SOLVER
 						if (temp_verbose) {
@@ -1990,7 +2117,7 @@ static int boats_solver_attempt_water_rows(game_state *state, char *tmpgrid, int
 					if(state->borderclues[x] != NO_CLUE && state->borderclues[x] - shipcounts[x] == 1)
 						boats_solver_fill_row(state, x, 0, x, h-1, WATER);
 					
-					if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
+					if(boats_validate_state(state) == STATUS_INVALID)
 					{
 #ifdef STANDALONE_SOLVER
 						if (temp_verbose) {
@@ -2025,7 +2152,7 @@ static int boats_solver_attempt_water_rows(game_state *state, char *tmpgrid, int
 					boats_solver_place_ship(state, x, y);
 					boats_solver_fill_row(state, x, 0, x, h-1, WATER);
 					
-					if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
+					if(boats_validate_state(state) == STATUS_INVALID)
 					{
 #ifdef STANDALONE_SOLVER
 						if (temp_verbose) {
@@ -2091,7 +2218,7 @@ static int boats_solver_centers_attempt(game_state *state, char *tmpgrid)
 		boats_solver_place_ship(state, x-1, y);
 		boats_solver_place_ship(state, x+1, y);
 		
-		if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
+		if(boats_validate_state(state) == STATUS_INVALID)
 		{
 #ifdef STANDALONE_SOLVER
 			if (temp_verbose) {
@@ -2112,7 +2239,7 @@ static int boats_solver_centers_attempt(game_state *state, char *tmpgrid)
 		boats_solver_place_ship(state, x, y-1);
 		boats_solver_place_ship(state, x, y+1);
 		
-		if(boats_validate_state(state, NULL, NULL, NULL) == STATUS_INVALID)
+		if(boats_validate_state(state) == STATUS_INVALID)
 		{
 #ifdef STANDALONE_SOLVER
 			if (temp_verbose) {
@@ -2265,6 +2392,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	
 	struct boats_run *runs = NULL;
 	char *tmpgrid = NULL;
+	int *dsf = NULL;
 	int runcount = 0;
 	int *borderclues = NULL;
 	int diff = DIFF_EASY;
@@ -2285,7 +2413,11 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	int *fleetcount = snewn(state->fleet, int);
 	
 	if(maxdiff >= DIFF_NORMAL)
+	{
 		runs = snewn(w*h*2, struct boats_run);
+		
+		dsf = snewn((w*h)+1, int);
+	}
 	if(maxdiff >= DIFF_TRICKY)
 	{
 		/*
@@ -2315,7 +2447,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	while(TRUE)
 	{
 		/* Validation */
-		if(boats_validate_state(state, blankcounts, shipcounts, fleetcount) != STATUS_INCOMPLETE)
+		if(boats_validate_full_state(state, blankcounts, shipcounts, fleetcount, dsf) != STATUS_INCOMPLETE)
 			break;
 		
 #ifdef STANDALONE_SOLVER
@@ -2346,6 +2478,9 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		diff = max(diff, DIFF_NORMAL);
 		
 		if(hascenters && boats_solver_centers_normal(state, shipcounts))
+			continue;
+		
+		if(boats_solver_max_expand_dsf(state, fleetcount, dsf))
 			continue;
 		
 		runcount = boats_collect_runs(state, runs);
@@ -2391,7 +2526,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		break;
 	}
 	
-	status = boats_validate_state(state, blankcounts, shipcounts, fleetcount);
+	status = boats_validate_full_state(state, blankcounts, shipcounts, fleetcount, NULL);
 	
 	if(status == STATUS_INCOMPLETE)
 		diff = -1;
@@ -2407,6 +2542,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	sfree(runs);
 	sfree(tmpgrid);
 	sfree(borderclues);
+	sfree(dsf);
 	
 	return diff;
 }
@@ -3072,7 +3208,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		}
 		
 		boats_adjust_ships(ret);
-		if(boats_validate_state(ret, NULL, NULL, NULL) == STATUS_COMPLETE)
+		if(boats_validate_state(ret) == STATUS_COMPLETE)
 			ret->completed = TRUE;
 		
 		return ret;
@@ -3099,7 +3235,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		
 		boats_adjust_ships(ret);
 		
-		if(boats_validate_state(ret, NULL, NULL, NULL) == STATUS_COMPLETE)
+		if(boats_validate_state(ret) == STATUS_COMPLETE)
 			ret->completed = TRUE;
 		
 		/* 

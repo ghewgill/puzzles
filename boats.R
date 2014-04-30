@@ -1,10 +1,12 @@
 # -*- makefile -*-
 
-boats : [X] GTK COMMON boats boats-icon|no-icon
-boats : [G] WINDOWS COMMON boats boats.res|noicon.res
+BOATS_EXTRA = dsf
 
-boatssolver : [U] boats[STANDALONE_SOLVER] STANDALONE
-boatssolver : [C] boats[STANDALONE_SOLVER] STANDALONE
+boats : [X] GTK COMMON boats BOATS_EXTRA boats-icon|no-icon
+boats : [G] WINDOWS COMMON boats BOATS_EXTRA boats.res|noicon.res
+
+boatssolver : [U] boats[STANDALONE_SOLVER] BOATS_EXTRA STANDALONE
+boatssolver : [C] boats[STANDALONE_SOLVER] BOATS_EXTRA STANDALONE
 
 ALL += boats[COMBINED]
 
