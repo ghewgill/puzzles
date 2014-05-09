@@ -2772,6 +2772,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 {
 	game_state *state;
 	int diff = params->diff;
+	char strip = params->strip;
 	char *ret = NULL, *p;
 	char *grid;
 	char tempg;
@@ -2793,7 +2794,10 @@ restart:
 	if(attempts > MAX_ATTEMPTS)
 	{
 		attempts = 0;
-		diff--;
+		if(strip)
+			strip = FALSE;
+		else
+			diff--;
 		assert(diff >= 0);
 	}
 	
@@ -2856,7 +2860,7 @@ restart:
 	}
 	
 	/* Remove border clues */
-	if(params->strip)
+	if(strip)
 	{
 		for(i = 0; i < w+h; i++)
 			spaces[i] = i;
@@ -2879,6 +2883,14 @@ restart:
 		
 		/* Don't generate puzzles with only one clue missing */
 		boats_solver_borderclues_last(state);
+		
+		for(i = 0; i < w+h; i++)
+		{
+			if(state->borderclues[i] == NO_CLUE)
+				break;
+		}
+		if(i == w+h) /* No empty clue found */
+			goto restart;
 	}
 	
 	/* 
