@@ -1720,6 +1720,116 @@ static int boats_solver_centers_normal(game_state *state, int *shipcounts)
 	return ret;
 }
 
+static int boats_solver_min_expand_dsf_forward(game_state *state, int *fleetcount, int *dsf,
+		int sx, int sy, int d, int ship)
+{
+	/*
+	 * See if a boat must expand to the right or down. There must be an edge
+	 * located at the first square occupied by this boat (the canonical index).
+	 *
+	 * Because the dsf must be reconstructed when a new ship is added,
+	 * this function can perform at most one action per call.
+	 */
+	
+	int w = state->w;
+	int h = state->h;
+	int end = dsf_canonify(dsf, w*h);
+	int x, y, i1, i2, s;
+	for(y = sy; y < h; y++)
+	for(x = sx; x < w; x++)
+	{
+		i1 = y*w+x;
+		i2 = i1 - d;
+		if(state->grid[i1] != EMPTY || dsf_canonify(dsf, i2) == end)
+			continue;
+		if(state->grid[dsf_canonify(dsf, i2)] != ship)
+			continue;
+		
+		s = dsf_size(dsf, i2) - 1;
+		if(s < 1 || s >= state->fleet || state->fleetdata[s] != fleetcount[s])
+			continue;
+		
+#ifdef STANDALONE_SOLVER
+		if (solver_verbose) {
+			printf("Boat of size %d must expand to %d,%d\n", s+1, x, y);
+		}
+#endif
+		return boats_solver_place_ship(state, x, y);
+	}
+	
+	return 0;
+}
+
+static int boats_solver_min_expand_dsf_back(game_state *state, int *fleetcount, int *dsf,
+		int d, int ship)
+{
+	/*
+	 * See if a boat must expand to the left or up. If an edge pointing right
+	 * or down is found, this boat can only expand to the opposite direction.
+	 * The cell to expand to is calculated using the canonical index.
+	 */
+	
+	int w = state->w;
+	int h = state->h;
+	int end = dsf_canonify(dsf, w*h);
+	int x, y, i1, c1, i2, s;
+	for(y = 0; y < h; y++)
+	for(x = 0; x < w; x++)
+	{
+		i1 = y*w+x;
+		if(state->grid[i1] != ship)
+			continue;
+		c1 = dsf_canonify(dsf, i1);
+		if(c1 == end)
+			continue;
+		
+		s = dsf_size(dsf, i1) - 1;
+		if(s < 1 || s >= state->fleet || state->fleetdata[s] != fleetcount[s])
+			continue;
+		
+		i2 = c1 - d;
+		
+#ifdef STANDALONE_SOLVER
+		if (solver_verbose) {
+			printf("Boat of size %d must expand to %d,%d\n", s+1, i2%w, i2/w);
+		}
+#endif
+		return boats_solver_place_ship(state, i2%w, i2/w);
+	}
+	
+	return 0;
+}
+
+static int boats_solver_min_expand_dsf(game_state *state, int *fleetcount, int *dsf)
+{
+	/*
+	 * See if an unfinished boat needs to expand in the last possible direction.
+	 * This function does not handle unfinished boats of size 1, this is done
+	 * in the function boats_solver_remove_singles.
+	 *
+	 * Because the dsf must be reconstructed when a new ship is added,
+	 * this function can perform at most one action per call.
+	 */
+	
+	int w = state->w;
+	
+	/* Expand down */
+	if(boats_solver_min_expand_dsf_forward(state, fleetcount, dsf, 0, 1, w, SHIP_TOP))
+		return 1;
+	/* Expand right */
+	if(boats_solver_min_expand_dsf_forward(state, fleetcount, dsf, 1, 0, 1, SHIP_LEFT))
+		return 1;
+	
+	/* Expand up */
+	if(boats_solver_min_expand_dsf_back(state, fleetcount, dsf, w, SHIP_BOTTOM))
+		return 1;
+	/* Expand left */
+	if(boats_solver_min_expand_dsf_back(state, fleetcount, dsf, 1, SHIP_RIGHT))
+		return 1;
+	
+	return 0;
+}
+
 static int boats_solver_max_expand_dsf(game_state *state, int *fleetcount, int *dsf)
 {
 	/* 
@@ -2481,6 +2591,9 @@ static int boats_solve_game(game_state *state, int maxdiff)
 			continue;
 		
 		if(boats_solver_max_expand_dsf(state, fleetcount, dsf))
+			continue;
+		
+		if(boats_solver_min_expand_dsf(state, fleetcount, dsf))
 			continue;
 		
 		runcount = boats_collect_runs(state, runs);
