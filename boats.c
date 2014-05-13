@@ -23,7 +23,6 @@
 /*
  * TODO solver:
  * - Watch for smaller runs that cannot fit any boat, and fill them with water
- * - Check for unfinished boat that must extend in a direction
  * - Recursion?
  *
  * TODO ui:
