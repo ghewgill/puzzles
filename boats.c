@@ -26,7 +26,6 @@
  * - Recursion?
  *
  * TODO ui:
- * - User interface for custom fleet
  * - Certain custom fleets don't fit in the UI
  */
 
@@ -137,6 +136,39 @@ static int *boats_default_fleet(int fleet)
 	return ret;
 }
 
+static int *boats_decode_fleet(const char *input, int fleet)
+{
+	int *ret = snewn(fleet, int);
+	const char *p = input;
+	int i;
+	for(i = 0; i < fleet; i++)
+	{
+		while (*p && !isdigit((unsigned char) *p)) ++p;
+		if(*p)
+		{
+			ret[i] = atoi(p);
+			while (*p && isdigit((unsigned char) *p)) ++p;
+		}
+		else
+			ret[i] = 0;
+	}
+	return ret;
+}
+
+static char *boats_encode_fleet(const int *input, int fleet)
+{
+	char buf[256];
+	char *p = buf;
+	int i;
+	for(i = 0; i < fleet; i++)
+	{
+		p += sprintf(p, "%d,", input[i]);
+	}
+	p--;
+	*p = '\0';
+	return dupstr(buf);
+}
+
 const static struct game_params boats_presets[] = {
     { 6, 6, 3, NULL, DIFF_EASY, FALSE },
     { 6, 6, 3, NULL, DIFF_NORMAL, FALSE },
@@ -203,7 +235,6 @@ static game_params *dup_params(const game_params *params)
 
 static void decode_params(game_params *params, char const *string)
 {
-	int i;
 	char const *p = string;
 	params->fleet = 4;
 	params->strip = FALSE;
@@ -252,21 +283,7 @@ static void decode_params(game_params *params, char const *string)
 		sfree(params->fleetdata);
 	
 	if(*p == ',')
-	{
-		/* Custom fleet */
-		params->fleetdata = snewn(params->fleet, int);
-		for(i = 0; i < params->fleet; i++)
-		{
-			if(*p == ',') p++;
-			if(*p)
-			{
-				params->fleetdata[i] = atoi(p);
-				while (*p && isdigit((unsigned char) *p)) ++p;
-			}
-			else
-				params->fleetdata[i] = 0;
-		}
-	}
+		params->fleetdata = boats_decode_fleet(p, params->fleet);
 	else
 		params->fleetdata = boats_default_fleet(params->fleet);
 }
@@ -275,15 +292,17 @@ static char *encode_params(const game_params *params, int full)
 {
 	char data[256];
 	char *p = data;
-	int i;
+	char *fleet;
 	
 	p += sprintf(p, "%dx%df%d", params->w, params->h, params->fleet);
 	if(full)
 		p += sprintf(p, "d%c", boats_diffchars[params->diff]);
 	if(full && params->strip)
 		p += sprintf(p, "S");
-	for(i = 0; i < params->fleet; i++)
-		p += sprintf(p, ",%d", params->fleetdata[i]);
+	
+	fleet = boats_encode_fleet(params->fleetdata, params->fleet);
+	p += sprintf(p, ",%s", fleet);
+	sfree(fleet);
 	
 	return dupstr(data);
 }
@@ -292,8 +311,9 @@ static config_item *game_configure(const game_params *params)
 {
 	config_item *ret;
     char buf[80];
+	int *fleet = boats_default_fleet(params->fleet);
 
-    ret = snewn(6, config_item);
+    ret = snewn(7, config_item);
 
     ret[0].name = "Width";
     ret[0].type = C_STRING;
@@ -313,21 +333,31 @@ static config_item *game_configure(const game_params *params)
     ret[2].sval = dupstr(buf);
     ret[2].ival = 0;
 
-    ret[3].name = "Difficulty";
-    ret[3].type = C_CHOICES;
-    ret[3].sval = DIFFCONFIG;
-    ret[3].ival = params->diff;
+	ret[3].name = "Fleet configuration";
+	ret[3].type = C_STRING;
+	ret[3].ival = 0;
+	/* Only fill this field if the fleet is non-standard */
+	if(memcmp(params->fleetdata, fleet, params->fleet*sizeof(int)))
+		ret[3].sval = boats_encode_fleet(params->fleetdata, params->fleet);
+	else
+		ret[3].sval = dupstr("");
 	
-	ret[4].name = "Remove numbers";
-	ret[4].type = C_BOOLEAN;
-	ret[4].sval = NULL;
-	ret[4].ival = params->strip;
+    ret[4].name = "Difficulty";
+    ret[4].type = C_CHOICES;
+    ret[4].sval = DIFFCONFIG;
+    ret[4].ival = params->diff;
+	
+	ret[5].name = "Remove numbers";
+	ret[5].type = C_BOOLEAN;
+	ret[5].sval = NULL;
+	ret[5].ival = params->strip;
 
-    ret[5].name = NULL;
-    ret[5].type = C_END;
-    ret[5].sval = NULL;
-    ret[5].ival = 0;
+    ret[6].name = NULL;
+    ret[6].type = C_END;
+    ret[6].sval = NULL;
+    ret[6].ival = 0;
 
+	sfree(fleet);
     return ret;
 }
 
@@ -338,10 +368,14 @@ static game_params *custom_params(const config_item *cfg)
     ret->w = atoi(cfg[0].sval);
     ret->h = atoi(cfg[1].sval);
     ret->fleet = atoi(cfg[2].sval);
-    ret->diff = cfg[3].ival;
-    ret->strip = cfg[4].ival;
+    ret->diff = cfg[4].ival;
+    ret->strip = cfg[5].ival;
 
-	if(ret->fleet > 0)
+	if(ret->fleet < 1 || ret->fleet > 9)
+		ret->fleetdata = NULL;
+	else if(strcmp(cfg[3].sval, ""))
+		ret->fleetdata = boats_decode_fleet(cfg[3].sval, ret->fleet);
+	else
 		ret->fleetdata = boats_default_fleet(ret->fleet);
 	
     return ret;
