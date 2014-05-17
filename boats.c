@@ -1476,6 +1476,40 @@ static int boats_solver_fill_row(game_state *state, int sx, int sy, int ex, int 
 	return ret;
 }
 
+static int boats_solver_check_fill(game_state *state, int *blankcounts)
+{
+	/* If all water is placed, fill the rest of the grid with ships */
+	int i;
+	int w = state->w;
+	int h = state->h;
+	int ret = 0;
+	int count = 0;
+	
+	for(i = 0; i < state->fleet; i++)
+		count += state->fleetdata[i] * (i+1);
+	
+	for(i = 0; i < w; i++)
+	{
+		count += blankcounts[i];
+	}
+	
+	if(count == w*h)
+	{
+#ifdef STANDALONE_SOLVER
+		if (solver_verbose) {
+			printf("Fill the rest of the grid with ships\n");
+		}
+#endif
+		for(i = 0; i < w*h; i++)
+		{
+			if(state->grid[i] == EMPTY)
+				ret += boats_solver_place_ship(state, i%w, i/w);
+		}
+	}
+	
+	return ret;
+}
+
 static int boats_solver_check_counts(game_state *state, int *blankcounts, int *shipcounts)
 {
 	/*
@@ -2561,27 +2595,22 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		
 		dsf = snewn((w*h)+1, int);
 	}
-	if(maxdiff >= DIFF_TRICKY)
+	
+	for(i = 0; i < w+h && !hasnoclue; i++)
+	{
+		if(state->borderclues[i] == NO_CLUE)
+			hasnoclue = TRUE;
+	}
+	
+	if(maxdiff >= DIFF_TRICKY && hasnoclue)
 	{
 		/*
 		 * When a puzzle contains missing border clues, try to fill in the missing
 		 * numbers. This is done in the state itself. When the solver finishes,
 		 * the puzzle must be restored to its original state.
 		 */
-		for(i = 0; i < w+h && !borderclues; i++)
-		{
-			if(state->borderclues[i] == NO_CLUE)
-			{
-#ifdef STANDALONE_SOLVER
-				if (solver_verbose) {
-					printf("Missing border clues detected\n");
-				}
-#endif
-				borderclues = snewn(w+h, int);
-				memcpy(borderclues, state->borderclues, (w+h)*sizeof(int));
-				hasnoclue = TRUE;
-			}
-		}
+		borderclues = snewn(w+h, int);
+		memcpy(borderclues, state->borderclues, (w+h)*sizeof(int));
 	}
 	if(maxdiff >= DIFF_HARD)
 		tmpgrid = snewn(w*h, char);
@@ -2606,6 +2635,9 @@ static int boats_solve_game(game_state *state, int maxdiff)
 #endif
 		
 		/* Easy techniques */
+		if(hasnoclue && boats_solver_check_fill(state, blankcounts))
+			continue;
+		
 		if(boats_solver_check_counts(state, blankcounts, shipcounts))
 			continue;
 		
