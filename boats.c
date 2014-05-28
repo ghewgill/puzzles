@@ -2088,6 +2088,49 @@ static int boats_solver_find_max_fleet(game_state *state, int *shipcounts,
 	return ret;
 }
 
+static int boats_solver_split_runs(game_state *state, int *fleetcount, 
+		struct boats_run *runs, int runcount)
+{
+	/*
+	 * Look for runs which contain one blank space, and see if filling it would
+	 * result in too many boats. If so, fill the last space with water.
+	 */
+	
+	int ret = 0;
+	struct boats_run *run;
+	int i, len;
+	
+	for(i = 0; i < runcount; i++)
+	{
+		run = &runs[i];
+		len = run->len;
+		if(len < 2 || len > state->fleet)
+			continue;
+		if(len - run->ships != 1)
+			continue;
+		
+		if(state->fleetdata[len-1] == fleetcount[len-1])
+		{
+#ifdef STANDALONE_SOLVER
+			if (solver_verbose) {
+				printf("Run of size %d at %s %d must not be filled\n",
+					len, run->horizontal ? "row" : "column", run->row); 
+			}
+#endif
+			if(run->horizontal)
+			{
+				ret += boats_solver_fill_row(state, run->start, run->row, run->start+len-1, run->row, WATER);
+			}
+			else
+			{
+				ret += boats_solver_fill_row(state, run->row, run->start, run->row, run->start+len-1, WATER);
+			}
+		}
+	}
+	
+	return ret; 
+}
+
 static int boats_solver_shared_diagonals(game_state *state, int *watercounts, int *shipcounts)
 {
 	/*
@@ -2667,6 +2710,9 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		if(diff < DIFF_TRICKY &&
 			boats_solver_find_max_fleet(state, shipcounts, fleetcount,
 			runs, runcount, TRUE))
+			continue;
+		
+		if(boats_solver_split_runs(state, fleetcount, runs, runcount))
 			continue;
 		
 		/* Tricky techniques */
