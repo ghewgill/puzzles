@@ -2019,7 +2019,6 @@ static int boats_solver_find_max_fleet(game_state *state, int *shipcounts,
 	 */
 	if(r == bc)
 	{
-		/* Do stuff */
 		for(i = 0; i < r; i++)
 		{
 			struct boats_run *run = &runs[idx[i]];
@@ -2918,6 +2917,7 @@ static char *validate_params(const game_params *params, int full)
 {
 	int w = params->w;
 	int h = params->h;
+	int i;
 	int fleet = params->fleet;
 	
 	int *spaces;
@@ -2930,13 +2930,18 @@ static char *validate_params(const game_params *params, int full)
 	if(w > 99)
 		return "Width is too high";
 	if(h > 99)
-		return "Height is too high.";
+		return "Height is too high";
 	if(fleet < 1)
 		return "Fleet size must be at least 1";
 	if(fleet > w && fleet > h)
 		return "Fleet size must be smaller than the width and height";
 	if(fleet > 9)
 		return "Fleet size must be no more than 9";
+		
+	for(i = 0; i < fleet; i++)
+		if(params->fleetdata[i]) break;
+	if(i == fleet)
+		return "Fleet must contain at least 1 boat";
 	
 	if(w < 2)
 		return "Width must be at least 2";
