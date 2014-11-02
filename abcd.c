@@ -25,9 +25,6 @@
  *     of attempts...
  *
  * - Solver techniques for diagonal mode?
- *
- * - Optimize drawing routines
- *
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -1225,7 +1222,8 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 		ui->hshow = FALSE;
 }
 
-#define FD_CURSOR		2
+#define FD_CURSOR		1
+#define FD_PENCIL		2
 #define FD_ERROR		4
 #define FD_ERRVERT	8
 #define FD_ERRHORZ	16
@@ -1243,8 +1241,12 @@ struct game_drawstate {
 	int tilesize;
 	int diag;
 	int w,h,n;
+	char *grid;
 	int *cluefs;
+	int *oldcluefs;
 	int *gridfs;
+	int *oldgridfs;
+	unsigned char *clues;
 	char initial;
 	int flash;
 };
@@ -1536,12 +1538,20 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	int l = w + h;
 	
 	ds->initial = FALSE;
-	ds->flash = 0;
+	ds->flash = -1;
 	
 	ds->cluefs = snewn(l*n, int);
 	ds->gridfs = snewn(w*h, int);
+	ds->grid = snewn(w*h, char);
+	ds->oldcluefs = snewn(l*n, int);
+	ds->oldgridfs = snewn(w*h, int);
+	ds->clues = snewn(w * h * n, unsigned char);
+	memset(ds->clues, FALSE, w*h*n);
 	memset(ds->cluefs, 0, l*n*sizeof(int));
 	memset(ds->gridfs, 0, w*h*sizeof(int));
+	memset(ds->grid, ~0, w*h*sizeof(char));
+	memset(ds->oldcluefs, ~0, l*n*sizeof(int));
+	memset(ds->oldgridfs, ~0, w*h*sizeof(int));
 
 	return ds;
 }
@@ -1550,6 +1560,10 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 {
 	sfree(ds->cluefs);
 	sfree(ds->gridfs);
+	sfree(ds->grid);
+	sfree(ds->oldcluefs);
+	sfree(ds->oldgridfs);
+	sfree(ds->clues);
 	sfree(ds);
 }
 
@@ -1576,6 +1590,53 @@ static void abcd_draw_borderletters(drawing *dr, game_drawstate *ds, int n, int 
 	}
 }
 
+static void abcd_count_clues(const game_state *state, int *cluefs, int horizontal)
+{
+	int w = state->w;
+	int h = state->h;
+	int n = state->n;
+	
+	int a,amx,b,bmx,i;
+	int clue, pos;
+	
+	int found, empty, gridpos;
+	
+	amx = (horizontal ? h : w);
+	bmx = (horizontal ? w : h);
+	
+	for(a = 0; a < amx; a++)
+		for(i = 0; i < n; i++)
+		{
+			pos = (horizontal ? HOR_CLUE(a,i) : VER_CLUE(a,i));
+			
+			clue = state->numbers[pos];
+			
+			if (clue == NO_NUMBER) continue;
+			
+			/* 
+			 * Check for errors. If the amount of letters of this type
+			 * found is more than the actual number, or if there's not
+			 * enough free space to use, we mark it as an error.
+			 */
+			found = 0;
+			empty = 0;
+			
+			for(b = 0; b < bmx; b++)
+			{
+				gridpos = (horizontal ? a*w+b : b*w+a);
+				if(state->grid[gridpos] == i)
+					found++;
+				else if (state->grid[gridpos] == EMPTY)
+					empty++;
+			}
+			
+			if ((found > clue || found+empty < clue) && !(cluefs[pos] & FD_ERROR))
+				cluefs[pos] |= FD_ERROR ; 
+			else if (found <= clue && found+empty >= clue && (cluefs[pos] & FD_ERROR))
+				cluefs[pos] &= ~FD_ERROR ; 
+		}
+}
+
 static void abcd_draw_clues(drawing *dr, game_drawstate *ds, const game_state *state, int print_color, int horizontal)
 {
 	/*
@@ -1589,14 +1650,11 @@ static void abcd_draw_clues(drawing *dr, game_drawstate *ds, const game_state *s
 	int n = state->n;
 	
 	int oo, oi, ox, oy;
-	int a,amx,b,bmx,i;
+	int a,amx,i;
 	int clue, pos;
 	char buf[80];
 	
-	int found, empty, gridpos;
-	
 	amx = (horizontal ? h : w);
-	bmx = (horizontal ? w : h);
 	
 	for(a = 0; a < amx; a++)
 		for(i = 0; i < n; i++)
@@ -1614,44 +1672,19 @@ static void abcd_draw_clues(drawing *dr, game_drawstate *ds, const game_state *s
 			* If we're not making a print, we run the full drawing code with
 			*  error highlighting and redrawing.
 			*/
-			if(print_color == -1)
+			if(print_color == -1 && ds->cluefs[pos] != ds->oldcluefs[pos])
 			{
 				if (clue != NO_NUMBER)
 				{
-					/* 
-					* Check for errors. If the amount of letters of this type
-					* found is more than the actual number, or if there's not
-					* enough free space to use, we mark it as an error.
-					*/
-					found = 0;
-					empty = 0;
-					
-					for(b = 0; b < bmx; b++)
-					{
-						gridpos = (horizontal ? a*w+b : b*w+a);
-						if(state->grid[gridpos] == i)
-							found++;
-						else if (state->grid[gridpos] == EMPTY)
-							empty++;
-					}
-					
-					if ((found > clue || found+empty < clue) && !(ds->cluefs[pos] & FD_ERROR))
-					{
-						ds->cluefs[pos] |= FD_ERROR ; 
-					}
-					else if (found <= clue && found+empty >= clue && (ds->cluefs[pos] & FD_ERROR))
-					{
-						ds->cluefs[pos] &= ~FD_ERROR ; 
-					}
-					
 					sprintf(buf, "%i", clue);
 					
-					draw_rect(dr, ox, oy, TILE_SIZE, TILE_SIZE, COL_OUTERBG);
+					draw_rect(dr, ox, oy, TILE_SIZE-1, TILE_SIZE-1, COL_OUTERBG);
 					draw_text(dr, ox + TILE_SIZE/2, oy + TILE_SIZE/2,
 							FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
 							(ds->cluefs[pos] & FD_ERROR ? COL_ERROR : COL_TEXT), buf);
 				}
-				draw_update(dr, ox, oy, TILE_SIZE, TILE_SIZE);
+				draw_update(dr, ox, oy, TILE_SIZE-1, TILE_SIZE-1);
+				ds->oldcluefs[pos] = ds->cluefs[pos];
 			}
 			else if(print_color != -1 && clue != NO_NUMBER)
 			{
@@ -1748,10 +1781,11 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int w = state->w;
 	int h = state->h;
 	int n = state->n;
-	int x,y;
+	int x,y,i;
+	int tx, ty, fs, bgcol;
 	char buf[80];
-	int flash = 0;
-	
+	int flash = -1;
+	char dirty;
 	
 	if (!ds->initial)
 	{
@@ -1771,6 +1805,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	if(flashtime > 0)
 		flash = (int)(flashtime / FLASH_FRAME) % 3;
 	
+	abcd_count_clues(state, ds->cluefs, TRUE);
+	abcd_count_clues(state, ds->cluefs, FALSE);
+	
 	/* Draw clues */
 	abcd_draw_clues(dr, ds, state, -1, TRUE);
 	abcd_draw_clues(dr, ds, state, -1, FALSE);
@@ -1779,10 +1816,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	for(x = 0; x < w; x++)
 		for(y = 0; y < h; y++)
 		{
+			ds->gridfs[y * w + x] &= ~(FD_CURSOR|FD_PENCIL);
 			if (ui->hy == y && ui->hx == x && ui->hshow)
-				ds->gridfs[y * w + x] |= FD_CURSOR;
-			else
-				ds->gridfs[y * w + x] &= ~FD_CURSOR;
+				ds->gridfs[y * w + x] |= ui->hpencil ? FD_PENCIL : FD_CURSOR;
 		}
 	
 	abcd_set_errors_adjacent(ds, state, 0, 0, w-1, h, 1, 0, FD_ERRHORZ); /* horizontal */
@@ -1797,24 +1833,39 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	for (x = 0; x < w; x++)
 		for (y = 0; y < h; y++)
 		{
-			int tx = INNER_COORD(x);
-			int ty = INNER_COORD(y);
-			int fs = ds->gridfs[y*w+x];
+			fs = ds->gridfs[y*w+x];
+			dirty = FALSE;
+			
+			if(flash != ds->flash || fs != ds->oldgridfs[y*w+x] || 
+					state->grid[y*w+x] != ds->grid[y*w+x])
+				dirty = TRUE;
+			
+			for(i = 0; i < n && !dirty; i++)
+			{
+				if(state->clues[CUBOID(x,y,i)] != ds->clues[CUBOID(x,y,i)])
+					dirty = TRUE;
+			}
+			
+			if(!dirty)
+				continue;
+			
+			tx = INNER_COORD(x);
+			ty = INNER_COORD(y);
 			
 			/*
 			* Determine background color. A diagonal stripe animation is shown
 			* when the puzzle has been solved.
 			*/
-			int bgcol = (flashtime > 0 && (x+y) % 3 == flash ? COL_HIGHLIGHT :
-							flashtime > 0 && (x+y+2) % 3 == flash ? COL_LOWLIGHT :
-							flashtime == 0 && fs & FD_CURSOR && !ui->hpencil ? COL_HIGHLIGHT :
-							COL_INNERBG);
+			bgcol = (flashtime > 0 && (x+y) % 3 == flash ? COL_HIGHLIGHT :
+					flashtime > 0 && (x+y+2) % 3 == flash ? COL_LOWLIGHT :
+					flashtime == 0 && fs & FD_CURSOR ? COL_HIGHLIGHT :
+					COL_INNERBG);
 			
 			/* Draw the tile background */
 			draw_rect(dr, tx+1, ty, TILE_SIZE-1, TILE_SIZE-1, bgcol);
 			
 			/* Draw the pencil marker */
-			if (flashtime == 0 && fs & FD_CURSOR && ui->hpencil)
+			if (flashtime == 0 && fs & FD_PENCIL)
 			{
 				int coords[6];
 				coords[0] = tx;
@@ -1866,12 +1917,40 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 			/* Draw a small cross to indicate diagonal mode is turned on */
 			if(ds->diag && x > 0 && y > 0)
 			{
-				draw_line(dr, tx - (TILE_SIZE/6), ty - (TILE_SIZE/6) - 1, tx + (TILE_SIZE/6), ty + (TILE_SIZE/6) - 1, COL_GRID);
-				draw_line(dr, tx - (TILE_SIZE/6), ty + (TILE_SIZE/6) - 1, tx + (TILE_SIZE/6), ty - (TILE_SIZE/6) - 1, COL_GRID);
+				draw_line(dr, tx, ty-1, tx + (TILE_SIZE/6), 
+					ty + (TILE_SIZE/6) - 1, COL_GRID);
+			}
+			
+			if(ds->diag && x < w-1 && y > 0)
+			{
+				draw_line(dr, tx + TILE_SIZE, ty-1, 
+					(tx + TILE_SIZE)-(TILE_SIZE/6), 
+					ty + (TILE_SIZE/6) - 1, COL_GRID);
+			}
+			
+			if(ds->diag && x > 0 && y < h-1)
+			{
+				draw_line(dr, tx, ty+TILE_SIZE-1, tx + (TILE_SIZE/6), 
+					(ty + TILE_SIZE)-(TILE_SIZE/6) - 1, COL_GRID);
+			}
+			
+			if(ds->diag && x < w-1 && y < h-1)
+			{
+				draw_line(dr, tx + TILE_SIZE, ty+TILE_SIZE-1, 
+					(tx + TILE_SIZE)-(TILE_SIZE/6), 
+					(ty + TILE_SIZE)-(TILE_SIZE/6) - 1, COL_GRID);
 			}
 			
 			draw_update(dr, tx, ty, TILE_SIZE, TILE_SIZE);
+			ds->oldgridfs[y*w+x] = fs;
+			ds->grid[y*w+x] = state->grid[y*w+x];
+			for(i = 0; i < n; i++)
+			{
+				ds->clues[CUBOID(x,y,i)] = state->clues[CUBOID(x,y,i)];
+			}
 		}
+	
+	ds->flash = flash;
 }
 
 static float game_anim_length(const game_state *oldstate, const game_state *newstate,
