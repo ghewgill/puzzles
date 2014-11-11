@@ -926,6 +926,7 @@ struct game_drawstate {
 };
 
 #define FROMCOORD(x) ( ((x) - (tilesize/2)) / tilesize )
+#define TOCOORD(x) ( ((x) * tilesize) + (tilesize) )
 
 /* TODO: Add keyboard control */
 static char *interpret_move(const game_state *state, game_ui *ui,
@@ -937,7 +938,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	int y = FROMCOORD(oy);
 	int w = state->w;
 	int h = state->h;
-	int sx, sy, dir, old, new;
+	int sx, sy, dx, dy, dir;
+	float angle;
 	
 	if(ox < tilesize/2) x = -1;
 	if(oy < tilesize/2) y = -1;
@@ -949,9 +951,9 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		
 		ui->drag_start = y*w+x;
 		ui->drag = button == LEFT_BUTTON ? DRAG_LEFT : DRAG_RIGHT;
-		return "";
 	}
-	if(button == LEFT_DRAG || button == RIGHT_DRAG)
+	if(button == LEFT_BUTTON || button == RIGHT_BUTTON || 
+		button == LEFT_DRAG || button == RIGHT_DRAG)
 	{
 		if(ui->drag_start == -1)
 			return NULL;
@@ -959,7 +961,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		sx = ui->drag_start % w;
 		sy = ui->drag_start / w;
 		
-		if(x < 0 || x >= w || y < 0 || y >= h || abs(sx-x) > 1 || abs(sy-y) > 1)
+		dx = ox - TOCOORD(sx);
+		dy = oy - TOCOORD(sy);
+		
+		angle = atan2(dy, dx);
+		angle = (angle + (PI/8)) / (PI/4);
+	    assert(angle > -16.0F);
+	    dir = (int)(angle + 16.0F) & 7;
+		
+		x = sx+spoke_dirs[dir].dx;
+		y = sy+spoke_dirs[dir].dy;
+		
+		if(x < 0 || x >= w || y < 0 || y >= h || 
+			(dx*dx)+(dy*dy) < (tilesize*tilesize) / 16 )
 			ui->drag_end = -1;
 		else
 			ui->drag_end = y*w+x;
@@ -970,7 +984,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		if(ui->drag_start != -1 && ui->drag_end != -1)
 		{
 			char buf[80];
-			
+			int old, new;
 			int start = min(ui->drag_start, ui->drag_end);
 			int end = max(ui->drag_start, ui->drag_end);
 			
