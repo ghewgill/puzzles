@@ -3746,15 +3746,15 @@ static int boats_draw_fleet(drawing *dr, int w, int y, int fleet,
 			nfx = ((i+1) * FLEET_SIZE) + FLEET_MARGIN;
 			
 			/* See if this boat needs to be updated */
-			if(dr && !redraw && fleetcount && oldfc && 
-				fleetcount[i] == oldfc[i])
+			if(!dr || (!redraw && fleetcount && oldfc && 
+				fleetcount[i] == oldfc[i]) )
 			{
 				fx += nfx;
 				continue;
 			}
 			
 			ofx = fx;
-			if(dr && print == -1)
+			if(print == -1)
 			{
 				draw_update(dr, ofx * tilesize, y * tilesize,
 					nfx * tilesize, FLEET_SIZE * tilesize);
@@ -3773,20 +3773,17 @@ static int boats_draw_fleet(drawing *dr, int w, int y, int fleet,
 			/* Draw each segment */
 			for(k = 0; k <= i; k++)
 			{
-				if(dr)
-				{
-					ship = (i == 0 ? SHIP_SINGLE : k == 0 ? SHIP_LEFT :
-						k == i ? SHIP_RIGHT : SHIP_CENTER);
-					
-					boats_draw_ship(dr, fx * tilesize, y * tilesize, 
-						tilesize * FLEET_SIZE, ship, bgcol);
-				}
+				ship = (i == 0 ? SHIP_SINGLE : k == 0 ? SHIP_LEFT :
+					k == i ? SHIP_RIGHT : SHIP_CENTER);
+				
+				boats_draw_ship(dr, fx * tilesize, y * tilesize, 
+					tilesize * FLEET_SIZE, ship, bgcol);
 				
 				fx += FLEET_SIZE;
 			}
 			
 			/* Draw a stripe through boats that have been placed already */
-			if(dr && print == -1 && fleetcount && j < fleetcount[i])
+			if(print == -1 && fleetcount && j < fleetcount[i])
 			{
 				bgcol = (fleetdata[i] >= fleetcount[i] ? COL_SHIP_FLEET_STRIPE : COL_COUNT_ERROR);
 				
