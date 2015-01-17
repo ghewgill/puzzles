@@ -27,6 +27,7 @@ enum {
 	COL_MARK,
 	COL_DONE,
 	COL_ERROR,
+	COL_CURSOR,
     NCOLOURS
 };
 
@@ -887,6 +888,9 @@ struct game_ui {
 	int drag_start;
 	int drag_end;
 	int drag;
+	
+	char cshow;
+	int cx, cy;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -896,6 +900,8 @@ static game_ui *new_ui(const game_state *state)
 	ui->drag_start = -1;
 	ui->drag_end = -1;
 	ui->drag = DRAG_NONE;
+	ui->cshow = FALSE;
+	ui->cx = ui->cy = 0;
 	
     return ui;
 }
@@ -928,7 +934,6 @@ struct game_drawstate {
 #define FROMCOORD(x) ( ((x) - (tilesize/2)) / tilesize )
 #define TOCOORD(x) ( ((x) * tilesize) + (tilesize) )
 
-/* TODO: Add keyboard control */
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
                             int ox, int oy, int button)
@@ -939,6 +944,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	int w = state->w;
 	int h = state->h;
 	int sx, sy, dx, dy, dir;
+	int from = -1, to = -1, drag = DRAG_NONE;
 	float angle;
 	
 	if(ox < tilesize/2) x = -1;
@@ -951,6 +957,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		
 		ui->drag_start = y*w+x;
 		ui->drag = button == LEFT_BUTTON ? DRAG_LEFT : DRAG_RIGHT;
+		ui->cshow = FALSE;
 	}
 	if(button == LEFT_BUTTON || button == RIGHT_BUTTON || 
 		button == LEFT_DRAG || button == RIGHT_DRAG)
@@ -973,7 +980,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		y = sy+spoke_dirs[dir].dy;
 		
 		if(x < 0 || x >= w || y < 0 || y >= h || 
-			(dx*dx)+(dy*dy) < (tilesize*tilesize) / 16 )
+			(dx*dx)+(dy*dy) < (tilesize*tilesize) / 22 )
 			ui->drag_end = -1;
 		else
 			ui->drag_end = y*w+x;
@@ -981,48 +988,71 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	}
 	if(button == LEFT_RELEASE || button == RIGHT_RELEASE)
 	{
-		if(ui->drag_start != -1 && ui->drag_end != -1)
-		{
-			char buf[80];
-			int old, new;
-			int start = min(ui->drag_start, ui->drag_end);
-			int end = max(ui->drag_start, ui->drag_end);
-			
-			sx = start % w;
-			sy = start / w;
-		
-			for(dir = 0; dir < 4; dir++)
-			{
-				if((sy+spoke_dirs[dir].dy)*w+sx+spoke_dirs[dir].dx != end)
-					continue;
-				old = GET_SPOKE(state->spokes[start], dir);
-				if(old == SPOKE_HIDDEN)
-					continue;
-				
-				if(ui->drag == DRAG_LEFT)
-					new = old == SPOKE_EMPTY ? SPOKE_LINE : SPOKE_EMPTY;
-				else
-					new = old == SPOKE_EMPTY ? SPOKE_MARKED : SPOKE_EMPTY;
-				
-				/* Don't allow diagonal lines to cross */
-				if(new == SPOKE_LINE && dir == DIR_BOTLEFT && 
-						GET_SPOKE(state->spokes[start-1], DIR_BOTRIGHT) == SPOKE_LINE)
-					continue;
-				if(new == SPOKE_LINE && dir == DIR_BOTRIGHT && 
-						GET_SPOKE(state->spokes[start+1], DIR_BOTLEFT) == SPOKE_LINE)
-					continue;
-				
-				sprintf(buf, "%d,%d,%d", start, dir, new);
-				
-				ui->drag_start = -1;
-				ui->drag_end = -1;
-				ui->drag = DRAG_NONE;
-				return dupstr(buf);
-			}
-		}
+		from = ui->drag_start;
+		to = ui->drag_end;
+		drag = ui->drag;
 		ui->drag_start = -1;
 		ui->drag_end = -1;
 		ui->drag = DRAG_NONE;
+	}
+	
+	if(ui->cshow && (button == CURSOR_SELECT || button == CURSOR_SELECT2))
+	{
+		int cx = (ui->cx + 1)/3;
+		int cy = (ui->cy + 1)/3;
+		dx = ((ui->cx + 1)%3)-1;
+		dy = ((ui->cy + 1)%3)-1;
+		
+		from = cy*w+cx;
+		to = from+(dy*w+dx);
+		drag = button == CURSOR_SELECT ? DRAG_LEFT : DRAG_RIGHT;
+	}
+	
+	if(drag != DRAG_NONE)
+	{
+		if(from == -1 || to == -1)
+			return "";
+		
+		char buf[80];
+		int old, new;
+		int start = min(from, to);
+		int end = max(from, to);
+		
+		sx = start % w;
+		sy = start / w;
+	
+		for(dir = 0; dir < 4; dir++)
+		{
+			if((sy+spoke_dirs[dir].dy)*w+sx+spoke_dirs[dir].dx != end)
+				continue;
+			old = GET_SPOKE(state->spokes[start], dir);
+			if(old == SPOKE_HIDDEN)
+				continue;
+			
+			if(drag == DRAG_LEFT)
+				new = old == SPOKE_EMPTY ? SPOKE_LINE : SPOKE_EMPTY;
+			else
+				new = old == SPOKE_EMPTY ? SPOKE_MARKED : SPOKE_EMPTY;
+			
+			/* Don't allow diagonal lines to cross */
+			if(new == SPOKE_LINE && dir == DIR_BOTLEFT && 
+					GET_SPOKE(state->spokes[start-1], DIR_BOTRIGHT) == SPOKE_LINE)
+				continue;
+			if(new == SPOKE_LINE && dir == DIR_BOTRIGHT && 
+					GET_SPOKE(state->spokes[start+1], DIR_BOTLEFT) == SPOKE_LINE)
+				continue;
+			
+			sprintf(buf, "%d,%d,%d", start, dir, new);
+			
+			return dupstr(buf);
+		}
+		return "";
+	}
+	
+	if(IS_CURSOR_MOVE(button))
+	{
+		move_cursor(button, &ui->cx, &ui->cy, w*3-2, h*3-2, 0);
+		ui->cshow = TRUE;
 		return "";
 	}
 	
@@ -1125,6 +1155,10 @@ static float *game_colours(frontend *fe, int *ncolours)
 	ret[COL_ERROR*3 + 1] = 0;
 	ret[COL_ERROR*3 + 2] = 0;
 	
+	ret[COL_CURSOR*3 + 0] = 0;
+	ret[COL_CURSOR*3 + 1] = 0;
+	ret[COL_CURSOR*3 + 2] = 1.0F;
+	
     *ncolours = NCOLOURS;
     return ret;
 }
@@ -1186,14 +1220,20 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int h = state->h;
 	int tilesize = ds->tilesize;
 	int i, x, y, d, tx, ty, connected;
+	int cx = (ui->cx + 1)/3;
+	int cy = (ui->cy + 1)/3;
+	int dx = (ui->cx + 1)%3;
+	int dy = (ui->cy + 1)%3;
+	char flash, cshow;
 	char buf[2];
-	int fill, border, txt, lines, flash;
+	int fill, border, txt, lines;
 	buf[1] = '\0';
 	
 	if(flashtime > 0)
 		flash = (int)(flashtime/FLASH_FRAME) & 1;
 	else
 		flash = FALSE;
+	cshow = ui->cshow && !flashtime;
 	
 	double thick = (tilesize <= 21 ? 1 : 2);
 	float radius = tilesize/3.5F;
@@ -1210,32 +1250,38 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	for(x = 0; x < w; x++)
 	{
 		i = y*w+x;
-		if(!state->spokes[i]) continue;
-		
-		tx = (x+1)*tilesize;
-		ty = (y+1)*tilesize;
-		for(d = 0; d < 4; d++)
+		if(state->spokes[i])
 		{
-			if(GET_SPOKE(state->spokes[y*w+x], d) == SPOKE_LINE)
-				draw_thick_line(dr, thick,
-					tx, ty, 
-					tx + (spoke_dirs[d].dx * tilesize),
-					ty + (spoke_dirs[d].dy * tilesize),
-					COL_LINE);
+			tx = (x+1)*tilesize;
+			ty = (y+1)*tilesize;
+			for(d = 0; d < 4; d++)
+			{
+				if(GET_SPOKE(state->spokes[y*w+x], d) == SPOKE_LINE)
+					draw_thick_line(dr, thick,
+						tx, ty, 
+						tx + (spoke_dirs[d].dx * tilesize),
+						ty + (spoke_dirs[d].dy * tilesize),
+						COL_LINE);
+			}
+			
+			lines = ds->scratch->lines[i];
+			
+			fill = lines == state->numbers[i] ? COL_DONE : COL_BACKGROUND;
+			border = flash ? COL_DONE : i == ui->drag_start || i == ui->drag_end ? COL_HOLDING : 
+				!connected && !ds->isolated[dsf_canonify(ds->scratch->dsf, i)] ? COL_ERROR : COL_BORDER;
+			spokes_draw_hub(dr, tx, ty, radius, thick, state->spokes[i], border, fill, COL_MARK);
+			
+			buf[0] = state->numbers[i] + '0';
+			txt = lines > state->numbers[i] || 
+				ds->scratch->marked[i] > ds->scratch->nodes[i] - state->numbers[i] 
+				? COL_ERROR : cshow && cx == x && cy == y ? COL_CURSOR : COL_LINE;
+			draw_text(dr, tx, ty, FONT_FIXED, tilesize/2.5F, ALIGN_VCENTRE|ALIGN_HCENTRE, txt, buf);
 		}
-		
-		lines = ds->scratch->lines[i];
-		
-		fill = lines == state->numbers[i] ? COL_DONE : COL_BACKGROUND;
-		border = flash ? COL_DONE : i == ui->drag_start || i == ui->drag_end ? COL_HOLDING : 
-			!connected && !ds->isolated[dsf_canonify(ds->scratch->dsf, i)] ? COL_ERROR : COL_BORDER;
-		spokes_draw_hub(dr, tx, ty, radius, thick, state->spokes[i], border, fill, COL_MARK);
-		
-		buf[0] = state->numbers[i] + '0';
-		txt = lines > state->numbers[i] || 
-			ds->scratch->marked[i] > ds->scratch->nodes[i] - state->numbers[i] 
-			? COL_ERROR : COL_LINE;
-		draw_text(dr, tx, ty, FONT_FIXED, tilesize/2.5F, ALIGN_VCENTRE|ALIGN_HCENTRE, txt, buf);
+		if(cshow && cx == x && cy == y)
+		{
+			draw_rect_corners(dr, (cx+((2+dx)/3.0))*tilesize, 
+				(cy+((2+dy)/3.0))*tilesize, tilesize*0.2, COL_CURSOR);
+		}
 	}
 }
 
