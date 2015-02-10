@@ -1177,18 +1177,18 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	return ret;
 }
 
-static void salad_strip_clues(game_state *state, random_state *rs, digit *clues, int max, int diff)
+static void salad_strip_clues(game_state *state, random_state *rs, digit *clues, int m, int diff)
 {
+	int *spaces = snewn(m, int);
 	int o = state->params->order;
 	int o2 = o*o;
 	int i, j;
 	digit temp;
 	
-	int spaces[max];
-	for(i = 0; i < max; i++) spaces[i] = i;
-	shuffle(spaces, max, sizeof(*spaces), rs);
+	for(i = 0; i < m; i++) spaces[i] = i;
+	shuffle(spaces, m, sizeof(*spaces), rs);
 	
-	for(i = 0; i < max; i++)
+	for(i = 0; i < m; i++)
 	{
 		j = spaces[i];
 		
@@ -1208,6 +1208,7 @@ static void salad_strip_clues(game_state *state, random_state *rs, digit *clues,
 			clues[j] = temp;
 		}
 	}
+	sfree(spaces);
 }
 
 /* ********* *
@@ -1218,12 +1219,13 @@ static char *salad_new_numbers_desc(const game_params *params, random_state *rs,
 	int o = params->order;
 	int o2 = o*o;
 	int nums = params->nums;
-	int i, j, max;
+	int i, j;
 	int diff = params->diff;
 	char temp;
 	digit *grid = NULL;
 	game_state *state = NULL;
-	
+	int *spaces = snewn(o2, int);
+
 	while(TRUE)
 	{
 		/* Generate a solved grid */
@@ -1241,12 +1243,10 @@ static char *salad_new_numbers_desc(const game_params *params, random_state *rs,
 		sfree(grid);
 		
 		/* Remove grid clues */
-		max = o2;
-		int spaces[max];
-		for(i = 0; i < max; i++) spaces[i] = i;
-		shuffle(spaces, max, sizeof(*spaces), rs);
+		for(i = 0; i < o2; i++) spaces[i] = i;
+		shuffle(spaces, o2, sizeof(*spaces), rs);
 		
-		for(i = 0; i < max; i++)
+		for(i = 0; i < o2; i++)
 		{
 			j = spaces[i];
 			
@@ -1300,6 +1300,7 @@ static char *salad_new_numbers_desc(const game_params *params, random_state *rs,
 	
 	char *ret = salad_serialize(state->gridclues, o2, '0');
 	free_game(state);
+	sfree(spaces);
 	
 	return ret;
 }
