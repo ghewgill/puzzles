@@ -35,6 +35,6 @@ Any bugfixes/contributions/suggestions welcome!
 
 ## LICENCE
 
-Copyright (c) 2011-2014 Lennard Sprong
+Copyright (c) 2011-2015 Lennard Sprong
 
 Based on Simon Tatham's Portable Puzzle Collection. [MIT Licence](./LICENCE)
