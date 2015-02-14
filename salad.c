@@ -22,7 +22,6 @@
 /*
  * TODO:
  * - Add difficulty levels
- * - Optimize drawing routines
  */
  
 #include <stdio.h>
@@ -1433,12 +1432,18 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 {
 }
 
-#define FD_CURSOR  0x1
-#define FD_PENCIL  0x2
-#define FD_ERROR   0x4
+#define FD_CURSOR  0x01
+#define FD_PENCIL  0x02
+#define FD_ERROR   0x04
+#define FD_CIRCLE  0x08
+#define FD_CROSS   0x10
+
+#define FD_MASK    0x1f
 
 struct game_drawstate {
 	int tilesize;
+	char redraw;
+	int oldflash;
 	int *gridfs;
 	int *borderfs;
 	
@@ -1726,6 +1731,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 			  const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
+	ds->redraw = TRUE;
 }
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -1807,6 +1813,8 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	struct game_drawstate *ds = snew(struct game_drawstate);
 
 	ds->tilesize = DEFAULT_TILE_SIZE;
+	ds->redraw = TRUE;
+	ds->oldflash = -1;
 	ds->gridfs = snewn(o2, int);
 	ds->grid = snewn(o2, digit);
 	ds->marks = snewn(o2, unsigned int);
@@ -1820,9 +1828,9 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	memset(ds->gridfs, 0, o2 * sizeof(int));
 	memset(ds->grid, 0, o2 * sizeof(digit));
 	memset(ds->marks, 0, o2 * sizeof(unsigned int));
-	memset(ds->oldgridfs, 0, o2 * sizeof(int));
+	memset(ds->oldgridfs, ~0, o2 * sizeof(int));
 	memset(ds->borderfs, 0, ox4 * sizeof(int));
-	memset(ds->oldborderfs, 0, ox4 * sizeof(int));
+	memset(ds->oldborderfs, ~0, ox4 * sizeof(int));
 
 	return ds;
 }
@@ -1885,94 +1893,61 @@ static void salad_draw_pencil(drawing *dr, const game_state *state, int x, int y
 	}
 }
 
-static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldstate,
-			const game_state *state, int dir, const game_ui *ui,
-			float animtime, float flashtime)
+static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const game_state *state, int hshow)
 {
-	int mode = state->params->mode;
 	int o = state->params->order;
-	int o2 = o*o;
 	int nums = state->params->nums;
-	int x, y, i, tx, ty, color;
+	int o2 = o*o;
+	int x, y, i;
 	char c; digit d;
-	char base = (mode == GAMEMODE_LETTERS ? 'A' - 1 : '0');
-	char buf[80];
-	int hshow = ui->hshow;
-	buf[1] = '\0';
 	
-	int flash = -1;
-	if(flashtime > 0)
+	/* Count numbers */
+	memset(ds->rowcount, 0, o2*sizeof(int));
+	memset(ds->colcount, 0, o2*sizeof(int));
+	for(x = 0; x < o; x++)
+	for(y = 0; y < o; y++)
 	{
-		flash = (int)(flashtime / FLASH_FRAME) % 3;
-		hshow = FALSE;
+		if(state->holes[y*o+x] == LATINH_HOLE)
+		{
+			ds->rowcount[y+(nums*o)]++;
+			ds->colcount[x+(nums*o)]++;
+		}
+		else if(state->grid[y*o+x])
+		{
+			d = state->grid[y*o+x] - 1;
+			ds->rowcount[y+(d*o)]++;
+			ds->colcount[x+(d*o)]++;
+		}
 	}
 	
-	/* Draw background */
-	draw_rect(dr, 0, 0, (o+2)*TILE_SIZE, (o+2)*TILE_SIZE, COL_BACKGROUND);
-	
-	/* Draw cursor */
+	/* Grid flags */
 	for(x = 0; x < o; x++)
 		for(y = 0; y < o; y++)
 		{
-			if(mode == GAMEMODE_LETTERS && flash >= 0)
+			i = y*o+x;
+			/* Unset all flags */
+			ds->gridfs[i] &= ~FD_MASK;
+			
+			/* Set cursor flags */
+			if(hshow && ui->hx == x && ui->hy == y)
+				ds->gridfs[i] |= ui->hpencil ? FD_PENCIL : FD_CURSOR;
+			
+			/* Mark count errors */
+			d = state->grid[i];
+			if(state->holes[i] == LATINH_HOLE && 
+				(ds->rowcount[y+(nums*o)] > (o-nums) || ds->colcount[x+(nums*o)] > (o-nums)))
 			{
-				tx = (x+1)*TILE_SIZE;
-				ty = (y+1)*TILE_SIZE;
-				color = (x+y) % 3 == flash ? COL_BACKGROUND :
-						(x+y+1) % 3 == flash ? COL_LOWLIGHT : COL_HIGHLIGHT;
-				draw_rect(dr, tx, ty, TILE_SIZE, TILE_SIZE, color);
+				ds->gridfs[i] |= FD_ERROR;
+			}
+			else if(d > 0 && (ds->rowcount[y+((d-1)*o)] > 1 || ds->colcount[x+((d-1)*o)] > 1))
+			{
+				ds->gridfs[i] |= FD_ERROR;
 			}
 			
-			else if(flash == -1 && hshow && ui->hx == x && ui->hy == y)
-			{
-				tx = (x+1)*TILE_SIZE;
-				ty = (y+1)*TILE_SIZE;
-				
-				if(ui->hpencil)
-				{
-					ds->gridfs[y*o+x] |= FD_PENCIL;
-					ds->gridfs[y*o+x] &= ~FD_CURSOR;
-					
-					int coords[6];
-					coords[0] = tx;
-					coords[1] = ty;
-					coords[2] = tx+(TILE_SIZE/2);
-					coords[3] = ty;
-					coords[4] = tx;
-					coords[5] = ty+(TILE_SIZE/2);
-					draw_polygon(dr, coords, 3, COL_LOWLIGHT, COL_LOWLIGHT);
-				}
-				else
-				{
-					ds->gridfs[y*o+x] |= FD_CURSOR;
-					ds->gridfs[y*o+x] &= ~FD_PENCIL;
-					draw_rect(dr, tx, ty, TILE_SIZE, TILE_SIZE, COL_LOWLIGHT);
-				}
-			}
-			else
-			{
-				ds->gridfs[y*o+x] &= ~(FD_CURSOR|FD_PENCIL);
-			}
-		}
-	
-	/* Draw grid */
-	for(x = 0; x < o; x++)
-		for(y = 0; y < o; y++)
-		{
-			tx = (x+1)*TILE_SIZE;
-			ty = (y+1)*TILE_SIZE;
-			
-			/* Define a square */
-			int coords[8];
-			coords[0] = tx;
-			coords[1] = ty - 1;
-			coords[2] = tx + TILE_SIZE;
-			coords[3] = ty - 1;
-			coords[4] = tx + TILE_SIZE;
-			coords[5] = ty + TILE_SIZE - 1;
-			coords[6] = tx;
-			coords[7] = ty + TILE_SIZE - 1;
-			draw_polygon(dr, coords, 4, -1, COL_BORDER);
+			if(state->holes[i] == LATINH_HOLE)
+				ds->gridfs[i] |= FD_CROSS;
+			if(state->holes[i] == LATINH_NOT)
+				ds->gridfs[i] |= FD_CIRCLE;
 		}
 	
 	/* Check border clues */
@@ -2015,196 +1990,253 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 				ds->borderfs[i+(o*3)] &= ~FD_ERROR;
 		}
 	}
+}
+
+static void salad_draw_balls(drawing *dr, game_drawstate *ds, int x, int y, int flash, const game_state *state)
+{
+	int mode = state->params->mode;
+	int o = state->params->order;
+	int tx, ty, bgcolor, color;
+	
+	int i = x+(y*o);
+	if(mode == GAMEMODE_LETTERS && state->grid[i] != 0)
+		return;
+	if(state->holes[i] != LATINH_NOT)
+		return;
+	
+	tx = (x+1)*TILE_SIZE + (TILE_SIZE/2);
+	ty = (y+1)*TILE_SIZE + (TILE_SIZE/2);
+	
+	/* Draw ball background */
+	if(mode == GAMEMODE_NUMBERS)
+		bgcolor = ((x+y) % 3 == flash ? COL_BACKGROUND :
+					(x+y+1) % 3 == flash ? COL_LOWLIGHT : 
+					state->gridclues[i] ? COL_I_BALLBG : COL_G_BALLBG);
+	else /* Transparent */
+		bgcolor = (ds->gridfs[i] & FD_CURSOR ? COL_LOWLIGHT : COL_BACKGROUND);
+	color = (state->gridclues[i] ? COL_I_BALL : COL_G_BALL);
+	
+	draw_circle(dr, tx, ty, TILE_SIZE*0.4, color, color);
+	draw_circle(dr, tx, ty, TILE_SIZE*0.38, bgcolor, color);
+}
+
+static void salad_draw_cross(drawing *dr, game_drawstate *ds, int x, int y, double thick, const game_state *state)
+{
+	int tx, ty, color;
+	int i = x+(y*state->params->order);
+	if(state->holes[i] != LATINH_HOLE)
+		return;
+	
+	tx = (x+1)*TILE_SIZE;
+	ty = (y+1)*TILE_SIZE;
+	
+	color = (state->gridclues[i] ? COL_I_HOLE : 
+		ds->gridfs[i] & FD_ERROR ? COL_E_HOLE : COL_G_HOLE);
+	draw_thick_line(dr, thick,
+		tx + (TILE_SIZE*0.2), ty + (TILE_SIZE*0.2),
+		tx + (TILE_SIZE*0.8), ty + (TILE_SIZE*0.8),
+		color);
+	draw_thick_line(dr, thick,
+		tx + (TILE_SIZE*0.2), ty + (TILE_SIZE*0.8),
+		tx + (TILE_SIZE*0.8), ty + (TILE_SIZE*0.2),
+		color);
+}
+
+static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldstate,
+			const game_state *state, int dir, const game_ui *ui,
+			float animtime, float flashtime)
+{
+	int mode = state->params->mode;
+	int o = state->params->order;
+	int nums = state->params->nums;
+	int x, y, i, j, tx, ty, color;
+	char base = (mode == GAMEMODE_LETTERS ? 'A' - 1 : '0');
+	char buf[80];
+	int hshow = ui->hshow;
+	double thick = (TILE_SIZE <= 21 ? 1 : 2.5);
+	
+	int flash = -1;
+	if(flashtime > 0)
+	{
+		flash = (int)(flashtime / FLASH_FRAME) % 3;
+		hshow = FALSE;
+	}
+	
+	if(ds->redraw)
+	{
+		/* Draw background */
+		draw_rect(dr, 0, 0, (o+2)*TILE_SIZE, (o+2)*TILE_SIZE, COL_BACKGROUND);
+
+#ifndef STYLUS_BASED	
+		/* Draw the status bar only when there is no virtual keyboard */
+		sprintf(buf, "%c~%c", base + 1, base + nums);
+		status_bar(dr, buf);
+#endif
+		
+		draw_update(dr, 0, 0, (o+2)*TILE_SIZE, (o+2)*TILE_SIZE);
+	}
+	
+	salad_set_drawflags(ds, ui, state, hshow);
+	
+	buf[1] = '\0';
+	for(x = 0; x < o; x++)
+		for(y = 0; y < o; y++)
+		{
+			tx = (x+1)*TILE_SIZE;
+			ty = (y+1)*TILE_SIZE;
+			i = x+(y*o);
+			
+			if(!ds->redraw && ds->oldgridfs[i] == ds->gridfs[i] && 
+					ds->grid[i] == state->grid[i] && 
+					ds->marks[i] == state->marks[i] &&
+					ds->oldflash == flash)
+				continue;
+			
+			ds->oldgridfs[i] = ds->gridfs[i];
+			ds->grid[i] = state->grid[i];
+			ds->marks[i] = state->marks[i];
+			
+			draw_update(dr, tx, ty, TILE_SIZE, TILE_SIZE);
+			
+			/* Draw cursor */
+			if(mode == GAMEMODE_LETTERS && flash >= 0)
+			{
+				color = (x+y) % 3 == flash ? COL_BACKGROUND :
+						(x+y+1) % 3 == flash ? COL_LOWLIGHT : COL_HIGHLIGHT;
+				
+				draw_rect(dr, tx, ty, TILE_SIZE, TILE_SIZE, color);
+			}
+			else
+				draw_rect(dr, tx, ty, TILE_SIZE, TILE_SIZE, COL_BACKGROUND);
+			
+			if(flash == -1 && ds->gridfs[y*o+x] & FD_PENCIL)
+			{
+				int coords[6];
+				coords[0] = tx;
+				coords[1] = ty;
+				coords[2] = tx+(TILE_SIZE/2);
+				coords[3] = ty;
+				coords[4] = tx;
+				coords[5] = ty+(TILE_SIZE/2);
+				draw_polygon(dr, coords, 3, COL_LOWLIGHT, COL_LOWLIGHT);
+			}
+			else if(flash == -1 && ds->gridfs[y*o+x] & FD_CURSOR)
+			{
+				draw_rect(dr, tx, ty, TILE_SIZE, TILE_SIZE, COL_LOWLIGHT);
+			}
+			
+			/* Define a square */
+			int sqc[8];
+			sqc[0] = tx;
+			sqc[1] = ty - 1;
+			sqc[2] = tx + TILE_SIZE;
+			sqc[3] = ty - 1;
+			sqc[4] = tx + TILE_SIZE;
+			sqc[5] = ty + TILE_SIZE - 1;
+			sqc[6] = tx;
+			sqc[7] = ty + TILE_SIZE - 1;
+			draw_polygon(dr, sqc, 4, -1, COL_BORDER);
+			
+			if(ds->gridfs[i] & FD_CIRCLE)
+				salad_draw_balls(dr, ds, x, y, flash, state);
+			else if(ds->gridfs[i] & FD_CROSS)
+				salad_draw_cross(dr, ds, x, y, thick, state);
+			
+			/* Draw pencil marks */
+			if(state->grid[i] == 0 && state->holes[i] != LATINH_HOLE)
+			{
+				if(state->holes[i] == LATINH_NOT)
+				{
+					/* Draw the clues smaller */
+					salad_draw_pencil(dr, state, x, y, base, TILE_SIZE * 0.8F, 
+						(x+1.1F)*TILE_SIZE, (y+1.1F)*TILE_SIZE);
+				}
+				else
+				{
+					salad_draw_pencil(dr, state, x, y, base, TILE_SIZE, tx, ty);
+				}
+			}
+			
+			/* Draw number/letter */
+			else if(state->grid[i] != 0)
+			{
+				color = (state->gridclues[i] > 0 && state->gridclues[i] <= o ? COL_I_NUM :
+					ds->gridfs[i] & FD_ERROR ? COL_E_NUM : COL_G_NUM);
+				buf[0] = state->grid[i] + base;
+				
+				draw_text(dr, tx + TILE_SIZE/2, ty + TILE_SIZE/2,
+					FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE, color,
+					buf);
+			}
+		}
 	
 	/* Draw border clues */
 	for(i = 0; i < o; i++)
 	{
 		/* Top */
-		if(state->borderclues[i] != 0)
+		j = i;
+		if(state->borderclues[j] != 0 && ds->borderfs[j] != ds->oldborderfs[j])
 		{
-			color = ds->borderfs[i] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
+			color = ds->borderfs[j] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
 			tx = (i+1)*TILE_SIZE;
 			ty = 0;
-			buf[0] = state->borderclues[i] + base;
+			draw_rect(dr, tx, ty, TILE_SIZE-1, TILE_SIZE-1, COL_BACKGROUND);
+			draw_update(dr, tx, ty, tx+TILE_SIZE-1, ty+TILE_SIZE-1);
+			buf[0] = state->borderclues[j] + base;
 			draw_text(dr, tx + TILE_SIZE/2, ty + TILE_SIZE/2,
 				FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE, color,
 				buf);
+			ds->oldborderfs[j] = ds->borderfs[j];
 		}
 		/* Left */
-		if(state->borderclues[i+o] != 0)
+		j = i+o;
+		if(state->borderclues[j] != 0 && ds->borderfs[j] != ds->oldborderfs[j])
 		{
-			color = ds->borderfs[i+o] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
+			color = ds->borderfs[j] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
 			tx = 0;
 			ty = (i+1)*TILE_SIZE;
-			buf[0] = state->borderclues[i+o] + base;
+			draw_rect(dr, tx, ty, TILE_SIZE-1, TILE_SIZE-1, COL_BACKGROUND);
+			draw_update(dr, tx, ty, tx+TILE_SIZE-1, ty+TILE_SIZE-1);
+			buf[0] = state->borderclues[j] + base;
 			draw_text(dr, tx + TILE_SIZE/2, ty + TILE_SIZE/2,
 				FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE, color,
 				buf);
+			ds->oldborderfs[j] = ds->borderfs[j];
 		}
 		/* Bottom */
-		if(state->borderclues[i+(o*2)] != 0)
+		j = i+(o*2);
+		if(state->borderclues[j] != 0 && ds->borderfs[j] != ds->oldborderfs[j])
 		{
-			color = ds->borderfs[i+(o*2)] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
+			color = ds->borderfs[j] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
 			tx = (i+1)*TILE_SIZE;
 			ty = (o+1)*TILE_SIZE;
-			buf[0] = state->borderclues[i+(o*2)] + base;
+			draw_rect(dr, tx, ty, TILE_SIZE-1, TILE_SIZE-1, COL_BACKGROUND);
+			draw_update(dr, tx, ty, tx+TILE_SIZE-1, ty+TILE_SIZE-1);
+			buf[0] = state->borderclues[j] + base;
 			draw_text(dr, tx + TILE_SIZE/2, ty + TILE_SIZE/2,
 				FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE, color,
 				buf);
+			ds->oldborderfs[j] = ds->borderfs[j];
 		}
 		/* Right */
-		if(state->borderclues[i+(o*3)] != 0)
+		j = i+(o*3);
+		if(state->borderclues[j] != 0 && ds->borderfs[j] != ds->oldborderfs[j])
 		{
-			color = ds->borderfs[i+(o*3)] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
+			color = ds->borderfs[j] & FD_ERROR ? COL_E_BORDERCLUE : COL_BORDERCLUE;
 			tx = (o+1)*TILE_SIZE;
 			ty = (i+1)*TILE_SIZE;
-			buf[0] = state->borderclues[i+(o*3)] + base;
+			draw_rect(dr, tx+1, ty+1, TILE_SIZE-2, TILE_SIZE-2, COL_BACKGROUND);
+			draw_update(dr, tx+1, ty+1, tx+TILE_SIZE-2, ty+TILE_SIZE-2);
+			buf[0] = state->borderclues[j] + base;
 			draw_text(dr, tx + TILE_SIZE/2, ty + TILE_SIZE/2,
 				FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE, color,
 				buf);
+			ds->oldborderfs[j] = ds->borderfs[j];
 		}
 	}
 	
-	/* Draw balls */
-	for(x = 0; x < o; x++)
-	for(y = 0; y < o; y++)
-	{
-		i = x+(y*o);
-		if(mode == GAMEMODE_LETTERS && state->grid[i] != 0)
-			continue;
-		if(state->holes[i] != LATINH_NOT)
-			continue;
-		
-		tx = (x+1)*TILE_SIZE + (TILE_SIZE/2);
-		ty = (y+1)*TILE_SIZE + (TILE_SIZE/2);
-		
-		/* Draw ball background */
-		int bgcolor;
-		if(mode == GAMEMODE_NUMBERS)
-			bgcolor = ((x+y) % 3 == flash ? COL_BACKGROUND :
-						(x+y+1) % 3 == flash ? COL_LOWLIGHT : 
-						state->gridclues[i] ? COL_I_BALLBG : COL_G_BALLBG);
-		else /* Transparent */
-			bgcolor = (ds->gridfs[i] & FD_CURSOR ? COL_LOWLIGHT : COL_BACKGROUND);
-		color = (state->gridclues[i] ? COL_I_BALL : COL_G_BALL);
-		
-		draw_circle(dr, tx, ty, TILE_SIZE*0.4, color, color);
-		draw_circle(dr, tx, ty, TILE_SIZE*0.38, bgcolor, color);
-	}
-	
-	/* Count numbers */
-	memset(ds->rowcount, 0, o2*sizeof(int));
-	memset(ds->colcount, 0, o2*sizeof(int));
-	for(x = 0; x < o; x++)
-	for(y = 0; y < o; y++)
-	{
-		if(state->holes[y*o+x] == LATINH_HOLE)
-		{
-			ds->rowcount[y+(nums*o)]++;
-			ds->colcount[x+(nums*o)]++;
-		}
-		else if(state->grid[y*o+x])
-		{
-			d = state->grid[y*o+x] - 1;
-			ds->rowcount[y+(d*o)]++;
-			ds->colcount[x+(d*o)]++;
-		}
-	}
-	
-	/* Mark count errors */
-	for(x = 0; x < o; x++)
-	for(y = 0; y < o; y++)
-	{
-		d = state->grid[y*o+x];
-		if(state->holes[y*o+x] == LATINH_HOLE && 
-			(ds->rowcount[y+(nums*o)] > (o-nums) || ds->colcount[x+(nums*o)] > (o-nums)))
-		{
-			ds->gridfs[y*o+x] |= FD_ERROR;
-		}
-		else if(d > 0 && (ds->rowcount[y+((d-1)*o)] > 1 || ds->colcount[x+((d-1)*o)] > 1))
-		{
-			ds->gridfs[y*o+x] |= FD_ERROR;
-		}
-		else
-		{
-			ds->gridfs[y*o+x] &= ~FD_ERROR;
-		}
-	}
-	
-	/* Draw holes */
-	double thick = (TILE_SIZE <= 21 ? 1 : 2.5);
-	for(x = 0; x < o; x++)
-	for(y = 0; y < o; y++)
-	{
-		i = x+(y*o);
-		if(state->holes[i] != LATINH_HOLE)
-			continue;
-		
-		tx = (x+1)*TILE_SIZE;
-		ty = (y+1)*TILE_SIZE;
-		
-		color = (state->gridclues[i] ? COL_I_HOLE : 
-			ds->gridfs[i] & FD_ERROR ? COL_E_HOLE : COL_G_HOLE);
-		draw_thick_line(dr, thick,
-			tx + (TILE_SIZE*0.2), ty + (TILE_SIZE*0.2),
-			tx + (TILE_SIZE*0.8), ty + (TILE_SIZE*0.8),
-			color);
-		draw_thick_line(dr, thick,
-			tx + (TILE_SIZE*0.2), ty + (TILE_SIZE*0.8),
-			tx + (TILE_SIZE*0.8), ty + (TILE_SIZE*0.2),
-			color);
-	}
-	
-	/* Draw pencil marks */
-	for(x = 0; x < o; x++)
-	for(y = 0; y < o; y++)
-	{
-		i = x+(y*o);
-		if(state->grid[i] != 0 || state->holes[i] == LATINH_HOLE)
-			continue;
-		
-		if(state->holes[i] == LATINH_NOT)
-		{
-			/* Draw the clues smaller */
-			tx = (x+1.1F)*TILE_SIZE;
-			ty = (y+1.1F)*TILE_SIZE;
-			
-			salad_draw_pencil(dr, state, x, y, base, TILE_SIZE * 0.8F, tx, ty);
-		}
-		else
-		{
-			tx = (x+1)*TILE_SIZE;
-			ty = (y+1)*TILE_SIZE;
-			
-			salad_draw_pencil(dr, state, x, y, base, TILE_SIZE, tx, ty);
-		}
-	}
-	
-	/* Draw numbers/letters */
-	for(x = 0; x < o; x++)
-	for(y = 0; y < o; y++)
-	{
-		i = x+(y*o);
-		if(state->grid[i] == 0)
-			continue;
-		
-		color = (state->gridclues[i] > 0 && state->gridclues[i] <= o ? COL_I_NUM :
-			ds->gridfs[i] & FD_ERROR ? COL_E_NUM : COL_G_NUM);
-		buf[0] = state->grid[i] + base;
-		
-		tx = (x+1)*TILE_SIZE;
-		ty = (y+1)*TILE_SIZE;
-		
-		draw_text(dr, tx + TILE_SIZE/2, ty + TILE_SIZE/2,
-			FONT_VARIABLE, TILE_SIZE/2, ALIGN_HCENTRE|ALIGN_VCENTRE, color,
-			buf);
-	}
-	
-	/* Status bar */
-	sprintf(buf, "%c~%c", base + 1, base + nums);
-	status_bar(dr, buf);
-	
-	draw_update(dr, 0, 0, (o+2)*TILE_SIZE, (o+2)*TILE_SIZE);
+	ds->redraw = FALSE;
+	ds->oldflash = flash;
 }
 
 static float game_anim_length(const game_state *oldstate, const game_state *newstate,
@@ -2400,7 +2432,11 @@ const struct game thegame = {
 	game_flash_length,
 	game_status,
 	TRUE, FALSE, game_print_size, game_print,
+#ifndef STYLUS_BASED
 	TRUE,			       /* wants_statusbar */
+#else
+	FALSE,
+#endif
 	FALSE, game_timing_state,
 	0,				       /* flags */
 };
