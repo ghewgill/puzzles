@@ -1,29 +1,41 @@
 #!/usr/bin/perl
 
 # Perl script to generate an Inno Setup installer script for
-# Puzzles. This has to be scripted so that it can read wingames.lst
+# Puzzles. This has to be scripted so that it can read gamedesc.txt
 # and automatically adjust to the current available set of puzzles.
 
 # Usage:
 #
-#   $ ./winiss.pl 1234 wingames.lst > puzzles.iss
+#   $ ./winiss.pl 20140922.sdfsdf gamedesc.txt > puzzles.iss
 #
-# where `1234' is the revision number which will be encoded in the
-# installer's version indicators.
+# where the first argument is the version number which will be encoded
+# in the installer's version indicators. The first component of that
+# version number will be expected to be a YYYYMMDD-format date.
 
 use warnings;
+use Time::Local;
 
-$rev = shift @ARGV;
-($revclean=$rev) =~ s/M$//;
-$lst = shift @ARGV;
-open LST, "<", $lst;
-while (<LST>) {
+$ver = shift @ARGV;
+
+# Parse the date out of $ver, and convert it into an integer number of
+# days since an arbitrary epoch. This number is used for the Windows
+# version resource (which wants a monotonic 16-bit integer). The epoch
+# is chosen so that the first build using this date-based mechanism
+# has a higher number than the last build in which that number was
+# derived from a Subversion revision.
+die "bad date format" if $ver !~ /^(\d{4})(\d{2})(\d{2})/;
+$date = timegm(0,0,0,$3,$2-1,$1);
+$integer_date = int($date / 86400) - 6000;
+
+$desc = shift @ARGV;
+open DESC, "<", $desc;
+while (<DESC>) {
     chomp;
     @_ = split /:/;
-    push @exes, $_[0];
-    $names{$_[0]} = $_[1];
+    push @exes, $_[1];
+    $names{$_[1]} = $_[2];
 }
-close LST;
+close DESC;
 
 print '; -*- no -*-'."\n";
 print ';'."\n";
@@ -31,10 +43,10 @@ print '; -- Inno Setup installer script for Puzzles.'."\n";
 print ''."\n";
 print '[Setup]'."\n";
 print 'AppName=Simon Tatham\'s Portable Puzzle Collection'."\n";
-print 'AppVerName=Puzzles revision '.$rev."\n";
-print 'VersionInfoTextVersion=Revision '.$rev."\n";
-print 'AppVersion=r'.$rev."\n";
-print 'VersionInfoVersion=0.0.'.$revclean.'.0'."\n";
+print 'AppVerName=Puzzles version '.$ver."\n";
+print 'VersionInfoTextVersion=Version '.$ver."\n";
+print 'AppVersion=r'.$ver."\n";
+print 'VersionInfoVersion=0.0.'.$integer_date.'.0'."\n";
 print 'AppPublisher=Simon Tatham'."\n";
 print 'AppPublisherURL=http://www.chiark.greenend.org.uk/~sgtatham/puzzles/'."\n";
 print 'DefaultDirName={pf}\Simon Tatham\'s Portable Puzzle Collection'."\n";

@@ -8,7 +8,7 @@ unrulysolver : [C] unruly[STANDALONE_SOLVER] STANDALONE
 
 ALL += unruly[COMBINED]
 
-!begin gtk
+!begin am gtk
 GAMES += unruly
 !end
 
@@ -16,6 +16,6 @@ GAMES += unruly
     A(unruly) \
 !end
 
-!begin >wingames.lst
-unruly.exe:Unruly
+!begin >gamedesc.txt
+unruly:unruly.exe:Unruly:Black and white grid puzzle:Fill in the black and white grid to avoid runs of three.
 !end

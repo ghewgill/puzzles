@@ -48,7 +48,9 @@
  */
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "puzzles.h"
 
@@ -314,6 +316,8 @@ void key(int keycode, int charcode, const char *key, const char *chr,
     } else if (keycode >= 65 && keycode <= 90) {
         keyevent = keycode + (shift ? 0 : 32);
     } else if (keycode >= 48 && keycode <= 57) {
+        keyevent = keycode;
+    } else if (keycode == 32) {        /* space / CURSOR_SELECT2 */
         keyevent = keycode;
     }
 
@@ -792,8 +796,6 @@ int main(int argc, char **argv)
         js_remove_type_dropdown();
         have_presets_dropdown = FALSE;
     } else {
-        int preset;
-
         presets = snewn(npresets, game_params *);
         for (i = 0; i < npresets; i++) {
             char *name;

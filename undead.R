@@ -5,7 +5,7 @@ undead : [G] WINDOWS COMMON undead undead.res|noicon.res
 
 ALL += undead[COMBINED]
 
-!begin gtk
+!begin am gtk
 GAMES += undead
 !end
 
@@ -13,6 +13,6 @@ GAMES += undead
     A(undead) \
 !end
 
-!begin >wingames.lst
-undead.exe:Undead
+!begin >gamedesc.txt
+undead:undead.exe:Undead:Monster-placing puzzle:Place ghosts, vampires and zombies so that the right numbers of them can be seen in mirrors.
 !end
