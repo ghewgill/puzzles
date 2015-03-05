@@ -1085,7 +1085,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"char ver[] = \\\"Revision: r`git log|grep git-svn-id|head -1|awk -F '[@ ]+' '{print $4}'`\\\";\" >svnversion.c";
+			shellScript = "echo \"char ver[] = \\\"Revision: `git describe --always $(git merge-base HEAD simon/master)`\\\";\" >svnversion.c";
 		};
 /* End PBXShellScriptBuildPhase section */
 
