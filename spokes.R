@@ -5,6 +5,9 @@ SPOKES_EXTRA = dsf
 spokes : [X] GTK COMMON spokes SPOKES_EXTRA spokes-icon|no-icon
 spokes : [G] WINDOWS COMMON spokes SPOKES_EXTRA spokes.res|noicon.res
 
+spokessolver : [U] spokes[STANDALONE_SOLVER] SPOKES_EXTRA STANDALONE
+spokessolver : [C] spokes[STANDALONE_SOLVER] SPOKES_EXTRA STANDALONE
+
 ALL += spokes[COMBINED]
 
 !begin am gtk

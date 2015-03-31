@@ -879,7 +879,36 @@ static int game_can_format_as_text_now(const game_params *params)
 
 static char *game_text_format(const game_state *state)
 {
-    return NULL;
+	int w = state->w, h = state->h;
+	int x, y, i;
+	int lr = w*2;
+	
+	char *ret = snewn((lr*h*2)-lr+1, char);
+	char *p = ret;
+	
+	for(y = 0; y < h; y++)
+	{
+		for(x = 0; x < w; x++)
+		{
+			i = y*w+x;
+			*p++ = state->numbers[i] ? state->numbers[i] + '0' : ' ';
+			*p++ = x == w-1 ? '\n' : 
+				GET_SPOKE(state->spokes[i], DIR_RIGHT) == SPOKE_LINE ? '-' : ' ';
+		}
+		if(y == h-1) break;
+		for(x = 0; x < w; x++)
+		{
+			i = y*w+x;
+			*p++ = GET_SPOKE(state->spokes[i], DIR_BOT) == SPOKE_LINE ? '|' : ' ';
+			*p++ = x == w-1 ? '\n' : 
+				GET_SPOKE(state->spokes[i], DIR_BOTRIGHT) == SPOKE_LINE ? '\\' :
+				GET_SPOKE(state->spokes[i+1], DIR_BOTLEFT) == SPOKE_LINE ? '/' : ' ';
+		}
+	}
+	
+	*p++ = '\0';
+	
+    return ret;
 }
 
 enum { DRAG_NONE, DRAG_LEFT, DRAG_RIGHT };
@@ -931,8 +960,8 @@ struct game_drawstate {
 	struct spokes_scratch *scratch;
 };
 
-#define FROMCOORD(x) ( ((x) - (tilesize/2)) / tilesize )
-#define TOCOORD(x) ( ((x) * tilesize) + (tilesize) )
+#define FROMCOORD(x) ( (x)/tilesize )
+#define TOCOORD(x) ( ((x) * tilesize) + (tilesize/2) )
 
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
@@ -947,8 +976,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	int from = -1, to = -1, drag = DRAG_NONE;
 	float angle;
 	
-	if(ox < tilesize/2) x = -1;
-	if(oy < tilesize/2) y = -1;
+	if(ox < 0) x = -1;
+	if(oy < 0) y = -1;
 	
 	if(button == LEFT_BUTTON || button == RIGHT_BUTTON)
 	{
@@ -1115,8 +1144,8 @@ static game_state *execute_move(const game_state *state, const char *move)
 static void game_compute_size(const game_params *params, int tilesize,
                               int *x, int *y)
 {
-    *x = (params->w+1) * tilesize;
-	*y = (params->h+1) * tilesize;
+    *x = (params->w) * tilesize;
+	*y = (params->h) * tilesize;
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
@@ -1252,8 +1281,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		i = y*w+x;
 		if(state->spokes[i])
 		{
-			tx = (x+1)*tilesize;
-			ty = (y+1)*tilesize;
+			tx = TOCOORD(x);
+			ty = TOCOORD(y);
 			for(d = 0; d < 4; d++)
 			{
 				if(GET_SPOKE(state->spokes[y*w+x], d) == SPOKE_LINE)
@@ -1279,8 +1308,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		}
 		if(cshow && cx == x && cy == y)
 		{
-			draw_rect_corners(dr, (cx+((2+dx)/3.0))*tilesize, 
-				(cy+((2+dy)/3.0))*tilesize, tilesize*0.2, COL_CURSOR);
+			draw_rect_corners(dr, (cx+((2+dx)/3.0))*tilesize - (tilesize/2), 
+				(cy+((2+dy)/3.0))*tilesize - (tilesize/2), tilesize*0.2, COL_CURSOR);
 		}
 	}
 }
@@ -1338,8 +1367,8 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 		i = y*w+x;
 		if(!state->spokes[i]) continue;
 		
-		tx = (x+1)*tilesize;
-		ty = (y+1)*tilesize;
+		tx = TOCOORD(x);
+		ty = TOCOORD(y);
 		for(d = 0; d < 4; d++)
 		{
 			if(GET_SPOKE(state->spokes[y*w+x], d) == SPOKE_LINE)
@@ -1377,7 +1406,7 @@ const struct game thegame = {
     dup_game,
     free_game,
     TRUE, solve_game,
-    FALSE, game_can_format_as_text_now, game_text_format,
+    TRUE, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
@@ -1385,7 +1414,7 @@ const struct game thegame = {
     game_changed_state,
     interpret_move,
     execute_move,
-    48, game_compute_size, game_set_size,
+    72, game_compute_size, game_set_size,
     game_colours,
     game_new_drawstate,
     game_free_drawstate,
@@ -1398,3 +1427,135 @@ const struct game thegame = {
     FALSE, game_timing_state,
     0,				       /* flags */
 };
+
+/* ***************** *
+ * Standalone solver *
+ * ***************** */
+
+#ifdef STANDALONE_SOLVER
+#include <time.h>
+#include <stdarg.h>
+
+/* Most of the standalone solver code was copied from unequal.c and singles.c */
+
+const char *quis;
+
+static void usage_exit(const char *msg)
+{
+	if (msg)
+		fprintf(stderr, "%s: %s\n", quis, msg);
+	fprintf(stderr,
+			"Usage: %s [--seed SEED] [--soak AMOUNT] <params> | [game_id [game_id ...]]\n",
+			quis);
+	exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+	random_state *rs;
+	time_t seed = time(NULL);
+	time_t tt_start, tt_end;
+	
+	game_params *params = NULL;
+
+	char *id = NULL, *desc = NULL, *err;
+	int n = 1;
+	
+	quis = argv[0];
+
+	while (--argc > 0) {
+		char *p = *++argv;
+		if (!strcmp(p, "--seed")) {
+			if (argc == 0)
+				usage_exit("--seed needs an argument");
+			seed = (time_t) atoi(*++argv);
+			argc--;
+		}
+		else if (!strcmp(p, "--soak")) {
+			if (argc == 0)
+				usage_exit("--soak needs an argument");
+			n = atoi(*++argv);
+			if(n < 1)
+				usage_exit("--soak argument must be at least 1");
+			argc--;
+		}
+		else if (*p == '-')
+			usage_exit("unrecognised option");
+		else
+			id = p;
+	}
+
+	if (id) {
+		desc = strchr(id, ':');
+		if (desc)
+			*desc++ = '\0';
+
+		params = default_params();
+		decode_params(params, id);
+		err = validate_params(params, TRUE);
+		if (err) {
+			fprintf(stderr, "Parameters are invalid\n");
+			fprintf(stderr, "%s: %s", argv[0], err);
+			exit(1);
+		}
+	}
+
+	if (!desc) {
+		int i;
+		char *desc_gen, *aux, *fmt;
+		rs = random_new((void *) &seed, sizeof(time_t));
+		if (!params)
+			params = default_params();
+		printf("Generating %d puzzle%s with parameters %s\n",
+			   n, n != 1 ? "s" : "",
+			   encode_params(params, TRUE));
+			   
+		tt_start = time(NULL);
+		for(i = 0; i < n; i++)
+		{
+			fflush(stdout);
+			desc_gen = new_game_desc(params, rs, &aux, FALSE);
+
+			fmt = game_text_format(new_game(NULL, params, desc_gen));
+			fputs(fmt, stdout);
+			sfree(fmt);
+
+			printf("Game ID: %s\n\n", desc_gen);
+			sfree(desc_gen);
+		}
+		tt_end = time(NULL);
+		double total = difftime(tt_end, tt_start);
+		if(n == 1)
+			printf("Generated in %.2fs", total);
+		else if(n > 0)
+			printf("Generated in %.2fs, avg %.4fs", total, total/n);
+		
+	} else {
+		game_state *input;
+		int valid;
+
+		err = validate_desc(params, desc);
+		if (err) {
+			fprintf(stderr, "Description is invalid\n");
+			fprintf(stderr, "%s", err);
+			exit(1);
+		}
+
+		input = new_game(NULL, params, desc);
+
+		valid = spokes_solve(input, DIFFCOUNT);
+
+		char *fmt = game_text_format(input);
+		fputs(fmt, stdout);
+		sfree(fmt);
+		if (valid == STATUS_INCOMPLETE)
+			printf("No solution found.\n");
+		else if (valid == STATUS_INVALID)
+			printf("Puzzle is invalid.\n");
+		
+		free_game(input);
+	}
+
+	return 0;
+}
+#endif
