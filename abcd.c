@@ -1214,7 +1214,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 	* by Redo, or by Solve), then we cancel the highlight.
 	*/
 	if (ui->hshow && ui->hpencil && !ui->hcursor &&
-			newstate->grid[ui->hy * w + ui->hx] != 0) {
+			newstate->grid[ui->hy * w + ui->hx] != EMPTY) {
 		ui->hshow = FALSE;
 	}
 	
@@ -1362,7 +1362,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		);
 		
 		/* When not in keyboard mode, hide cursor */
-		if (!ui->hcursor)
+		if (!ui->hcursor && !ui->hpencil)
 			ui->hshow = FALSE;
 		
 		return dupstr(buf);

@@ -1356,7 +1356,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		);
 		
 		/* When not in keyboard mode, hide cursor */
-		if (!ui->ckey)
+		if (!ui->ckey && !ui->cpencil)
 			ui->cshow = FALSE;
 		
 		return dupstr(buf);
