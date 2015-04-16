@@ -320,8 +320,10 @@ static void free_game(game_state *state)
  * Latin square with holes *
  * *********************** */
 
-#define LATINH_HOLE 'X'
-#define LATINH_NOT  'O'
+/* This square definitely doesn't contain a character */
+#define LATINH_CROSS  'X'
+/* This square must contain a character */
+#define LATINH_CIRCLE 'O'
 
 struct solver_ctx {
 	game_state *state;
@@ -388,7 +390,7 @@ static int latinholes_solver_sync(struct latin_solver *solver, struct solver_ctx
 #endif
 			/* This square must be a hole */
 			nchanged++;
-			sctx->state->holes[i] = LATINH_HOLE;
+			sctx->state->holes[i] = LATINH_CROSS;
 			continue;
 		}
 		
@@ -407,14 +409,14 @@ static int latinholes_solver_sync(struct latin_solver *solver, struct solver_ctx
 #endif
 			/* This square must be a number */
 			nchanged++;
-			sctx->state->holes[i] = LATINH_NOT;
+			sctx->state->holes[i] = LATINH_CIRCLE;
 		}
 	}
 	
 	return nchanged;
 }
 
-static int latinholes_solver_place_hole(struct latin_solver *solver, struct solver_ctx *sctx, int x, int y)
+static int latinholes_solver_place_cross(struct latin_solver *solver, struct solver_ctx *sctx, int x, int y)
 {
 	int n;
 	int nchanged = 0;
@@ -422,7 +424,7 @@ static int latinholes_solver_place_hole(struct latin_solver *solver, struct solv
 	
 #ifdef STANDALONE_SOLVER
 	if(solver_show_working)
-		printf("Place hole at %d,%d\n", x, y);
+		printf("Place cross at %d,%d\n", x, y);
 #endif
 	
 	for(n = 0; n < nums; n++)
@@ -437,7 +439,7 @@ static int latinholes_solver_place_hole(struct latin_solver *solver, struct solv
 	return nchanged;
 }
 
-static int latinholes_solver_place_not(struct latin_solver *solver, struct solver_ctx *sctx, int x, int y)
+static int latinholes_solver_place_circle(struct latin_solver *solver, struct solver_ctx *sctx, int x, int y)
 {
 	int n;
 	int nchanged = 0;
@@ -446,19 +448,14 @@ static int latinholes_solver_place_not(struct latin_solver *solver, struct solve
 
 #ifdef STANDALONE_SOLVER
 	if(solver_show_working)
-		printf("Place not-a-hole at %d,%d\n", x, y);
+		printf("Place circle at %d,%d\n", x, y);
 #endif
 
 	for(n = nums; n < o; n++)
 	{
 		if(!cube(x, y, n+1))
 			continue;
-
-#ifdef STANDALONE_SOLVER
-	if(solver_show_working)
-		printf("    Rule out %d at %d,%d\n", n+1, x, y);
-#endif
-
+		
 		cube(x, y, n+1) = FALSE;
 		nchanged++;
 	}
@@ -470,7 +467,7 @@ static int latinholes_solver_count(struct latin_solver *solver, struct solver_ct
 {
 	int o = solver->o;
 	int nums = sctx->nums;
-	int dir, holecount, notcount;
+	int dir, holecount, circlecount;
 	int x, y, i, j;
 	int nchanged = 0;
 	
@@ -483,15 +480,15 @@ static int latinholes_solver_count(struct latin_solver *solver, struct solver_ct
 			if(dir) x = i; else y = i;
 			
 			holecount = 0;
-			notcount = 0;
+			circlecount = 0;
 			for(j = 0; j < o; j++)
 			{
 				if(dir) y = j; else x = j;
 				
-				if(sctx->state->holes[y*o+x] == LATINH_HOLE)
+				if(sctx->state->holes[y*o+x] == LATINH_CROSS)
 					holecount++;
-				if(sctx->state->holes[y*o+x] == LATINH_NOT)
-					notcount++;
+				if(sctx->state->holes[y*o+x] == LATINH_CIRCLE)
+					circlecount++;
 			}
 			
 			if(holecount == (o-nums))
@@ -501,17 +498,17 @@ static int latinholes_solver_count(struct latin_solver *solver, struct solver_ct
 					if(dir) y = j; else x = j;
 					
 					if(!sctx->state->holes[y*o+x])
-						nchanged += latinholes_solver_place_not(solver, sctx, x, y);
+						nchanged += latinholes_solver_place_circle(solver, sctx, x, y);
 				}
 			}
-			else if(notcount == nums)
+			else if(circlecount == nums)
 			{
 				for(j = 0; j < o; j++)
 				{
 					if(dir) y = j; else x = j;
 					
 					if(!sctx->state->holes[y*o+x])
-						nchanged += latinholes_solver_place_hole(solver, sctx, x, y);
+						nchanged += latinholes_solver_place_cross(solver, sctx, x, y);
 				}
 			}
 		}
@@ -555,7 +552,7 @@ static int latinholes_check(game_state *state)
 			cols[x*nums+d-1]++;
 		}
 		
-		if(d == 0 && state->holes[y*o+x] == LATINH_NOT)
+		if(d == 0 && state->holes[y*o+x] == LATINH_CIRCLE)
 			fail = TRUE;
 	}
 	
@@ -618,7 +615,7 @@ static int salad_letters_solver_dir(struct latin_solver *solver, struct solver_c
 	maxdist = o-nums;
 	for(i = si + (di*(o-nums)); i != ei; i+=di)
 	{
-		if(sctx->state->holes[i] == LATINH_HOLE)
+		if(sctx->state->holes[i] == LATINH_CROSS)
 			maxdist--;
 	}
 	
@@ -644,7 +641,7 @@ static int salad_letters_solver_dir(struct latin_solver *solver, struct solver_c
 			}
 		}
 		
-		if(sctx->state->holes[i] != LATINH_HOLE)
+		if(sctx->state->holes[i] != LATINH_CROSS)
 			found = TRUE;
 		
 		/* Rule out this possibility too far away from clue */
@@ -663,7 +660,7 @@ static int salad_letters_solver_dir(struct latin_solver *solver, struct solver_c
 		}
 		dist++;
 		
-		if(sctx->state->holes[i] == LATINH_NOT || dist > maxdist)
+		if(sctx->state->holes[i] == LATINH_CIRCLE || dist > maxdist)
 			outofrange = TRUE;
 	}
 	
@@ -744,10 +741,10 @@ static char *game_text_format(const game_state *state)
 		{
 			d = state->grid[i*o+j];
 			hole = state->holes[i*o+j];
-			if(hole == LATINH_HOLE)
+			if(hole == LATINH_CROSS)
 				c = 'x';
 			else if(!d)
-				c = hole == LATINH_NOT ? 'O' : '.';
+				c = hole == LATINH_CIRCLE ? 'O' : '.';
 			else
 				c = mode == GAMEMODE_LETTERS ? 'A' + d - 1 : '0' + d;
 			
@@ -863,14 +860,14 @@ static game_state *load_game(const game_params *params, const char *desc, char *
 			d = (c - 'A') + 1;
 		else if(c == 'O')
 		{
-			ret->gridclues[pos] = LATINH_NOT;
-			ret->holes[pos] = LATINH_NOT;
+			ret->gridclues[pos] = LATINH_CIRCLE;
+			ret->holes[pos] = LATINH_CIRCLE;
 			pos++;
 		}
 		else if(c == 'X')
 		{
-			ret->gridclues[pos] = LATINH_HOLE;
-			ret->holes[pos] = LATINH_HOLE;
+			ret->gridclues[pos] = LATINH_CROSS;
+			ret->holes[pos] = LATINH_CROSS;
 			pos++;
 		}
 		else
@@ -884,7 +881,7 @@ static game_state *load_game(const game_params *params, const char *desc, char *
 		{
 			ret->gridclues[pos] = d;
 			ret->grid[pos] = d;
-			ret->holes[pos] = LATINH_NOT;
+			ret->holes[pos] = LATINH_CIRCLE;
 			pos++;
 		}
 		else if(d > nums)
@@ -940,9 +937,9 @@ static digit salad_scan_dir(digit *grid, char *holes, int si, int di, int ei, in
 	int i;
 	for(i = si; i != ei; i+=di)
 	{
-		if(direct && grid[i] == 0 && holes[i] != LATINH_HOLE)
+		if(direct && grid[i] == 0 && holes[i] != LATINH_CROSS)
 			return 0;
-		if(grid[i] != 0 && grid[i] != LATINH_HOLE)
+		if(grid[i] != 0 && grid[i] != LATINH_CROSS)
 			return grid[i];
 	}
 	
@@ -1011,7 +1008,7 @@ static int salad_solve(game_state *state, int maxdiff)
 	
 	for(i = 0; i < o2; i++)
 	{
-		if(state->gridclues[i] && state->gridclues[i] != LATINH_HOLE && state->gridclues[i] != LATINH_NOT)
+		if(state->gridclues[i] && state->gridclues[i] != LATINH_CROSS && state->gridclues[i] != LATINH_CIRCLE)
 		{
 #ifdef STANDALONE_SOLVER
 			if(solver_show_working)
@@ -1019,13 +1016,13 @@ static int salad_solve(game_state *state, int maxdiff)
 #endif
 			latin_solver_place(solver, i%o, i/o, state->gridclues[i]);
 		}
-		else if(state->gridclues[i] == LATINH_HOLE)
+		else if(state->gridclues[i] == LATINH_CROSS)
 		{
-			latinholes_solver_place_hole(solver, ctx, i%o, i/o);
+			latinholes_solver_place_cross(solver, ctx, i%o, i/o);
 		}
-		else if(state->gridclues[i] == LATINH_NOT)
+		else if(state->gridclues[i] == LATINH_CIRCLE)
 		{
-			latinholes_solver_place_not(solver, ctx, i%o, i/o);
+			latinholes_solver_place_circle(solver, ctx, i%o, i/o);
 		}
 	}
 	
@@ -1062,7 +1059,7 @@ static int salad_solve(game_state *state, int maxdiff)
 		
 		for(i = 0; i < o2; i++)
 		{
-			if(state->holes[i] == LATINH_HOLE)
+			if(state->holes[i] == LATINH_CROSS)
 				holes++;
 		}
 		
@@ -1114,9 +1111,9 @@ static char *salad_serialize(const digit *input, int s, char base)
 				run = 0;
 			}
 			
-			if (input[i] == LATINH_HOLE)
+			if (input[i] == LATINH_CROSS)
 				*p++ = 'X';
-			else if (input[i] == LATINH_NOT)
+			else if (input[i] == LATINH_CIRCLE)
 				*p++ = 'O';
 			else
 				*p++ = input[i] + base;
@@ -1161,7 +1158,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 		int i;
 		for(i = 0; i < o2; i++)
 		{
-			if(solved->grid[i] && solved->holes[i] != LATINH_HOLE)
+			if(solved->grid[i] && solved->holes[i] != LATINH_CROSS)
 				*p++ = (solved->grid[i] + '0');
 			else
 				*p++ = 'X';
@@ -1235,7 +1232,7 @@ static char *salad_new_numbers_desc(const game_params *params, random_state *rs,
 		for(i = 0; i < o2; i++)
 		{
 			if(grid[i] > nums)
-				state->gridclues[i] = LATINH_HOLE;
+				state->gridclues[i] = LATINH_CROSS;
 			else
 				state->gridclues[i] = grid[i];
 		}
@@ -1255,10 +1252,10 @@ static char *salad_new_numbers_desc(const game_params *params, random_state *rs,
 				continue;
 			
 			/* Remove the hole or the number on a ball */
-			if(temp == LATINH_HOLE || temp == LATINH_NOT)
+			if(temp == LATINH_CROSS || temp == LATINH_CIRCLE)
 				state->gridclues[j] = 0;
 			else
-				state->gridclues[j] = LATINH_NOT;
+				state->gridclues[j] = LATINH_CIRCLE;
 			
 			memset(state->grid, 0, o2 * sizeof(digit));
 			memset(state->holes, 0, o2 * sizeof(digit));
@@ -1333,7 +1330,7 @@ static char *salad_new_letters_desc(const game_params *params, random_state *rs,
 			if(grid[i] <= nums)
 				state->gridclues[i] = grid[i];
 			else
-				state->gridclues[i] = LATINH_HOLE;
+				state->gridclues[i] = LATINH_CROSS;
 		}
 		sfree(grid);
 		
@@ -1482,7 +1479,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		{
 			int newpencil = button == RIGHT_BUTTON;
 			
-			if((state->gridclues[(gy*o)+gx] == 0 || state->gridclues[(gy*o)+gx] == LATINH_NOT)
+			if((state->gridclues[(gy*o)+gx] == 0 || state->gridclues[(gy*o)+gx] == LATINH_CIRCLE)
 				&& (!ui->hshow || (newpencil ? !ui->hpencil : ui->hpencil)
 				|| ui->hx != gx || ui->hy != gy))
 			{
@@ -1510,14 +1507,14 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				ui->hshow = FALSE;
 				return dupstr(buf);
 			}
-			else if(state->holes[(gy*o)+gx] == LATINH_NOT && state->grid[(gy*o)+gx] == 0)
+			else if(state->holes[(gy*o)+gx] == LATINH_CIRCLE && state->grid[(gy*o)+gx] == 0)
 			{
 				sprintf(buf, "%c%d,%d,%c", 'R',
 					gx, gy, 'X');
 				ui->hshow = FALSE;
 				return dupstr(buf);
 			}
-			else if(state->holes[(gy*o)+gx] == LATINH_HOLE)
+			else if(state->holes[(gy*o)+gx] == LATINH_CROSS)
 			{
 				sprintf(buf, "%c%d,%d,%c", 'R',
 					gx, gy, '-');
@@ -1544,7 +1541,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		return "";
 	}
 	
-	if(ui->hshow && (state->gridclues[pos] == 0 || state->gridclues[pos] == LATINH_NOT))
+	if(ui->hshow && (state->gridclues[pos] == 0 || state->gridclues[pos] == LATINH_CIRCLE))
 	{
 		if ((button >= '0' && button <= '9') || 
 			(button >= 'a' && button <= 'i') || 
@@ -1584,7 +1581,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		
 		if(button == 'X' || button == 'x' || button == '-' || button == '_')
 		{
-			if(state->gridclues[pos] == LATINH_NOT)
+			if(state->gridclues[pos] == LATINH_CIRCLE)
 				return NULL;
 			
 			sprintf(buf, "%c%d,%d,%c", (char)(ui->hpencil ? 'P'	: 'R'),
@@ -1599,7 +1596,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		
 		if(button == 'O' || button == 'o' || button == '+' || button == '=')
 		{
-			if(state->gridclues[pos] == LATINH_NOT && ui->hpencil)
+			if(state->gridclues[pos] == LATINH_CIRCLE && ui->hpencil)
 				return NULL;
 			if(state->grid[pos] != 0 && ui->hpencil)
 				return NULL;
@@ -1639,12 +1636,12 @@ static game_state *execute_move(const game_state *state, const char *move)
 			if(*p >= '1' && *p <= '9')
 			{
 				ret->grid[i] = *p - '0';
-				ret->holes[i] = LATINH_NOT;
+				ret->holes[i] = LATINH_CIRCLE;
 			}
 			else if(*p == 'X')
 			{
 				ret->grid[i] = 0;
-				ret->holes[i] = LATINH_HOLE;
+				ret->holes[i] = LATINH_CROSS;
 			}
 			else
 			{
@@ -1666,11 +1663,11 @@ static game_state *execute_move(const game_state *state, const char *move)
 		if(c == '-')
 		{
 			/* If square is already empty, remove pencil marks */
-			if(!ret->grid[y*o+x] && ret->holes[y*o+x] != LATINH_HOLE)
+			if(!ret->grid[y*o+x] && ret->holes[y*o+x] != LATINH_CROSS)
 				ret->marks[y*o+x] = 0;
 			
 			ret->grid[y*o+x] = 0;
-			if(ret->gridclues[y*o+x] != LATINH_NOT)
+			if(ret->gridclues[y*o+x] != LATINH_CIRCLE)
 				ret->holes[y*o+x] = 0;
 		}
 		/* Enter number */
@@ -1678,7 +1675,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		{
 			d = (digit)c - '0';
 			ret->grid[y*o+x] = d;
-			ret->holes[y*o+x] = LATINH_NOT;
+			ret->holes[y*o+x] = LATINH_CIRCLE;
 		}
 		/* Add/remove pencil mark */
 		else if(move[0] == 'P' && c != 'X' && c != 'O')
@@ -1690,25 +1687,25 @@ static game_state *execute_move(const game_state *state, const char *move)
 		else if(move[0] == 'R' && c == 'X')
 		{
 			ret->grid[y*o+x] = 0;
-			ret->holes[y*o+x] = LATINH_HOLE;
+			ret->holes[y*o+x] = LATINH_CROSS;
 		}
 		/* Add/remove pencil mark for hole */
 		else if(move[0] == 'P' && c == 'X')
 		{
 			ret->marks[y*o+x] ^= 1 << nums;
 		}
-		/* Add not-a-hole and empty square */
+		/* Add circle and empty square */
 		else if(move[0] == 'R' && c == 'O')
 		{
 			ret->grid[y*o+x] = 0;
-			ret->holes[y*o+x] = LATINH_NOT;
+			ret->holes[y*o+x] = LATINH_CIRCLE;
 		}
-		/* Toggle not-a-hole without emptying */
+		/* Toggle circle without emptying */
 		else if(move[0] == 'P' && c == 'O')
 		{
 			if(ret->holes[y*o+x] == 0)
-				ret->holes[y*o+x] = LATINH_NOT;
-			else if(ret->holes[y*o+x] == LATINH_NOT)
+				ret->holes[y*o+x] = LATINH_CIRCLE;
+			else if(ret->holes[y*o+x] == LATINH_CIRCLE)
 				ret->holes[y*o+x] = 0;
 		}
 		
@@ -1907,7 +1904,7 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 	for(x = 0; x < o; x++)
 	for(y = 0; y < o; y++)
 	{
-		if(state->holes[y*o+x] == LATINH_HOLE)
+		if(state->holes[y*o+x] == LATINH_CROSS)
 		{
 			ds->rowcount[y+(nums*o)]++;
 			ds->colcount[x+(nums*o)]++;
@@ -1934,7 +1931,7 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 			
 			/* Mark count errors */
 			d = state->grid[i];
-			if(state->holes[i] == LATINH_HOLE && 
+			if(state->holes[i] == LATINH_CROSS && 
 				(ds->rowcount[y+(nums*o)] > (o-nums) || ds->colcount[x+(nums*o)] > (o-nums)))
 			{
 				ds->gridfs[i] |= FD_ERROR;
@@ -1944,9 +1941,9 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 				ds->gridfs[i] |= FD_ERROR;
 			}
 			
-			if(state->holes[i] == LATINH_HOLE)
+			if(state->holes[i] == LATINH_CROSS)
 				ds->gridfs[i] |= FD_CROSS;
-			if(state->holes[i] == LATINH_NOT)
+			if(state->holes[i] == LATINH_CIRCLE)
 				ds->gridfs[i] |= FD_CIRCLE;
 		}
 	
@@ -2001,7 +1998,7 @@ static void salad_draw_balls(drawing *dr, game_drawstate *ds, int x, int y, int 
 	int i = x+(y*o);
 	if(mode == GAMEMODE_LETTERS && state->grid[i] != 0)
 		return;
-	if(state->holes[i] != LATINH_NOT)
+	if(state->holes[i] != LATINH_CIRCLE)
 		return;
 	
 	tx = (x+1)*TILE_SIZE + (TILE_SIZE/2);
@@ -2024,7 +2021,7 @@ static void salad_draw_cross(drawing *dr, game_drawstate *ds, int x, int y, doub
 {
 	int tx, ty, color;
 	int i = x+(y*state->params->order);
-	if(state->holes[i] != LATINH_HOLE)
+	if(state->holes[i] != LATINH_CROSS)
 		return;
 	
 	tx = (x+1)*TILE_SIZE;
@@ -2143,9 +2140,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 				salad_draw_cross(dr, ds, x, y, thick, state);
 			
 			/* Draw pencil marks */
-			if(state->grid[i] == 0 && state->holes[i] != LATINH_HOLE)
+			if(state->grid[i] == 0 && state->holes[i] != LATINH_CROSS)
 			{
-				if(state->holes[i] == LATINH_NOT)
+				if(state->holes[i] == LATINH_CIRCLE)
 				{
 					/* Draw the clues smaller */
 					salad_draw_pencil(dr, state, x, y, base, TILE_SIZE * 0.8F, 
@@ -2364,7 +2361,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 			draw_polygon(dr, coords, 4, -1, ink);
 			
 			/* Draw cross */
-			if(state->gridclues[y*o+x] == LATINH_HOLE)
+			if(state->gridclues[y*o+x] == LATINH_CROSS)
 			{
 				draw_thick_line(dr, 2.5,
 					tx + (tilesize*0.2), ty + (tilesize*0.2),
@@ -2376,8 +2373,8 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 					ink);
 			}
 			/* Draw circle */
-			if(state->gridclues[y*o+x] == LATINH_NOT ||
-				(mode != GAMEMODE_LETTERS && state->holes[y*o+x] == LATINH_NOT))
+			if(state->gridclues[y*o+x] == LATINH_CIRCLE ||
+				(mode != GAMEMODE_LETTERS && state->holes[y*o+x] == LATINH_CIRCLE))
 			{
 				draw_circle(dr, tx+ (tilesize/2), ty+ (tilesize/2), tilesize*0.4, ink, ink);
 				draw_circle(dr, tx+ (tilesize/2), ty+ (tilesize/2), tilesize*0.38, paper, ink);
