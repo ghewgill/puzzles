@@ -19,5 +19,5 @@ GAMES += rome
 !end
 
 !begin >gamedesc.txt
-rome:rome.exe:Rome:Arrow-placing puzzle
+rome:rome.exe:Rome:Arrow-placing puzzle:Fill the grid with arrows leading to a goal.
 !end

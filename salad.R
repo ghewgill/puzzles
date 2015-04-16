@@ -19,5 +19,5 @@ GAMES += salad
 !end
 
 !begin >gamedesc.txt
-salad:salad.exe:Salad:Pseudo-Latin square puzzle
+salad:salad.exe:Salad:Pseudo-Latin square puzzle:Place each character once in every row and column. Some squares remain empty.
 !end

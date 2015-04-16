@@ -17,5 +17,5 @@ GAMES += abcd
 !end
 
 !begin >gamedesc.txt
-abcd:abcd.exe:ABCD:Letter placement puzzle
+abcd:abcd.exe:ABCD:Letter placement puzzle:Place letters according to the numbers. Identical letters cannot touch.
 !end

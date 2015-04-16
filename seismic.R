@@ -19,5 +19,5 @@ GAMES += seismic
 !end
 
 !begin >gamedesc.txt
-seismic:seismic.exe:Seismic:Number placement puzzle
+seismic:seismic.exe:Seismic:Number placement puzzle:Place numbers in each area, keeping enough distance between equal numbers.
 !end

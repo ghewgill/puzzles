@@ -19,5 +19,5 @@ GAMES += spokes
 !end
 
 !begin >gamedesc.txt
-spokes:spokes.exe:Spokes:Wheel-connecting puzzle
+spokes:spokes.exe:Spokes:Wheel-connecting puzzle:Connect all hubs using horizontal, vertical and diagonal lines.
 !end

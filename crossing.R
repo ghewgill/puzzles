@@ -18,5 +18,5 @@ GAMES += crossing
 !end
 
 !begin >gamedesc.txt
-crossing:crossing.exe:Crossing:Number crossword puzzle
+crossing:crossing.exe:Crossing:Number crossword puzzle:Place each number from the list into the crossword.
 !end

@@ -19,5 +19,5 @@ GAMES += boats
 !end
 
 !begin >gamedesc.txt
-boats:boats.exe:Boats:Boat-placing puzzle
+boats:boats.exe:Boats:Boat-placing puzzle:Find the fleet in the grid.
 !end
