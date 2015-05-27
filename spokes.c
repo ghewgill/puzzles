@@ -958,6 +958,22 @@ struct game_drawstate {
     int tilesize;
 	int *isolated;
 	struct spokes_scratch *scratch;
+	
+	hub_t *spokes;
+	/* Contains w*h hashes for the colors of each hub */
+	unsigned int *colors;
+	
+	char *corners;
+	
+	/* Blitter for the background of the keyboard cursor */
+	blitter *bl;
+	char bl_on;
+	/* Position of the center of the blitter */
+	int blx, bly;
+	/* Radius of the keyboard cursor */
+	int blr;
+	/* Size of the blitter */
+	int bls;
 };
 
 #define FROMCOORD(x) ( (x)/tilesize )
@@ -1152,6 +1168,10 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
     ds->tilesize = tilesize;
+	ds->blr = tilesize*0.2;
+	ds->bls = ds->blr*2+1;
+	assert(!ds->bl);
+	ds->bl = blitter_new(dr, ds->bls, ds->bls);
 }
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -1195,11 +1215,27 @@ static float *game_colours(frontend *fe, int *ncolours)
 static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 {
     struct game_drawstate *ds = snew(struct game_drawstate);
-
+	int w = state->w, h = state->h;
+	
     ds->tilesize = 0;
-	ds->isolated = snewn(state->w * state->h, int);
+	ds->isolated = snewn(w*h, int);
     ds->scratch = spokes_new_scratch(state);
 
+	ds->spokes = snewn(w*h, hub_t);
+	ds->colors = snewn(w*h, unsigned int);
+	ds->corners = snewn(w*h, char);
+	
+	memset(ds->spokes, ~0, w*h*sizeof(hub_t));
+	memset(ds->colors, ~0, w*h*sizeof(unsigned int));
+	memset(ds->corners, ~0, w*h*sizeof(char));
+	
+	ds->bl = NULL;
+	ds->bl_on = FALSE;
+	ds->blx = -1;
+	ds->bly = -1;
+	ds->blr = -1;
+	ds->bls = -1;
+	
     return ds;
 }
 
@@ -1207,6 +1243,11 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 {
     sfree(ds->isolated);
     sfree(ds->scratch);
+    sfree(ds->spokes);
+    sfree(ds->colors);
+    sfree(ds->corners);
+	if(ds->bl)
+		blitter_free(dr, ds->bl);
     sfree(ds);
 }
 
@@ -1239,7 +1280,6 @@ static void spokes_draw_hub(drawing *dr, int tx, int ty, float radius,
 #define FLASH_FRAME 0.12F
 #define FLASH_TIME (FLASH_FRAME * 5)
 
-/* TODO: Optimize drawing routines */
 static void game_redraw(drawing *dr, game_drawstate *ds,
                         const game_state *oldstate, const game_state *state,
                         int dir, const game_ui *ui,
@@ -1248,15 +1288,32 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int w = state->w;
 	int h = state->h;
 	int tilesize = ds->tilesize;
-	int i, x, y, d, tx, ty, connected;
+	int i, x, y, d, tx, ty, connected, color;
 	int cx = (ui->cx + 1)/3;
 	int cy = (ui->cy + 1)/3;
-	int dx = (ui->cx + 1)%3;
-	int dy = (ui->cy + 1)%3;
+	int dx = (ui->cx + 1)%3 - 1;
+	int dy = (ui->cy + 1)%3 - 1;
 	char flash, cshow;
 	char buf[2];
 	int fill, border, txt, lines;
 	buf[1] = '\0';
+	
+	if(ds->bl_on)
+	{
+		blitter_load(dr, ds->bl, 
+			ds->blx - ds->blr, ds->bly - ds->blr);
+        draw_update(dr, 
+			ds->blx - ds->blr, ds->bly - ds->blr, 
+			ds->bls, ds->bls);
+		ds->bl_on = FALSE;
+	}
+	
+	/* Initialize background */
+	if(ds->colors[0] == ~0)
+	{
+		draw_rect(dr, 0, 0, w*tilesize, h*tilesize, COL_BACKGROUND);
+		draw_update(dr, 0, 0, w*tilesize, h*tilesize);
+	}
 	
 	if(flashtime > 0)
 		flash = (int)(flashtime/FLASH_FRAME) & 1;
@@ -1264,13 +1321,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		flash = FALSE;
 	cshow = ui->cshow && !flashtime;
 	
-	double thick = (tilesize <= 21 ? 1 : 2);
+	double thick = (tilesize <= 80 ? 2 : 4);
 	float radius = tilesize/3.5F;
 	
-    draw_rect(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize, COL_BACKGROUND);
-    draw_update(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize);
-	
-	spokes_solver_recount(state, ds->scratch);
+    spokes_solver_recount(state, ds->scratch);
 	spokes_find_isolated(state, ds->scratch, ds->isolated);
 	
 	connected = dsf_size(ds->scratch->dsf, 0) == w*h;
@@ -1283,34 +1337,106 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			tx = TOCOORD(x);
 			ty = TOCOORD(y);
-			for(d = 0; d < 4; d++)
-			{
-				if(GET_SPOKE(state->spokes[y*w+x], d) == SPOKE_LINE)
-					draw_thick_line(dr, thick,
-						tx, ty, 
-						tx + (spoke_dirs[d].dx * tilesize),
-						ty + (spoke_dirs[d].dy * tilesize),
-						COL_LINE);
-			}
-			
 			lines = ds->scratch->lines[i];
 			
 			fill = lines == state->numbers[i] ? COL_DONE : COL_BACKGROUND;
 			border = flash ? COL_DONE : i == ui->drag_start || i == ui->drag_end ? COL_HOLDING : 
 				!connected && !ds->isolated[dsf_canonify(ds->scratch->dsf, i)] ? COL_ERROR : COL_BORDER;
-			spokes_draw_hub(dr, tx, ty, radius, thick, state->spokes[i], border, fill, COL_MARK);
-			
-			buf[0] = state->numbers[i] + '0';
 			txt = lines > state->numbers[i] || 
 				ds->scratch->marked[i] > ds->scratch->nodes[i] - state->numbers[i] 
 				? COL_ERROR : cshow && cx == x && cy == y ? COL_CURSOR : COL_LINE;
+			
+			/* Make a hash of the appearance of this hub */
+			color = (fill<<10) | (border<<5) | txt;
+			
+			if(ds->spokes[i] == state->spokes[i] && ds->colors[i] == color)
+				continue;
+			
+			clip(dr, x*tilesize, y*tilesize, tilesize, tilesize);
+			/* Don't redraw the corners */
+			draw_rect(dr, x*tilesize+8, y*tilesize, tilesize-16, tilesize, COL_BACKGROUND);
+			draw_rect(dr, x*tilesize, y*tilesize+8, tilesize, tilesize-16, COL_BACKGROUND);
+			draw_update(dr, x*tilesize, y*tilesize, tilesize, tilesize);
+			
+			for(d = 0; d < 8; d++)
+			{
+				if(GET_SPOKE(state->spokes[i], d) == SPOKE_LINE)
+					draw_thick_line(dr, thick, tx, ty, 
+						tx + (spoke_dirs[d].dx * tilesize),
+						ty + (spoke_dirs[d].dy * tilesize),
+						COL_LINE);
+			}
+			
+			spokes_draw_hub(dr, tx, ty, radius, thick, state->spokes[i], border, fill, COL_MARK);
+			
+			buf[0] = state->numbers[i] + '0';
 			draw_text(dr, tx, ty, FONT_FIXED, tilesize/2.5F, ALIGN_VCENTRE|ALIGN_HCENTRE, txt, buf);
+			
+			ds->spokes[i] = state->spokes[i];
+			ds->colors[i] = color;
+			unclip(dr);
 		}
-		if(cshow && cx == x && cy == y)
+		else if(ds->spokes[i])
 		{
-			draw_rect_corners(dr, (cx+((2+dx)/3.0))*tilesize - (tilesize/2), 
-				(cy+((2+dy)/3.0))*tilesize - (tilesize/2), tilesize*0.2, COL_CURSOR);
+			clip(dr, x*tilesize, y*tilesize, tilesize, tilesize);
+			draw_rect(dr, x*tilesize, y*tilesize, tilesize, tilesize, COL_BACKGROUND);
+			draw_update(dr, x*tilesize, y*tilesize, tilesize, tilesize);
+			ds->spokes[i] = state->spokes[i];
+			ds->colors[i] = 0;
+			unclip(dr);
 		}
+	}
+	
+	/* Redraw part of the diagonal lines */
+	if(tilesize >= 24)
+	{
+		for(y = 0; y < h-1; y++)
+		for(x = 0; x < w-1; x++)
+		{
+			i = y*w+x;
+			char diag = GET_SPOKE(state->spokes[i], DIR_BOTRIGHT) == SPOKE_LINE ? DIR_BOTRIGHT :
+				GET_SPOKE(state->spokes[i+1], DIR_BOTLEFT) == SPOKE_LINE ? DIR_BOTLEFT :
+				0;
+			
+			if(diag == ds->corners[i])
+				continue;
+			
+			tx = (x+1)*tilesize;
+			ty = (y+1)*tilesize;
+			
+			clip(dr, tx-8, ty-8, 16, 16);
+			draw_rect(dr, tx-8, ty-8, 16, 16, COL_BACKGROUND);
+			draw_update(dr, tx-8, ty-8, 16, 16);
+			
+			if(diag == DIR_BOTRIGHT)
+			{
+				draw_thick_line(dr, thick,
+					tx-10, ty-10, tx+10, ty+10, COL_LINE);
+			}
+			if(diag == DIR_BOTLEFT)
+			{
+				draw_thick_line(dr, thick,
+					tx-10, ty+10, tx+10, ty-10, COL_LINE);
+			}
+			
+			unclip(dr);
+			ds->corners[i] = diag;
+		}
+	}
+	
+	if(cshow)
+	{
+		ds->blx = cx*tilesize + tilesize/2;
+		ds->bly = cy*tilesize + tilesize/2;
+		
+		ds->blx += dx*(tilesize*0.4)*SQRTHALF;
+		ds->bly += dy*(tilesize*0.4)*SQRTHALF;
+		
+		blitter_save(dr, ds->bl, ds->blx - ds->blr, ds->bly - ds->blr);
+		ds->bl_on = TRUE;
+		
+		draw_rect_corners(dr, ds->blx, ds->bly, ds->blr-1, COL_CURSOR);
+		draw_update(dr, ds->blx - ds->blr, ds->bly - ds->blr, ds->bls, ds->bls);
 	}
 }
 
