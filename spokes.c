@@ -445,18 +445,44 @@ struct spokes_scratch {
 	int *dsf;
 };
 
-static void spokes_solver_recount(const game_state *state, struct spokes_scratch *solver)
+static void spokes_solver_recount(const game_state *state, struct spokes_scratch *solver, char full)
 {
 	int i, j, x, y;
 	int w = state->w;
 	int h = state->h;
-	hub_t hub;
+	hub_t hub, hub2;
 	for(i = 0; i < w*h; i++)
 	{
 		hub = state->spokes[i];
 		solver->nodes[i] = 8 - spokes_count(hub, SPOKE_HIDDEN);
 		solver->lines[i] = spokes_count(hub, SPOKE_LINE);
 		solver->marked[i] = spokes_count(hub, SPOKE_MARKED);
+	}
+	
+	if(full)
+	{
+		/* For each diagonal, make sure the other diagonal counts as marked */
+		for(y = 0; y < h-1; y++)
+		for(x = 0; x < w-1; x++)
+		{
+			i = y*w+x;
+			hub = state->spokes[i];
+			hub2 = state->spokes[i+1];
+			
+			if(GET_SPOKE(hub, DIR_BOTRIGHT) == SPOKE_LINE &&
+				GET_SPOKE(hub2, DIR_BOTLEFT) == SPOKE_EMPTY)
+			{
+				solver->marked[i+1]++;
+				solver->marked[i+w]++;
+			}
+			
+			if(GET_SPOKE(hub2, DIR_BOTLEFT) == SPOKE_LINE &&
+				GET_SPOKE(hub, DIR_BOTRIGHT) == SPOKE_EMPTY)
+			{
+				solver->marked[i]++;
+				solver->marked[i+w+1]++;
+			}
+		}
 	}
 	
 	dsf_init(solver->dsf, w*h);
@@ -665,7 +691,7 @@ static int spokes_validate(game_state *state, struct spokes_scratch *solver)
 	if(!hassolver)
 		solver = spokes_new_scratch(state);
 	
-	spokes_solver_recount(state, solver);
+	spokes_solver_recount(state, solver, FALSE);
 	
 	for(i = 0; i < w*h && ret != STATUS_INVALID; i++)
 	{
@@ -1324,7 +1350,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	double thick = (tilesize <= 80 ? 2 : 4);
 	float radius = tilesize/3.5F;
 	
-    spokes_solver_recount(state, ds->scratch);
+    spokes_solver_recount(state, ds->scratch, TRUE);
 	spokes_find_isolated(state, ds->scratch, ds->isolated);
 	
 	connected = dsf_size(ds->scratch->dsf, 0) == w*h;
