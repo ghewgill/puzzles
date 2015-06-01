@@ -19,6 +19,10 @@
 
 #include "puzzles.h"
 
+#ifdef STANDALONE_SOLVER
+int solver_debug = FALSE;
+#endif
+
 enum {
     COL_BACKGROUND,
 	COL_BORDER,
@@ -623,7 +627,10 @@ static int spokes_solver_attempt(game_state *state, int diff)
 	int ret = 0;
 	int i, dir, l, w = state->w, h = state->h;
 	game_state *copy = dup_game(state);
-	
+#ifdef STANDALONE_SOLVER
+	int temp_debug = solver_debug;
+	solver_debug = FALSE;
+#endif
 	for(i = 0; i < w*h; i++)
 	{
 		for(dir = 0; dir < 8; dir++)
@@ -642,6 +649,10 @@ static int spokes_solver_attempt(game_state *state, int diff)
 		}
 	}
 	free_game(copy);
+#ifdef STANDALONE_SOLVER
+	solver_debug = temp_debug;
+#endif
+	
 	return ret;
 }
 
@@ -735,6 +746,8 @@ static int spokes_validate(game_state *state, struct spokes_scratch *solver)
 	return ret;
 }
 
+static char *game_text_format(const game_state *state);
+
 static int spokes_solve(game_state *state, int diff)
 {
 	struct spokes_scratch *solver = spokes_new_scratch(state);
@@ -764,6 +777,24 @@ static int spokes_solve(game_state *state, int diff)
 	ret = spokes_validate(state, solver);
 	
 	spokes_free_scratch(solver);
+	
+#ifdef STANDALONE_SOLVER
+	if(solver_debug)
+	{
+		char *fmt = game_text_format(state);
+		fputs(fmt, stdout);
+		sfree(fmt);
+		if(ret != STATUS_VALID)
+		{
+			printf("Puzzle is %s\n", 
+				ret == STATUS_INVALID ? "invalid" : "incomplete");
+		}
+		else
+			printf("Difficulty: %s\n", spokes_diffnames[diff]);
+		
+		printf("\n");
+	}
+#endif
 	
 	return ret;
 }
@@ -884,7 +915,16 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	state->numbers = snewn(w*h, char);
 	state->spokes = snewn(w*h, hub_t);
 	
-	while(!spokes_generate(params, state, rs));
+	int attempts = 0;
+	
+	while(!spokes_generate(params, state, rs)) { attempts++; };
+
+#ifdef STANDALONE_SOLVER
+	if(solver_debug)
+	{
+		printf("Generated puzzle in %d attempts\n", attempts);
+	}
+#endif
 	
 	ret = snewn(w*h + 1, char);
 	for(i = 0; i < w*h; i++)
@@ -1597,7 +1637,7 @@ static void usage_exit(const char *msg)
 	if (msg)
 		fprintf(stderr, "%s: %s\n", quis, msg);
 	fprintf(stderr,
-			"Usage: %s [--seed SEED] [--soak AMOUNT] <params> | [game_id [game_id ...]]\n",
+			"Usage: %s [-d] [--seed SEED] [--soak AMOUNT] <params> | [game_id [game_id ...]]\n",
 			quis);
 	exit(1);
 }
@@ -1631,6 +1671,8 @@ int main(int argc, char *argv[])
 				usage_exit("--soak argument must be at least 1");
 			argc--;
 		}
+		else if (!strcmp(p, "-d"))
+			solver_debug = TRUE;
 		else if (*p == '-')
 			usage_exit("unrecognised option");
 		else
