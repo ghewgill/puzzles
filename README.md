@@ -24,6 +24,7 @@ Each puzzle source file contains a TODO list.
 * Seismic (based on [Hakyuu](http://www.janko.at/Raetsel/Hakyuu/index.htm)): Place numbers in each area, keeping enough distance between equal numbers.
 * Crossing (based on [Nansuke](http://www.nikoli.co.jp/en/puzzles/number_skeleton.html)): Place each number from the list into the crossword.
 * [Spokes](http://puzzlepicnic.com/genre?id=12): Connect all hubs using horizontal, vertical and diagonal lines.
+* Ascent (based on [Hidoku](http://www.janko.at/Raetsel/Hidoku/index.htm)): Create a path of numbers, using each number exactly once.
 
 ## Building
 
