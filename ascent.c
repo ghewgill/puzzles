@@ -743,6 +743,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	int w = state->w, h = state->h;
 	int tilesize = ds->tilesize;
 	cell i;
+	number n;
 	char buf[80];
 	
 	int gx = FROMCOORD(ox);
@@ -751,13 +752,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
 	{
 		i = gy*w+gx;
+		n = state->grid[i];
 		switch(button)
 		{
 		case LEFT_BUTTON:
-		case RIGHT_BUTTON:
 			update_positions(ui->positions, state->grid, w*h);
 			
-			if(state->grid[i] != -1)
+			if(n != -1)
 			{
 				if(i == ui->held && ui->dir != 0)
 				{
@@ -766,9 +767,10 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				else
 				{
 					ui->held = i;
-					ui->dir = button == LEFT_BUTTON ? 1 : -1;
+					ui->dir = n < state->last && ui->positions[n+1] == -1 ? +1
+						: n > 0 && ui->positions[n-1] == -1 ? -1 : +1;
 				}
-				ui->select = state->grid[i] + ui->dir;
+				ui->select = n + ui->dir;
 				
 				if(ui->select < 0 || ui->select > state->last)
 				{
@@ -785,12 +787,11 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			}
 		/* Deliberate fallthrough */
 		case LEFT_DRAG:
-		case RIGHT_DRAG:
 			/*
 			 * TODO: make sure the mouse has a certain distance from the
 			 * previous cell, to make diagonal drags easier
 			 */
-			if(state->grid[i] == -1 && ui->held != -1 && ui->target != ui->select && IS_NEAR(ui->held, i, w))
+			if(n == -1 && ui->held != -1 && ui->target != ui->select && IS_NEAR(ui->held, i, w))
 			{
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
@@ -799,17 +800,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				
 				return dupstr(buf);
 			}
-			else if(state->grid[i] == -1)
+			else if(n == -1)
 			{
 				ui_clear(ui);
 				return "";
 			}
 		break;
 		case MIDDLE_BUTTON:
+		case RIGHT_BUTTON:
 			update_positions(ui->positions, state->grid, w*h);
 		/* Deliberate fallthrough */
 		case MIDDLE_DRAG:
-			if(state->grid[i] == -1 || GET_BIT(state->immutable, i))
+		case RIGHT_DRAG:
+			if(n == -1 || GET_BIT(state->immutable, i))
 				return NULL;
 			
 			sprintf(buf, "C%d", i);
