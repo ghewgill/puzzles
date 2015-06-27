@@ -657,9 +657,9 @@ struct game_ui
 	int dir;
 	
 	cell *positions;
+	int s;
 };
 
-/* TODO: Loading a saved game will not initialize the positions in the ui */
 static game_ui *new_ui(const game_state *state)
 {
 	int s = state->w*state->h;
@@ -668,6 +668,7 @@ static game_ui *new_ui(const game_state *state)
 	ret->held = ret->select = ret->target = -1;
 	ret->dir = 0;
 	ret->positions = snewn(s, cell);
+	ret->s = s;
 	
 	update_positions(ret->positions, state->grid, s);
 	return ret;
@@ -681,11 +682,66 @@ static void free_ui(game_ui *ui)
 
 static char *encode_ui(const game_ui *ui)
 {
-	return NULL;
+	/*
+	 * Resuming a saved game will not create a ui based on the current state,
+	 * but based on the original state. This causes most lines to disappear
+	 * from the screen, until the user interacts with the game.
+	 * To remedy this, the positions array is included in the save file.
+	 */
+	char *ret = snewn(ui->s*4, char);
+	char *p = ret;
+	int run = 0;
+	int i;
+	*p++ = 'P';
+	for(i = 0; i < ui->s; i++)
+	{
+		if(ui->positions[i] >= 0)
+		{
+			if(i != 0)
+				*p++ = run ? 'a' + run-1 : '_';
+			p += sprintf(p, "%d", ui->positions[i]);
+			run = 0;
+		}
+		else
+		{
+			if (run == 26)
+			{
+				*p++ = ('a'-1) + run;
+				run = 0;
+			}
+			run++;
+		}
+	}
+	if(run)
+		*p++ = 'a' + run-1;
+	*p++ = '\0';
+	ret = sresize(ret, p - ret, char);
+	return ret;
 }
 
 static void decode_ui(game_ui *ui, const char *encoding)
 {
+	if(!encoding || encoding[0] != 'P') return;
+	
+	int i;
+	const char *p = encoding+1;
+	
+	for(i = 0; i < ui->s; i++) ui->positions[i] = -1;
+	i = 0;
+	while(*p && i < ui->s)
+	{
+		if(isdigit((unsigned char) *p))
+		{
+			ui->positions[i] = atoi(p);
+			if(ui->positions[i] >= ui->s) ui->positions[i] = -1;
+			while (*p && isdigit((unsigned char) *p)) ++p;
+			++i;
+		}
+		else if(*p >= 'a' && *p <= 'z')
+			i += ((*p++) - 'a') + 1;
+		else
+			++p;
+	}
 }
 
 static void ui_clear(game_ui *ui)
