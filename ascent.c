@@ -750,6 +750,21 @@ static void ui_clear(game_ui *ui)
 	ui->dir = 0;
 }
 
+static void ui_seek(game_ui *ui, number last)
+{
+	if(ui->select < 0 || ui->select > last)
+	{
+		ui->select = -1;
+		ui->target = -1;
+	}
+	else
+	{
+		ui->target = ui->select;
+		while(ui->positions[ui->target] == -1)
+			ui->target += ui->dir;
+	}
+}
+
 static void ui_backtrack(game_ui *ui, number last)
 {
 	number n = ui->select;
@@ -828,17 +843,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				}
 				ui->select = n + ui->dir;
 				
-				if(ui->select < 0 || ui->select > state->last)
-				{
-					ui->select = -1;
-					ui->target = -1;
-				}
-				else
-				{
-					ui->target = ui->select;
-					while(ui->positions[ui->target] == -1)
-						ui->target += ui->dir;
-				}
+				ui_seek(ui, state->last);
 				return "";
 			}
 		/* Deliberate fallthrough */
@@ -847,6 +852,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			 * TODO: make sure the mouse has a certain distance from the
 			 * previous cell, to make diagonal drags easier
 			 */
+			if(n >= 0 && ui->select == n)
+			{
+				ui->held = i;
+				ui->select += ui->dir;
+				ui_seek(ui, state->last);
+				return "";
+			}
 			if(n == -1 && ui->held != -1 && ui->target != ui->select && IS_NEAR(ui->held, i, w))
 			{
 				sprintf(buf, "P%d,%d", i, ui->select);
@@ -856,7 +868,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				
 				return dupstr(buf);
 			}
-			else if(n == -1)
+			else if(n == -1 && button == LEFT_BUTTON)
 			{
 				ui_clear(ui);
 				return "";
