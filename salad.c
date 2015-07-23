@@ -9,7 +9,7 @@
  * Some squares remain empty.
  * ABC End View:  The letters on the edge indicate which letter
  * is encountered first when 'looking' into the grid.
- * Number Ball: A circle indicate that a number must be placed here,
+ * Number Ball: A circle indicates that a number must be placed here,
  * and a cross indicates a space that remains empty.
  *
  * Number Ball was invented by Inaba Naoki. 
@@ -1463,7 +1463,7 @@ struct game_drawstate {
 static char *interpret_move(const game_state *state, game_ui *ui, const game_drawstate *ds,
 				int x, int y, int button)
 {
-	int o, nums, pos, gx, gy;
+	int i, o, nums, pos, gx, gy;
 	char buf[80];
 	o = state->params->order;
 	nums = state->params->nums;
@@ -1612,6 +1612,19 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		}
 	}
 	
+	if(button == 'm' || button == 'M')
+	{
+		unsigned int allmarks = (1<<(nums+1))-1;
+		unsigned int marks = (1<<nums)-1;
+		
+		for(i = 0; i < o*o; i++)
+		{
+			if(!state->grid[i] && state->holes[i] != LATINH_CROSS &&
+				state->marks[i] != (state->holes[i] == LATINH_CIRCLE ? marks : allmarks))
+			return dupstr("M");
+		}
+	}
+	
 	return NULL;
 }
 
@@ -1620,15 +1633,13 @@ static game_state *execute_move(const game_state *state, const char *move)
 	game_state *ret = NULL;
 	int o = state->params->order;
 	int nums = state->params->nums;
-	int x;
-	int y;
+	int x, y, i;
 	char c; digit d;
 	
 	/* Auto-solve game */
 	if(move[0] == 'S')
 	{
 		const char *p = move + 1;
-		int i;
 		ret = dup_game(state);
 		
 		for (i = 0; i < o*o; i++) {
@@ -1715,6 +1726,25 @@ static game_state *execute_move(const game_state *state, const char *move)
 		
 		return ret;
 	}
+	/*
+	 * Fill in every possible mark. If a square has a circle set,
+	 * don't include a mark for a cross.
+	 */
+	if(move[0] == 'M')
+	{
+		unsigned int allmarks = (1<<(nums+1))-1;
+		unsigned int marks = (1<<nums)-1;
+		ret = dup_game(state);
+		
+		for(i = 0; i < o*o; i++)
+		{
+			if(!state->grid[i] && state->holes[i] != LATINH_CROSS)
+				ret->marks[i] = (state->holes[i] == LATINH_CIRCLE ? marks : allmarks);
+		}
+		
+		return ret;
+	}
+	
 	return NULL;
 }
  
