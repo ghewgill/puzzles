@@ -271,6 +271,10 @@ static void free_game(game_state *state)
 	sfree(state);
 }
 
+/* ******************** *
+ * Validation and Tools *
+ * ******************** */
+
 enum { STATUS_COMPLETE, STATUS_INCOMPLETE, STATUS_INVALID };
 enum { VALID, INVALID_WALLS, INVALID_CLUES, INVALID_REGIONS, INVALID_GOALS };
 
@@ -300,7 +304,12 @@ static char rome_validate_game(game_state *state, char fullerrors, int *dsf, cel
 	for(y = 0; y < h; y++)
 	for(x = 0; x < w; x++)
 	{
-		/* Merge things with dsf, and mark as loopstart */
+		/*
+		 * Merge all arrows pointing towards the same square, and mark
+		 * any arrows pointing off the grid. If an arrow attempts to merge
+		 * with another arrow pointing back to itself, mark it as the start
+		 * of a loop.
+		 */
 		i = y*w+x;
 		if(state->grid[i] & FM_UP)
 		{
@@ -340,6 +349,7 @@ static char rome_validate_game(game_state *state, char fullerrors, int *dsf, cel
 		}
 	}
 	
+	/* Mark every arrow in a loop */
 	if(fullerrors)
 	{
 		for(i = 0; i < w*h; i++)
@@ -392,7 +402,7 @@ static char rome_validate_game(game_state *state, char fullerrors, int *dsf, cel
 			if(state->grid[i] & FM_GOAL)
 			{
 				c = dsf_canonify(dsf, i);
-				for(x = 0; x < w*h; x++)
+				for(x = c; x < w*h; x++)
 				{
 					if(c == dsf_canonify(dsf, x))
 						state->grid[x] |= FD_TOGOAL;
@@ -627,6 +637,10 @@ static game_state *dup_game(const game_state *state)
 	return ret;
 }
 
+/* ****** *
+ * Solver *
+ * ****** */
+ 
 static int rome_solver_single(game_state *state)
 {
 	/* If a square has a single possibility, place it */
@@ -667,7 +681,7 @@ static int rome_solver_single(game_state *state)
 static int rome_solver_doubles(game_state *state, cell *sets)
 {
 	/* Look at the currently placed arrows in each region, 
-		and rule these out as possibilities */
+	 * and rule these out as possibilities */
 	int ret = 0;
 	int i;
 	int s = state->w * state->h;
@@ -801,7 +815,7 @@ static int rome_naked_pairs(game_state *state)
 					continue;
 				
 				/* We found two squares. Now look for the other ones */
-				for(k = 0; k < s; k++)
+				for(k = c; k < s; k++)
 				{
 					if(k == i || k == j || c != dsf_canonify(state->dsf, k))
 						continue;
@@ -1053,8 +1067,17 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	return ret;
 }
 
+/* ********* *
+ * Generator *
+ * ********* */
+ 
 static void rome_join_arrows(game_state *state, int *arrdsf, cell *suggest)
 {
+	/*
+	 * This function detects clusters of identical arrows, and gives
+	 * suggestions to the generator to avoid growing a cluster even larger.
+	 */
+	
 	int x, y, i1, i2;
 	int w = state->w;
 	int h = state->h;
@@ -1131,12 +1154,14 @@ static char rome_generate_arrows(game_state *state, random_state *rs)
 		if(state->grid[i] != EMPTY)
 			continue;
 		
+		/* If no arrows are available here, place a goal */
 		if(state->marks[i] == EMPTY)
 		{
 			state->grid[i] = FM_GOAL;
 			continue;
 		}
 		
+		/* Detect if there are certain arrows we should avoid if possible */
 		rome_join_arrows(state, arrdsf, suggest);
 		
 		/* Remove arrows only if there are other options */
@@ -1178,6 +1203,11 @@ static char rome_generate_arrows(game_state *state, random_state *rs)
 
 static char rome_generate_regions(game_state *state, random_state *rs)
 {
+	/*
+	 * From a grid filled with arrows in 1x1 regions, randomly pick
+	 * region borders and remove them if possible.
+	 */
+	
 	int w = state->w;
 	int h = state->h;
 	int x, y, i, i1, i2;
@@ -1242,6 +1272,8 @@ static char rome_generate_regions(game_state *state, random_state *rs)
 
 static char rome_generate_clues(game_state *state, random_state *rs, int diff)
 {
+	/* Remove clues from the grid if the puzzle is solvable without them. */
+	
 	int s = state->w * state->h;
 	int i, j;
 	char status;
@@ -1428,6 +1460,10 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	return dupstr(ret);
 }
 
+/* ************** *
+ * User interface *
+ * ************** */
+ 
 static int game_can_format_as_text_now(const game_params *params)
 {
 	return TRUE;
@@ -1783,9 +1819,9 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
 	return NULL;
 }
 
-/* ----------------------------------------------------------------------
- * Drawing routines.
- */
+/* **************** *
+ * Drawing routines *
+ * **************** */
 
 static void game_compute_size(const game_params *params, int tilesize,
 				  int *x, int *y)
