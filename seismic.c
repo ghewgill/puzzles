@@ -475,9 +475,11 @@ static int seismic_solver_attempt(game_state *state)
 			
 			/* If any number no longer appears in the total marks, 
 			 * we have found an error */
-			for(j = 0; j < s; j++)
+			for(j = 0; j < s && valid; j++)
 			{
-				if(areas[dsf_canonify(state->dsf, j)] != AREA_BITS(dsf_size(state->dsf, j)))
+				if(j != dsf_canonify(state->dsf, j)) continue;
+				
+				if(areas[j] != AREA_BITS(dsf_size(state->dsf, j)))
 					valid = FALSE;
 			}
 			
@@ -569,7 +571,7 @@ static int seismic_validate_game(game_state *state)
 	
 	if(ret != STATUS_INVALID)
 	{
-		for(i = 0; i < s; i++)
+		for(i = 0; i < s && ret != STATUS_UNFINISHED; i++)
 		{
 			if(state->grid[i] == 0)
 				ret = STATUS_UNFINISHED;
@@ -738,7 +740,6 @@ static int seismic_gen_clues(game_state *state, random_state *rs, int diff)
 	
 	int *spaces = snewn(s, int);
 	char *grid = snewn(s, char);
-	int c;
 	
 	for(i = 0; i < s; i++)
 		spaces[i] = i;
@@ -749,8 +750,6 @@ static int seismic_gen_clues(game_state *state, random_state *rs, int diff)
 	for(j = 0; j < s; j++)
 	{
 		i = spaces[j];
-		
-		c = state->grid[i];
 		
 		state->grid[i] = 0;
 		
@@ -1316,7 +1315,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		);
 		
 		/* When not in keyboard mode, hide cursor */
-		if (!ui->ckey)
+		if (!ui->ckey && !ui->cpencil)
 			ui->cshow = FALSE;
 		
 		return dupstr(buf);
@@ -1605,7 +1604,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 		{
 			int nhints, i, j, hw, hh, hmax, fontsz;
 			for (i = nhints = 0; i < 9; i++) {
-				if (state->marks[y*w+x] & (1<<i)) nhints++;
+				if (p & (1<<i)) nhints++;
 			}
 
 			for (hw = 1; hw * hw < nhints; hw++);
@@ -1618,7 +1617,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 
 			for (i = j = 0; i < 9; i++)
 			{
-				if (state->marks[y*w+x] & (1<<i))
+				if (p & (1<<i))
 				{
 					int hx = j % hw, hy = j / hw;
 
