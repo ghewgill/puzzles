@@ -807,6 +807,7 @@ struct game_drawstate {
 };
 
 #define FROMCOORD(x) ( ((x)-(tilesize/2)) / tilesize )
+#define DRAG_RADIUS 0.6F
 static char *interpret_move(const game_state *state, game_ui *ui,
 							const game_drawstate *ds,
 							int ox, int oy, int button)
@@ -823,7 +824,21 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
 	{
 		i = gy*w+gx;
+		if(IS_MOUSE_DRAG(button) && ui->held >= 0)
+		{
+			int hx = (1+gx) * tilesize;
+			int hy = (1+gy) * tilesize;
+			
+			/* 
+			 * When dragging, the mouse must be close enough to the center of
+			 * the new cell. The hitbox is octagon-shaped to avoid drawing a 
+			 * straight line when trying to draw a diagonal line.
+			 */
+			if(abs(ox-hx) + abs(oy-hy) > DRAG_RADIUS*tilesize)
+				i = ui->held;
+		}
 		n = state->grid[i];
+		
 		switch(button)
 		{
 		case LEFT_BUTTON:
@@ -848,10 +863,6 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			}
 		/* Deliberate fallthrough */
 		case LEFT_DRAG:
-			/*
-			 * TODO: make sure the mouse has a certain distance from the
-			 * previous cell, to make diagonal drags easier
-			 */
 			if(n >= 0 && ui->select == n)
 			{
 				ui->held = i;
