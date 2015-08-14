@@ -833,51 +833,54 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     return ret;
 }
 
-#define ORTHOGONAL_LINE_ODDS 4
-#define DIAGONAL_LINE_ODDS 4
-
-/*
- * TODO: The generation process should not discard the entire grid if
- * the puzzle has multiple solutions. Instead, only the ambiguous parts
- * should be regenerated.
- */
-static int spokes_generate(const game_params *params, game_state *state, random_state *rs)
+static int spokes_generate_hubs(const game_params *params, game_state *state, int *scratch, random_state *rs)
 {
-	int w = params->w, h = params->h, diff = params->diff;
-	int i, x, y, r, d, dx, dy;
-	blank_game(params, state);
-	
-	for(y = 0; y < h; y++)
-	for(x = 0; x < w-1; x++)
-	{
-		r = random_upto(rs, ORTHOGONAL_LINE_ODDS);
-		if(r)
-			spokes_place(state, y*w+x, DIR_RIGHT, SPOKE_LINE);
-	}
-	
-	for(y = 0; y < h-1; y++)
-	for(x = 0; x < w; x++)
-	{
-		r = random_upto(rs, ORTHOGONAL_LINE_ODDS);
-		if(r)
-			spokes_place(state, y*w+x, DIR_BOT, SPOKE_LINE);
-	}
-	
-	for(y = 0; y < h-1; y++)
-	for(x = 0; x < w-1; x++)
-	{
-		if(!random_upto(rs, DIAGONAL_LINE_ODDS))
-			continue;
-		
-		if(random_upto(rs, 2))
-			spokes_place(state, y*w+x, DIR_BOTRIGHT, SPOKE_LINE);
-		else
-			spokes_place(state, y*w+x+1, DIR_BOTLEFT, SPOKE_LINE);
-	}
-	
-	for(i = 0; i < w*h; i++)
-		state->numbers[i] = spokes_count(state->spokes[i], SPOKE_LINE);
-	
+	/*
+	 * Fill up the grid with every possible horizontal and vertical line,
+	 * and a random set of diagonal lines.
+	 */
+	int w = params->w, h = params->h;
+	int x, y;
+	int ret = 0;
+
+	for (y = 0; y < h; y++)
+		for (x = 0; x < w - 1; x++)
+		{
+			spokes_place(state, y*w + x, DIR_RIGHT, SPOKE_LINE);
+			scratch[ret++] = ((y*w + x) << 3) | DIR_RIGHT;
+		}
+
+	for (y = 0; y < h - 1; y++)
+		for (x = 0; x < w; x++)
+		{
+			spokes_place(state, y*w + x, DIR_BOT, SPOKE_LINE);
+			scratch[ret++] = ((y*w + x) << 3) | DIR_BOT;
+		}
+
+	for (y = 0; y < h - 1; y++)
+		for (x = 0; x < w - 1; x++)
+		{
+			if (random_upto(rs, 2))
+			{
+				spokes_place(state, y*w + x, DIR_BOTRIGHT, SPOKE_LINE);
+				scratch[ret++] = ((y*w + x) << 3) | DIR_BOTRIGHT;
+			}
+			else
+			{
+				spokes_place(state, y*w + x + 1, DIR_BOTLEFT, SPOKE_LINE);
+				scratch[ret++] = ((y*w + x + 1) << 3) | DIR_BOTLEFT;
+			}
+		}
+
+	return ret;
+}
+
+static int spokes_generate_clear(game_state *state)
+{
+	/* Remove all lines and marks from a grid */
+	int w = state->w, h = state->h;
+	int x, y, d, dx, dy;
+	int ret = 0;
 	for(y = 0; y < h; y++)
 	for(x = 0; x < w; x++)
 	{
@@ -885,12 +888,14 @@ static int spokes_generate(const game_params *params, game_state *state, random_
 		{
 			for(d = 0; d < 8; d++)
 			{
-				if(GET_SPOKE(state->spokes[y*w+x], d) == SPOKE_LINE)
+				if(GET_SPOKE(state->spokes[y*w+x], d) != SPOKE_HIDDEN)
 					SET_SPOKE(state->spokes[y*w+x], d, SPOKE_EMPTY);
 			}
 		}
 		else
 		{
+			state->spokes[y*w + x] = 0;
+			ret++;
 			for(d = 0; d < 8; d++)
 			{
 				dx = x + spoke_dirs[d].dx;
@@ -901,8 +906,52 @@ static int spokes_generate(const game_params *params, game_state *state, random_
 			}
 		}
 	}
-	
-	return spokes_solve(state, diff) == STATUS_VALID;
+
+	return ret;
+}
+
+static int spokes_generate(const game_params *params, game_state *generated, game_state *state, int *scratch, random_state *rs)
+{
+	int w = params->w, h = params->h;
+	int i, i2, j, k, d, count;
+
+	blank_game(params, generated);
+	count = spokes_generate_hubs(params, generated, scratch, rs);
+
+	shuffle(scratch, count, sizeof(int), rs);
+
+	/*
+	 * Try removing each line and see if the puzzle remains solvable.
+	 */
+	for (j = 0; j < count; j++)
+	{
+		i = scratch[j] >> 3;
+		d = scratch[j] & 7;
+		i2 = i + (spoke_dirs[d].dy*w) + spoke_dirs[d].dx;
+
+		for (k = 0; k < w*h; k++)
+			state->numbers[k] = spokes_count(generated->spokes[k], SPOKE_LINE);
+		
+		/* Make sure each hub has at least 1 line connected to it */
+		if (state->numbers[i] == 1 || state->numbers[i2] == 1)
+			continue;
+
+		blank_game(params, state);
+
+		spokes_place(generated, i, d, SPOKE_EMPTY);
+
+		for (k = 0; k < w*h; k++)
+			state->numbers[k] = spokes_count(generated->spokes[k], SPOKE_LINE);
+		
+		spokes_generate_clear(state);
+
+		if(spokes_solve(state, params->diff) != STATUS_VALID)
+			spokes_place(generated, i, d, SPOKE_LINE);
+	}
+
+	for (k = 0; k < w*h; k++)
+		state->numbers[k] = spokes_count(generated->spokes[k], SPOKE_LINE);
+	return TRUE;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
@@ -911,13 +960,13 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	char *ret;
 	int w = params->w, h = params->h;
 	int i;
-	game_state *state = snew(game_state);
-	state->numbers = snewn(w*h, char);
-	state->spokes = snewn(w*h, hub_t);
-	
+	game_state *state = blank_game(params, NULL);
+	game_state *generated = blank_game(params, NULL);
+	int *scratch = snewn(w*h * 3, int);
+
 	int attempts = 0;
 	
-	while(!spokes_generate(params, state, rs)) { attempts++; };
+	while(!spokes_generate(params, generated, state, scratch, rs)) { attempts++; };
 
 #ifdef STANDALONE_SOLVER
 	if(solver_debug)
@@ -934,6 +983,8 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	ret[w*h] = '\0';
 	
 	free_game(state);
+	free_game(generated);
+	sfree(scratch);
 	
     return ret;
 }
