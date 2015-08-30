@@ -835,7 +835,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			 * straight line when trying to draw a diagonal line.
 			 */
 			if(abs(ox-hx) + abs(oy-hy) > DRAG_RADIUS*tilesize)
-				i = ui->held;
+				return NULL;
 		}
 		n = state->grid[i];
 		
