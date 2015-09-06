@@ -42,6 +42,7 @@ static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 
 struct game_params {
 	int w, h;
+	char removeends;
 };
 
 struct game_state {
@@ -61,7 +62,8 @@ static game_params *default_params(void)
 
 	ret->w = 7;
 	ret->h = 6;
-
+	ret->removeends = FALSE;
+	
 	return ret;
 }
 
@@ -103,12 +105,23 @@ static void decode_params(game_params *params, char const *string)
 		params->h = atoi(string);
 		while (*string && isdigit((unsigned char)*string)) string++;
 	}
+	if(*string == 'E')
+	{
+		params->removeends = TRUE;
+		string++;
+	}
 }
 
 static char *encode_params(const game_params *params, int full)
 {
 	char buf[256];
-	sprintf(buf, "%dx%d", params->w, params->h);
+	char *p = buf;
+	p += sprintf(p, "%dx%d", params->w, params->h);
+	if(full && params->removeends)
+		*p++ = 'E';
+
+	*p++ = '\0';
+	
 	return dupstr(buf);
 }
 
@@ -117,7 +130,7 @@ static config_item *game_configure(const game_params *params)
 	config_item *ret;
 	char buf[80];
 	
-	ret = snewn(4, config_item);
+	ret = snewn(5, config_item);
 	
 	ret[0].name = "Width";
 	ret[0].type = C_STRING;
@@ -131,15 +144,20 @@ static config_item *game_configure(const game_params *params)
 	ret[1].sval = dupstr(buf);
 	ret[1].ival = 0;
 	
-	ret[2].name = "Difficulty";
-	ret[2].type = C_CHOICES;
-	ret[2].sval = ":Easy";
-	ret[2].ival = 0;
+	ret[2].name = "Always show start and end points";
+	ret[2].type = C_BOOLEAN;
+	ret[2].sval = NULL;
+	ret[2].ival = !params->removeends;
 	
-	ret[3].name = NULL;
-	ret[3].type = C_END;
-	ret[3].sval = NULL;
+	ret[3].name = "Difficulty";
+	ret[3].type = C_CHOICES;
+	ret[3].sval = ":Easy";
 	ret[3].ival = 0;
+	
+	ret[4].name = NULL;
+	ret[4].type = C_END;
+	ret[4].sval = NULL;
+	ret[4].ival = 0;
 	
 	return ret;
 }
@@ -150,6 +168,7 @@ static game_params *custom_params(const config_item *cfg)
 	
 	ret->w = atoi(cfg[0].sval);
 	ret->h = atoi(cfg[1].sval);
+	ret->removeends = !cfg[2].ival;
 	
 	return ret;
 }
@@ -185,7 +204,8 @@ static char check_completion(number *grid, int w, int h)
 			y = i/w;
 		}
 	}
-	assert(x != -1 && y != -1);
+	if(x == -1)
+		return FALSE;
 	
 	/* Keep selecting the next number in line */
 	while(grid[y*w+x] != last)
@@ -502,7 +522,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	{
 		i = spaces[j];
 		temp = grid[i];
-		if(temp == 0 || temp == w*h-1) continue;
+		if(!params->removeends && (temp == 0 || temp == w*h-1)) continue;
 		grid[i] = -1;
 		
 		ascent_solve(grid, scratch);
@@ -759,9 +779,10 @@ static void ui_seek(game_ui *ui, number last)
 	}
 	else
 	{
-		ui->target = ui->select;
-		while(ui->positions[ui->target] == -1)
-			ui->target += ui->dir;
+		number n = ui->select;
+		while(n + ui->dir >= 0 && n + ui->dir <= last && ui->positions[n] == -1)
+			n += ui->dir;
+		ui->target = n;
 	}
 }
 
@@ -870,7 +891,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui_seek(ui, state->last);
 				return "";
 			}
-			if(n == -1 && ui->held != -1 && ui->target != ui->select && IS_NEAR(ui->held, i, w))
+			if(n == -1 && ui->held != -1 && ui->positions[ui->select] == -1 && IS_NEAR(ui->held, i, w))
 			{
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
@@ -916,7 +937,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 	
 	if (move[0] == 'P' &&
 			sscanf(move+1, "%d,%d", &i, &n) == 2 &&
-			i >= 0 && i < w*h && n > 0 && n < state->last
+			i >= 0 && i < w*h && n >= 0 && n <= state->last
 			)
 	{
 		if(GET_BIT(state->immutable, i))
