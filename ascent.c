@@ -896,7 +896,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
 				ui->held = i;
-				ui->select += ui->dir;
+				if(ui->select + ui->dir <= state->last)
+					ui->select += ui->dir;
 				
 				return dupstr(buf);
 			}
