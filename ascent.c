@@ -772,7 +772,7 @@ static void ui_clear(game_ui *ui)
 
 static void ui_seek(game_ui *ui, number last)
 {
-	if(ui->select < 0 || ui->select > last)
+	if(ui->held == -1 || ui->select < 0 || ui->select > last)
 	{
 		ui->select = -1;
 		ui->target = -1;
@@ -803,9 +803,7 @@ static void ui_backtrack(game_ui *ui, number last)
 	while(n > 0 && n < last && ui->held == -1);
 	
 	ui->select = n + ui->dir;
-	ui->target = ui->select;
-	while(ui->positions[ui->target] == -1)
-		ui->target += ui->dir;
+	ui_seek(ui, last);
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -820,6 +818,10 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 	if(!oldstate->completed && newstate->completed)
 	{
 		ui_clear(ui);
+	}
+	else
+	{
+		ui_seek(ui, oldstate->last);
 	}
 }
 
@@ -884,7 +886,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			}
 		/* Deliberate fallthrough */
 		case LEFT_DRAG:
-			if(n >= 0 && ui->select == n)
+			if(n >= 0 && ui->select == n && ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
 			{
 				ui->held = i;
 				ui->select += ui->dir;
@@ -896,7 +898,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
 				ui->held = i;
-				if(ui->select + ui->dir <= state->last)
+				if(ui->select + ui->dir < state->last)
 					ui->select += ui->dir;
 				
 				return dupstr(buf);
