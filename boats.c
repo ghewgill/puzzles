@@ -3388,11 +3388,31 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		return "";
 	}
 	
-	if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
-        ui->cursor = TRUE;
-        return "";
-    }
+	if (IS_CURSOR_MOVE(button & ~MOD_MASK))
+	{
+		int cx = ui->cx, cy = ui->cy;
+		move_cursor(button & ~MOD_MASK, &ui->cx, &ui->cy, w, h, 0);
+		ui->cursor = TRUE;
+		
+		/* Place boats or water by holding Shift or Ctrl while moving */
+		if(button & (MOD_CTRL|MOD_SHFT))
+		{
+			int xmin = min(cx, ui->cx);
+			int xmax = max(cx, ui->cx);
+			int ymin = min(cy, ui->cy);
+			int ymax = max(cy, ui->cy);
+			to = button & MOD_CTRL ? button & MOD_SHFT ? '-' : 'B' : 'W';
+			from = to == '-' ? '*' : '-';
+			
+			if(boats_validate_move(state, xmin, ymin, xmax, ymax, from, to))
+			{
+				sprintf(buf, "P%d,%d,%d,%d,%c,%c", xmin, ymin, xmax, ymax, from, to);
+				return dupstr(buf);
+			}
+		}
+		
+		return "";
+	}
 	
 	if(ui->cursor && (button == CURSOR_SELECT ||
 		button == CURSOR_SELECT2 || button == '\b'))
