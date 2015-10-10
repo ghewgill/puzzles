@@ -1926,7 +1926,7 @@ static void rome_draw_arrow(drawing *dr, int tx, int ty, double size, cell data,
 	if(ink == -1)
 		color = data & FD_ENTRY ? COL_ARROW_ENTRY : 
 			data & FM_FIXED ? COL_ARROW_FIXED :
-			data & (FE_DOUBLE|FE_BOUNDS) ? COL_ARROW_ERROR : COL_ARROW_GUESS;
+			data & FE_DOUBLE ? COL_ARROW_ERROR : COL_ARROW_GUESS;
 	else
 		color = ink;
 	
@@ -2034,6 +2034,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 		{
 			color = ui->sloops && state->grid[i1] & FE_LOOP ? COL_ERRORBG : 
 				ui->sgoals && state->grid[i1] & FD_TOGOAL ? COL_GOALBG : 
+				state->grid[i1] & FE_BOUNDS ? COL_ERRORBG :
 				COL_BACKGROUND;
 			
 			if(kmode != KEYMODE_OFF && ui->hx == x && ui->hy == y)
