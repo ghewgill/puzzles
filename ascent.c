@@ -17,6 +17,24 @@
 
 #include "puzzles.h"
 
+#ifdef STANDALONE_SOLVER
+#include <stdarg.h>
+int solver_verbose = FALSE;
+
+void solver_printf(char *fmt, ...)
+{
+	if(!solver_verbose) return;
+    char buf[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    printf("%s", buf);
+}
+#else
+#define solver_printf(...)
+#endif
+
 enum {
 	COL_MIDLIGHT,
 	COL_LOWLIGHT,
@@ -35,15 +53,31 @@ typedef unsigned char bitmap;
 static const int dir_x[] = {-1,  0,  1, -1, 1, -1, 0, 1};
 static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 
+#define FLAG_ENDPOINT (1<<8)
+#define FLAG_COMPLETE (1<<10)
+
 #define BITMAP_SIZE(i) ( ((i)+7) / 8 )
 #define GET_BIT(bmp, i) ( bmp[(i)/8] & 1<<((i)%8) )
 #define SET_BIT(bmp, i) bmp[(i)/8] |= 1<<((i)%8)
 #define CLR_BIT(bmp, i) bmp[(i)/8] &= ~(1<<((i)%8))
 
 struct game_params {
-	int w, h;
+	int w, h, diff;
 	char removeends;
 };
+
+#define DIFFLIST(A)                             \
+    A(EASY,Easy, e)                             \
+    A(NORMAL,Normal, n)                         \
+
+#define ENUM(upper,title,lower) DIFF_ ## upper,
+#define TITLE(upper,title,lower) #title,
+#define ENCODE(upper,title,lower) #lower
+#define CONFIG(upper,title,lower) ":" #title
+enum { DIFFLIST(ENUM) DIFFCOUNT };
+static char const *const ascent_diffnames[] = { DIFFLIST(TITLE) };
+
+static char const ascent_diffchars[] = DIFFLIST(ENCODE);
 
 struct game_state {
 	int w, h;
@@ -62,6 +96,7 @@ static game_params *default_params(void)
 
 	ret->w = 7;
 	ret->h = 6;
+	ret->diff = DIFF_EASY;
 	ret->removeends = FALSE;
 	
 	return ret;
@@ -110,6 +145,18 @@ static void decode_params(game_params *params, char const *string)
 		params->removeends = TRUE;
 		string++;
 	}
+	if (*string == 'd') {
+		int i;
+		string++;
+		params->diff = DIFFCOUNT + 1;   /* ...which is invalid */
+		if (*string) {
+			for (i = 0; i < DIFFCOUNT; i++) {
+				if (*string == ascent_diffchars[i])
+					params->diff = i;
+			}
+			string++;
+		}
+	}
 }
 
 static char *encode_params(const game_params *params, int full)
@@ -119,6 +166,8 @@ static char *encode_params(const game_params *params, int full)
 	p += sprintf(p, "%dx%d", params->w, params->h);
 	if(full && params->removeends)
 		*p++ = 'E';
+	if (full)
+		p += sprintf(p, "d%c", ascent_diffchars[params->diff]);
 
 	*p++ = '\0';
 	
@@ -151,8 +200,8 @@ static config_item *game_configure(const game_params *params)
 	
 	ret[3].name = "Difficulty";
 	ret[3].type = C_CHOICES;
-	ret[3].sval = ":Easy";
-	ret[3].ival = 0;
+	ret[3].sval = DIFFLIST(CONFIG);
+	ret[3].ival = params->diff;
 	
 	ret[4].name = NULL;
 	ret[4].type = C_END;
@@ -169,6 +218,7 @@ static game_params *custom_params(const config_item *cfg)
 	ret->w = atoi(cfg[0].sval);
 	ret->h = atoi(cfg[1].sval);
 	ret->removeends = !cfg[2].ival;
+	ret->diff = cfg[3].ival;
 	
 	return ret;
 }
@@ -299,8 +349,7 @@ static int backbite_right(int step, int n, int *pathx, int *pathy, int w, int h)
 }
 
 static int backbite(int n, int *pathx, int *pathy, int w, int h, random_state *rs) {
-	if (random_upto(rs, 2)) return backbite_left(random_upto(rs, 8), n, pathx, pathy, w, h);
-	else                    return backbite_right(random_upto(rs, 8), n, pathx, pathy, w, h);
+	return (random_upto(rs, 2) ? backbite_left : backbite_right)(random_upto(rs, 8), n, pathx, pathy, w, h);
 }
 
 static number *generate_hamiltonian_path(int w, int h, random_state *rs) {
@@ -344,19 +393,23 @@ struct solver_scratch {
 	int w, h;
 	cell *positions;
 	number *grid;
+	number end;
 	bitmap *marks; /* GET_BIT i*s+n */
 	int *path;
+	char found_endpoints;
 };
 
-static struct solver_scratch *new_scratch(int w, int h)
+static struct solver_scratch *new_scratch(int w, int h, number last)
 {
 	int i, n = w*h;
 	struct solver_scratch *ret = snew(struct solver_scratch);
 	ret->w = w;
 	ret->h = h;
+	ret->end = last;
 	ret->positions = snewn(n, cell);
 	ret->grid = snewn(n, number);
 	ret->path = snewn(n, int);
+	ret->found_endpoints = FALSE;
 	for(i = 0; i < n; i++)
 	{
 		ret->positions[i] = -1;
@@ -381,7 +434,7 @@ static void free_scratch(struct solver_scratch *scratch)
 
 static int solver_place(struct solver_scratch *scratch, cell pos, number num)
 {
-	int s = scratch->w*scratch->h;
+	int w = scratch->w, s = w*scratch->h;
 	cell i; number n;
 	scratch->grid[pos] = num;
 	scratch->positions[num] = (scratch->positions[num] == -1 ? pos : -2);
@@ -392,22 +445,24 @@ static int solver_place(struct solver_scratch *scratch, cell pos, number num)
 		CLR_BIT(scratch->marks, i*s+num);
 	}
 	
-	for(n = 0; n < s; n++)
+	for(n = 0; n < scratch->end; n++)
 	{
 		if(n == num) continue;
 		CLR_BIT(scratch->marks, pos*s+n);
 	}
 	
+	solver_printf("Placing %d at %d,%d\n", num+1, pos%w, pos/w);
+	
 	return 1;
 }
 
-static int solver_single(struct solver_scratch *scratch)
+static int solver_single_position(struct solver_scratch *scratch)
 {
 	int s = scratch->w*scratch->h;
 	cell i, found; number n;
 	int ret = 0;
 	
-	for(n = 0; n < s; n++)
+	for(n = 0; n <= scratch->end; n++)
 	{
 		if(scratch->positions[n] != -1) continue;
 		found = -1;
@@ -422,7 +477,39 @@ static int solver_single(struct solver_scratch *scratch)
 		}
 		assert(found != -1);
 		if(found >= 0)
+		{
+			solver_printf("Single possibility for number %d\n", n+1);
 			ret += solver_place(scratch, found, n);
+		}
+	}
+	
+	return ret;
+}
+
+static int solver_single_number(struct solver_scratch *scratch)
+{
+	int w = scratch->w, s = w*scratch->h;
+	cell i; number n, found;
+	int ret = 0;
+	
+	for(i = 0; i < s; i++)
+	{
+		if(scratch->grid[i] != -1) continue;
+		found = -1;
+		for(n = 0; n <= scratch->end; n++)
+		{
+			if(!GET_BIT(scratch->marks, i*s+n)) continue;
+			if(found == -1)
+				found = n;
+			else
+				found = -2;
+		}
+		assert(found != -1);
+		if(found >= 0)
+		{
+			solver_printf("Single possibility for cell %d,%d\n", i%w,i/w);
+			ret += solver_place(scratch, i, found);
+		}
 	}
 	
 	return ret;
@@ -434,6 +521,8 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num)
 	int ret = 0;
 	cell i;
 	
+	assert(num >= 0 && num < s);
+	
 	for(i = 0; i < s; i++)
 	{
 		if(!GET_BIT(scratch->marks, i*s+num)) continue;
@@ -442,30 +531,248 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num)
 		ret++;
 	}
 	
+	if(ret)
+	{
+		solver_printf("Removed %d mark%s of %d for being too far away from %d,%d (%d)\n", 
+			ret, ret != 1 ? "s" : "", num+1, near%w, near/w, scratch->grid[near]+1);
+	}
+	
 	return ret;
 }
 
 static int solver_proximity(struct solver_scratch *scratch)
 {
-	int w = scratch->w, h = scratch->h, s=w*h;
+	int end = scratch->end;
 	cell i; number n;
 	int ret = 0;
 	
-	for(n = 0; n < s; n++)
+	for(n = 0; n <= end; n++)
 	{
 		i = scratch->positions[n];
 		if(i < 0) continue;
 		
 		if(n > 0)
 			ret += solver_near(scratch, i, n-1);
-		if(n < s-1)
+		if(n < end-1)
 			ret += solver_near(scratch, i, n+1);
 	}
 	
 	return ret;
 }
 
-static void ascent_solve(const number *puzzle, struct solver_scratch *scratch)
+static int ascent_find_direction(cell i1, cell i2, int w)
+{
+	int dir;
+	for (dir = 0; dir < 8; dir++)
+	{
+		if (i2 - i1 == (dir_y[dir] * w + dir_x[dir]))
+			return dir;
+	}
+	return -1;
+}
+
+#ifdef STANDALONE_SOLVER
+static void solver_debug_path(struct solver_scratch *scratch)
+{
+	if(!solver_verbose) return;
+	
+	int w = scratch->w, h = scratch->h;
+	int x, y, path;
+	char c;
+	
+	for(y = 0; y < h; y++)
+	{
+		for(x = 0; x < w; x++)
+		{
+			path = scratch->path[y*w+x];
+			printf("%c%c%c", path & 1 ? '\\' : ' ', path & 2 ? '|' : ' ', path & 4 ? '/' : ' ');
+		}
+		printf("\n");
+		for(x = 0; x < w; x++)
+		{
+			path = scratch->path[y*w+x];
+			c = path & FLAG_ENDPOINT && path & FLAG_COMPLETE ? '#' : 
+				path & FLAG_ENDPOINT ? 'O' : 
+				path & FLAG_COMPLETE ? 'X' : '*';
+			printf("%c%c%c", path & 8 ? '-' : ' ', c, path & 16 ? '-' : ' ');
+		}
+		printf("\n");
+		for(x = 0; x < w; x++)
+		{
+			path = scratch->path[y*w+x];
+			printf("%c%c%c", path & 32 ? '/' : ' ', path & 64 ? '|' : ' ', path & 128 ? '\\' : ' ');
+		}
+		printf("\n");
+	}
+}
+#else
+#define solver_debug_path(...)
+#endif
+
+static void solver_initialize_path(struct solver_scratch *scratch)
+{
+	int w = scratch->w, h = scratch->h;
+	int x, y;
+
+	scratch->path[0] = 0xD0; /* top-left */
+	scratch->path[w-1] = 0x68; /* top-right */
+	scratch->path[(w*h) - w] = 0x16; /* bottom-left */
+	scratch->path[(w*h) - 1] = 0x0B; /* bottom-right */
+	
+	for (x = 1; x < w - 1; x++)
+	{
+		scratch->path[x] = 0xF8; /* top */
+		scratch->path[w*h - (x + 1)] = 0x1F; /* bottom */
+	}
+	for (y = 1; y < h - 1; y++)
+	{
+		scratch->path[y*w] = 0xD6; /* left */
+		scratch->path[((y + 1)*w) - 1] = 0x6B; /* right */
+	}
+	for (y = 1; y < h - 1; y++)
+	for (x = 1; x < w - 1; x++)
+	{
+		scratch->path[y*w + x] = 0xFF; /* center */
+	}
+
+	for (y = 0; y < h; y++)
+	for (x = 0; x < w; x++)
+	{
+		scratch->path[y*w + x] |= FLAG_ENDPOINT;
+	}
+	
+	solver_debug_path(scratch);
+}
+
+static int solver_update_path(struct solver_scratch *scratch)
+{
+	int w = scratch->w, h = scratch->h, s = w*h, end = scratch->end;
+	cell i, ib, ic; number n;
+	int dir;
+	int ret = 0;
+
+	ib = scratch->positions[0];
+	ic = scratch->positions[end];
+	if (!scratch->found_endpoints && ib != -1 && ic != -1)
+	{
+		scratch->found_endpoints = TRUE;
+		ret++;
+		for (i = 0; i < s; i++)
+		{
+			if (i == ib || i == ic) continue;
+			scratch->path[i] &= ~FLAG_ENDPOINT;
+		}
+	}
+
+	i = scratch->positions[1];
+	if (i != -1 && ib != -1 && !(scratch->path[ib] & FLAG_COMPLETE))
+	{
+		scratch->path[ib] = (1 << ascent_find_direction(ib, i, w)) | FLAG_ENDPOINT;
+	}
+	i = scratch->positions[end - 1];
+	if (i != -1 && ic != -1 && !(scratch->path[ic] & FLAG_COMPLETE))
+	{
+		scratch->path[ic] = (1 << ascent_find_direction(ic, i, w)) | FLAG_ENDPOINT;
+	}
+
+	for (n = 1; n <= end-1; n++)
+	{
+		i = scratch->positions[n];
+		if (i == -1 || scratch->path[i] & FLAG_COMPLETE) continue;
+
+		ib = scratch->positions[n-1];
+		ic = scratch->positions[n+1];
+		if (ib == -1 || ic == -1) continue;
+
+		scratch->path[i] = 1 << ascent_find_direction(i, ib, w);
+		scratch->path[i] |= 1 << ascent_find_direction(i, ic, w);
+	}
+
+	for (i = 0; i < s; i++)
+	{
+		if (scratch->path[i] & FLAG_COMPLETE) continue;
+		int count = 0;
+		for (dir = 0; dir <= 8; dir++)
+		{
+			if (scratch->path[i] & (1 << dir)) count++;
+		}
+		if (count == 2)
+		{
+			int x, y, dir;
+			scratch->path[i] |= FLAG_COMPLETE;
+			solver_printf("Completed path segment at %d,%d\n", i%w, i/w);
+			ret++;
+			for (dir = 0; dir < 8; dir++)
+			{
+				if (scratch->path[i] & (1 << dir)) continue;
+
+				x = (i%w) + dir_x[dir];
+				y = (i / w) + dir_y[dir];
+				if(x < 0 || y < 0 || x >= w || y >= h) continue;
+				scratch->path[y*w + x] &= ~(1 << (7 - dir));
+			}
+		}
+	}
+	
+	if(ret)
+	{
+		solver_debug_path(scratch);
+	}
+	return ret;
+}
+
+static int solver_adjacent_path(struct solver_scratch *scratch)
+{
+	int w = scratch->w, h = scratch->h, s = w*h;
+	cell i, i2;
+	number n, n1, n2;
+	int dir, ret = 0;
+
+	for (i = 0; i < s; i++)
+	{
+		if (scratch->path[i] & FLAG_COMPLETE && scratch->grid[i] == -1)
+		{
+			solver_printf("Found an unfilled path segment at %d,%d\n", i%w, i/w);
+			n1 = n2 = -1;
+			for(dir = 0; dir < 8; dir++)
+			{
+				if(!(scratch->path[i] & (1<<dir))) continue;
+				i2 = dir_y[dir] * w + dir_x[dir] + i;
+				if(n1 < 0)
+					n1 = scratch->grid[i2];
+				else
+					n2 = scratch->grid[i2];
+			}
+			if(n1 < 0)
+			{
+				solver_printf("No known connections\n");
+				continue;
+			}
+			else if(n2 >= 0)
+			{
+				solver_printf("Connected to %d and %d\n", n1+1, n2+1);
+				// TODO place the actual number
+				continue;
+			}
+			
+			solver_printf("Connected to %d\n", n1+1);
+			
+			for(n = 0; n <= scratch->end; n++)
+			{
+				if(abs(n-n1) == 1) continue;
+				
+				if(!GET_BIT(scratch->marks, i*s+n)) continue;
+				CLR_BIT(scratch->marks, i*s+n);
+				solver_printf("Clear mark for %d\n", n+1);
+				ret++;
+			}
+		}
+	}
+
+	return ret;
+}
+
+static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *scratch)
 {
 	int w = scratch->w, h = scratch->h, s=w*h;
 	cell i; number n;
@@ -489,14 +796,27 @@ static void ascent_solve(const number *puzzle, struct solver_scratch *scratch)
 		}
 	}
 	
+	solver_initialize_path(scratch);
+
 	while(TRUE)
 	{
-		if(solver_single(scratch))
+		if(solver_single_position(scratch))
 			continue;
 		
 		if(solver_proximity(scratch))
 			continue;
 		
+		if (diff < DIFF_NORMAL) break;
+
+		if(solver_single_number(scratch))
+			continue;
+		
+		if (solver_update_path(scratch))
+			continue;
+
+		if (solver_adjacent_path(scratch))
+			continue;
+
 		break;
 	}
 }
@@ -507,7 +827,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	int w = params->w;
 	int h = params->h;
 	cell i, j;
-	struct solver_scratch *scratch = new_scratch(w, h);
+	struct solver_scratch *scratch = new_scratch(w, h, (w*h)-1);
 	number temp;
 	cell *spaces = snewn(w*h, cell);
 	number *grid;
@@ -525,7 +845,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		if(!params->removeends && (temp == 0 || temp == w*h-1)) continue;
 		grid[i] = -1;
 		
-		ascent_solve(grid, scratch);
+		ascent_solve(grid, params->diff, scratch);
 		
 		if(!check_completion(scratch->grid, w, h))
 			grid[i] = temp;
@@ -639,9 +959,9 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 						const char *aux, char **error)
 {
 	int i, w = state->w, h = state->h;
-	struct solver_scratch *scratch = new_scratch(w, h);
+	struct solver_scratch *scratch = new_scratch(w, h, state->last);
 	
-	ascent_solve(state->grid, scratch);
+	ascent_solve(state->grid, DIFFCOUNT, scratch);
 
 	char *ret = snewn(w*h*4, char);
 	char *p = ret;
@@ -667,7 +987,7 @@ static int game_can_format_as_text_now(const game_params *params)
 
 static char *game_text_format(const game_state *state)
 {
-	return NULL;
+	return dupstr("TODO!\n");
 }
 
 struct game_ui
@@ -1239,3 +1559,106 @@ const struct game thegame = {
 	FALSE, game_timing_state,
 	0,				       /* flags */
 };
+
+/* ***************** *
+ * Standalone solver *
+ * ***************** */
+
+#ifdef STANDALONE_SOLVER
+#include <time.h>
+
+/* Most of the standalone solver code was copied from unequal.c and singles.c */
+
+const char *quis;
+
+static void usage_exit(const char *msg)
+{
+    if (msg)
+        fprintf(stderr, "%s: %s\n", quis, msg);
+    fprintf(stderr,
+            "Usage: %s [-v] [--seed SEED] <params> | [game_id [game_id ...]]\n",
+            quis);
+    exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+    random_state *rs;
+    time_t seed = time(NULL);
+
+    game_params *params = NULL;
+
+    char *id = NULL, *desc = NULL, *err;
+
+    quis = argv[0];
+
+    while (--argc > 0) {
+        char *p = *++argv;
+        if (!strcmp(p, "--seed")) {
+            if (argc == 0)
+                usage_exit("--seed needs an argument");
+            seed = (time_t) atoi(*++argv);
+            argc--;
+        } else if (!strcmp(p, "-v"))
+            solver_verbose = TRUE;
+        else if (*p == '-')
+            usage_exit("unrecognised option");
+        else
+            id = p;
+    }
+
+    if (id) {
+        desc = strchr(id, ':');
+        if (desc)
+            *desc++ = '\0';
+
+        params = default_params();
+        decode_params(params, id);
+        err = validate_params(params, TRUE);
+        if (err) {
+            fprintf(stderr, "Parameters are invalid\n");
+            fprintf(stderr, "%s: %s", argv[0], err);
+            exit(1);
+        }
+    }
+
+    if (!desc) {
+        char *desc_gen, *aux;
+        rs = random_new((void *) &seed, sizeof(time_t));
+        if (!params)
+            params = default_params();
+        printf("Generating puzzle with parameters %s\n",
+               encode_params(params, TRUE));
+        desc_gen = new_game_desc(params, rs, &aux, FALSE);
+
+        if (!solver_verbose) {
+            char *fmt = game_text_format(new_game(NULL, params, desc_gen));
+            fputs(fmt, stdout);
+            sfree(fmt);
+        }
+
+        printf("Game ID: %s\n", desc_gen);
+    } else {
+		game_state *input;
+        struct solver_scratch *scratch;
+		int w = params->w, h = params->h;
+		
+        err = validate_desc(params, desc);
+        if (err) {
+            fprintf(stderr, "Description is invalid\n");
+            fprintf(stderr, "%s", err);
+            exit(1);
+        }
+		
+		input = new_game(NULL, params, desc);
+		scratch = new_scratch(w, h, input->last);
+		
+		ascent_solve(input->grid, DIFFCOUNT, scratch);
+		
+		free_scratch(scratch);
+		free_game(input);
+    }
+
+    return 0;
+}
+#endif

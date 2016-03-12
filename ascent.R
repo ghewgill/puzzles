@@ -2,6 +2,8 @@
 
 ascent : [X] GTK COMMON ascent ascent-icon|no-icon
 ascent : [G] WINDOWS COMMON ascent ascent.res|noicon.res
+ascentsolver : [U] ascent[STANDALONE_SOLVER] STANDALONE
+ascentsolver : [C] ascent[STANDALONE_SOLVER] STANDALONE
 
 ALL += ascent[COMBINED]
 
