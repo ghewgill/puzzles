@@ -24,12 +24,12 @@ int solver_verbose = FALSE;
 void solver_printf(char *fmt, ...)
 {
 	if(!solver_verbose) return;
-    char buf[1024];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    printf("%s", buf);
+	char buf[1024];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	printf("%s", buf);
 }
 #else
 #define solver_printf(...)
@@ -67,8 +67,8 @@ struct game_params {
 };
 
 #define DIFFLIST(A)                             \
-    A(EASY,Easy, e)                             \
-    A(NORMAL,Normal, n)                         \
+	A(EASY,Easy, e)                             \
+	A(NORMAL,Normal, n)                         \
 
 #define ENUM(upper,title,lower) DIFF_ ## upper,
 #define TITLE(upper,title,lower) #title,
@@ -127,7 +127,7 @@ static void free_params(game_params *params)
 static game_params *dup_params(const game_params *params)
 {
 	game_params *ret = snew(game_params);
-	*ret = *params;		       /* structure copy */
+	*ret = *params;               /* structure copy */
 	return ret;
 }
 
@@ -321,7 +321,7 @@ static int backbite_left(int step, int n, int *pathx, int *pathy, int w, int h) 
 		reverse_path(0, n-1, pathx, pathy);
 		pathx[n] = neighx;
 		pathy[n] = neighy;
-		n++;        
+		n++;
 	}
 	
 	return n;
@@ -342,7 +342,7 @@ static int backbite_right(int step, int n, int *pathx, int *pathy, int w, int h)
 	else {
 		pathx[n] = neighx;
 		pathy[n] = neighy;
-		n++;        
+		n++;
 	}
 	
 	return n;
@@ -987,7 +987,27 @@ static int game_can_format_as_text_now(const game_params *params)
 
 static char *game_text_format(const game_state *state)
 {
-	return dupstr("TODO!\n");
+	int w = state->w, h = state->h;
+	int x, y;
+	int space = w*h >= 100 ? 3 : 2;
+	
+	char *ret = snewn(w*h*(space+1) + 1, char);
+	char *p = ret;
+	number n;
+	
+	for(y = 0; y < h; y++)
+	for(x = 0; x < w; x++)
+	{
+		n = state->grid[y*w+x];
+		if(n >= 0)
+			p += sprintf(p, "%*d", space, n+1);
+		else
+			p += sprintf(p, "%*s", space, ".");
+		*p++ = x < w-1 ? ' ' : '\n';
+	}
+	*p++ = '\0';
+	
+	return ret;
 }
 
 struct game_ui
@@ -1127,7 +1147,7 @@ static void ui_backtrack(game_ui *ui, number last)
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
-							   const game_state *newstate)
+                               const game_state *newstate)
 {
 	update_positions(ui->positions, newstate->grid, newstate->w*newstate->h);
 	
@@ -1147,6 +1167,12 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 
 struct game_drawstate {
 	int tilesize;
+	int *colours;
+	char redraw;
+	cell *oldpositions;
+	number *oldgrid;
+	cell oldheld;
+	number oldtarget;
 };
 
 #define FROMCOORD(x) ( ((x)-(tilesize/2)) / tilesize )
@@ -1361,14 +1387,28 @@ static float *game_colours(frontend *fe, int *ncolours)
 static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 {
 	struct game_drawstate *ds = snew(struct game_drawstate);
-
+	int s = state->w * state->h;
+	
 	ds->tilesize = 0;
+	ds->oldheld = 0;
+	ds->oldtarget = 0;
+	ds->redraw = TRUE;
+	ds->colours = snewn(s, int);
+	ds->oldgrid = snewn(s, number);
+	ds->oldpositions = snewn(s, cell);
 
+	memset(ds->colours, ~0, s*sizeof(int));
+	memset(ds->oldgrid, ~0, s*sizeof(number));
+	memset(ds->oldpositions, ~0, s*sizeof(cell));
+	
 	return ds;
 }
 
 static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 {
+	sfree(ds->colours);
+	sfree(ds->oldgrid);
+	sfree(ds->oldpositions);
 	sfree(ds);
 }
 
@@ -1384,57 +1424,130 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int w = state->w;
 	int h = state->h;
 	int tilesize = ds->tilesize;
-	int i, tx, ty, tx2, ty2;
+	int tx, ty, tx1, ty1, tx2, ty2;
+	cell i, i2;
 	number n;
+	char error;
 	char buf[8];
 	const cell *positions = ui->positions;
-	int flash = -2;
+	int flash = -2, colour;
 	int margin = tilesize*ERROR_MARGIN;
 	
 	if(flashtime > 0)
 		flash = (int)(flashtime/FLASH_FRAME);
 	
-	draw_rect(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize, COL_MIDLIGHT);
-	draw_rect(dr, (tilesize/2), (tilesize/2)-1, w*tilesize+1, h*tilesize+1, COL_BORDER);
-	draw_update(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize);
+	if(ds->redraw)
+	{
+		draw_rect(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize, COL_MIDLIGHT);
+		draw_rect(dr, (tilesize/2), (tilesize/2)-1, w*tilesize+1, h*tilesize+1, COL_BORDER);
+		draw_update(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize);
+	}
+	else
+	{
+		char dirty;
+		
+		/* Invalidate squares */
+		for(i = 0; i < w*h; i++)
+		{
+			dirty = FALSE;
+			n = state->grid[i];
+			if(n == -1 && ui->held != -1 && IS_NEAR(i, ui->held, w) && positions[ui->select] < 0)
+				n = ui->select;
+			
+			if(ds->oldgrid[i] != n)
+				dirty = TRUE;
+			
+			if(ui->held != ds->oldheld || ui->target != ds->oldtarget)
+			{
+				if(IS_NEAR(i, ui->held, w))
+					dirty = TRUE;
+				else if(IS_NEAR(i, ds->oldheld, w))
+					dirty = TRUE;
+			}
+			
+			if(dirty)
+				ds->colours[i] = -1;
+		}
+		
+		/* Invalidate numbers */
+		for(n = 0; n <= state->last; n++)
+		{
+			dirty = FALSE;
+			
+			if(n > 0 && ds->oldpositions[n-1] != positions[n-1])
+				dirty = TRUE;
+			if(n < state->last && ds->oldpositions[n+1] != positions[n+1])
+				dirty = TRUE;
+			if(ds->oldpositions[n] != positions[n])
+				dirty = TRUE;
+			
+			if(dirty)
+			{
+				if(ds->oldpositions[n] >= 0)
+					ds->colours[ds->oldpositions[n]] = -1;
+				if(positions[n] >= 0)
+					ds->colours[positions[n]] = -1;
+			}
+		}
+		
+		memcpy(ds->oldgrid, state->grid, w*h*sizeof(number));
+		memcpy(ds->oldpositions, ui->positions, w*h*sizeof(cell));
+	}
 	
-	/* Draw square backgrounds */
+	ds->redraw = FALSE;
+	ds->oldheld = ui->held;
+	ds->oldtarget = ui->target;
+	
+	/* Draw squares */
 	for(i = 0; i < w*h; i++)
 	{
 		tx = TOCOORD(i%w), ty = TOCOORD(i/w);
+		tx1 = tx + (tilesize/2), ty1 = ty + (tilesize/2);
+		n = state->grid[i];
+		error = FALSE;
 		
-		draw_rect(dr, tx, ty, tilesize, tilesize,
-			flash >= state->grid[i] && flash <= state->grid[i] + FLASH_SIZE ? COL_LOWLIGHT :
+		colour = flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
 			ui->held == i ? COL_LOWLIGHT : 
-			positions[ui->target] == i ? COL_HIGHLIGHT : COL_MIDLIGHT);
+			positions[ui->target] == i ? COL_HIGHLIGHT : COL_MIDLIGHT;
 		
-		if(i == positions[0] || i == positions[state->last])
+		if(ds->colours[i] == colour) continue;
+		
+		/* Draw tile background */
+		clip(dr, tx, ty, tilesize, tilesize);
+		draw_update(dr, tx, ty, tilesize, tilesize);
+		draw_rect(dr, tx, ty, tilesize, tilesize, colour);
+		ds->colours[i] = colour;
+		
+		/* Draw a circle on the beginning and the end of the path */
+		if(n == 0 || n == state->last)
 		{
 			draw_circle(dr, tx+(tilesize/2), ty+(tilesize/2),
 				tilesize/3, COL_HIGHLIGHT, COL_HIGHLIGHT);
 		}
-	}
-	
-	/* Draw paths */
-	for(i = 0; i < state->last; i++)
-	{
-		if(positions[i] < 0 || positions[i+1] < 0) continue;
 		
-		tx = (positions[i]%w)*tilesize + (tilesize);
-		ty = (positions[i]/w)*tilesize + (tilesize);
-		tx2 = (positions[i+1]%w)*tilesize + (tilesize);
-		ty2 = (positions[i+1]/w)*tilesize + (tilesize);
+		/* Draw path lines */
+		if(n > 0 && positions[n-1] >= 0)
+		{
+			i2 = positions[n-1];
+			tx2 = (i2%w)*tilesize + (tilesize);
+			ty2 = (i2/w)*tilesize + (tilesize);
+			if(IS_NEAR(i, i2, w))
+				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
+			else
+				error = TRUE;
+		}
+		if(n >= 0 && n < state->last && positions[n+1] >= 0)
+		{
+			i2 = positions[n+1];
+			tx2 = (i2%w)*tilesize + (tilesize);
+			ty2 = (i2/w)*tilesize + (tilesize);
+			if(IS_NEAR(i, i2, w))
+				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
+			else
+				error = TRUE;
+		}
 		
-		if(IS_NEAR(positions[i], positions[i+1], w))
-			draw_thick_line(dr, 5.0, tx, ty, tx2, ty2, COL_HIGHLIGHT);
-	}
-	
-	/* Draw square borders */
-	for(i = 0; i < w*h; i++)
-	{
-		tx = TOCOORD(i%w), ty = TOCOORD(i/w);
-		
-		/* Define a square */
+		/* Draw square border */
 		int sqc[8];
 		sqc[0] = tx;
 		sqc[1] = ty - 1;
@@ -1445,54 +1558,40 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		sqc[6] = tx;
 		sqc[7] = ty + tilesize - 1;
 		draw_polygon(dr, sqc, 4, -1, COL_BORDER);
-	}
-	
-	/* Draw numbers and path errors */
-	for(i = 0; i < w*h; i++)
-	{
-		n = -1;
-		
-		tx = TOCOORD(i%w), ty = TOCOORD(i/w);
-		tx2 = tx+(tilesize/2), ty2 = ty+(tilesize/2);
-		
-		n = state->grid[i];
+
 		if(n == -1 && ui->held != -1 && IS_NEAR(i, ui->held, w) && positions[ui->select] < 0)
 			n = ui->select;
 		
-		if(n < 0) continue;
-		sprintf(buf, "%d", n+1);
-		
-		draw_text(dr, tx2, ty2,
-				FONT_VARIABLE, tilesize/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
-				positions[n] == -2 ? COL_ERROR :
-				GET_BIT(state->immutable, i) ? COL_IMMUTABLE : 
-				state->grid[i] == -1 ? COL_LOWLIGHT : COL_BORDER, buf);
-		
-		if(state->grid[i] >= 0 && (
-			(n < state->last && positions[n+1] >= 0 && !IS_NEAR(i, positions[n+1], w)) || 
-			(n > 0 && positions[n-1] >= 0 && !IS_NEAR(i, positions[n-1], w)) ) )
+		/* Draw the number */
+		if(n >= 0)
 		{
-			draw_thick_line(dr, 2, tx+margin, ty+margin,
-				(tx+tilesize)-margin, (ty+tilesize)-margin, COL_ERROR);
+			sprintf(buf, "%d", n+1);
+			
+			draw_text(dr, tx1, ty1,
+					FONT_VARIABLE, tilesize/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
+					positions[n] == -2 ? COL_ERROR :
+					GET_BIT(state->immutable, i) ? COL_IMMUTABLE : 
+					state->grid[i] == -1 ? COL_LOWLIGHT : COL_BORDER, buf);
+			
+			if(error)
+			{
+				draw_thick_line(dr, 2, tx+margin, ty+margin,
+					(tx+tilesize)-margin, (ty+tilesize)-margin, COL_ERROR);
+			}
 		}
 		
-		char next = n <= 0 || positions[n-1] >= 0 ?1:0;
-		char prev = n >= state->last || positions[n+1] >= 0 ?1:0;
-		if(state->grid[i] >= 0 && next^prev)
-		{
-			// TODO draw marker for dead-end lines
-		}
+		unclip(dr);
 	}
 }
 
 static float game_anim_length(const game_state *oldstate,
-							  const game_state *newstate, int dir, game_ui *ui)
+                              const game_state *newstate, int dir, game_ui *ui)
 {
 	return 0.0F;
 }
 
 static float game_flash_length(const game_state *oldstate,
-							   const game_state *newstate, int dir, game_ui *ui)
+                               const game_state *newstate, int dir, game_ui *ui)
 {
 	if (!oldstate->completed && newstate->completed &&
 			!oldstate->cheated && !newstate->cheated)
@@ -1538,7 +1637,7 @@ const struct game thegame = {
 	dup_game,
 	free_game,
 	TRUE, solve_game,
-	FALSE, game_can_format_as_text_now, game_text_format,
+	TRUE, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -1573,82 +1672,82 @@ const char *quis;
 
 static void usage_exit(const char *msg)
 {
-    if (msg)
-        fprintf(stderr, "%s: %s\n", quis, msg);
-    fprintf(stderr,
-            "Usage: %s [-v] [--seed SEED] <params> | [game_id [game_id ...]]\n",
-            quis);
-    exit(1);
+	if (msg)
+		fprintf(stderr, "%s: %s\n", quis, msg);
+	fprintf(stderr,
+			"Usage: %s [-v] [--seed SEED] <params> | [game_id [game_id ...]]\n",
+			quis);
+	exit(1);
 }
 
 int main(int argc, char *argv[])
 {
-    random_state *rs;
-    time_t seed = time(NULL);
+	random_state *rs;
+	time_t seed = time(NULL);
 
-    game_params *params = NULL;
+	game_params *params = NULL;
 
-    char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL, *err;
 
-    quis = argv[0];
+	quis = argv[0];
 
-    while (--argc > 0) {
-        char *p = *++argv;
-        if (!strcmp(p, "--seed")) {
-            if (argc == 0)
-                usage_exit("--seed needs an argument");
-            seed = (time_t) atoi(*++argv);
-            argc--;
-        } else if (!strcmp(p, "-v"))
-            solver_verbose = TRUE;
-        else if (*p == '-')
-            usage_exit("unrecognised option");
-        else
-            id = p;
-    }
+	while (--argc > 0) {
+		char *p = *++argv;
+		if (!strcmp(p, "--seed")) {
+			if (argc == 0)
+				usage_exit("--seed needs an argument");
+			seed = (time_t) atoi(*++argv);
+			argc--;
+		} else if (!strcmp(p, "-v"))
+			solver_verbose = TRUE;
+		else if (*p == '-')
+			usage_exit("unrecognised option");
+		else
+			id = p;
+	}
 
-    if (id) {
-        desc = strchr(id, ':');
-        if (desc)
-            *desc++ = '\0';
+	if (id) {
+		desc = strchr(id, ':');
+		if (desc)
+			*desc++ = '\0';
 
-        params = default_params();
-        decode_params(params, id);
-        err = validate_params(params, TRUE);
-        if (err) {
-            fprintf(stderr, "Parameters are invalid\n");
-            fprintf(stderr, "%s: %s", argv[0], err);
-            exit(1);
-        }
-    }
+		params = default_params();
+		decode_params(params, id);
+		err = validate_params(params, TRUE);
+		if (err) {
+			fprintf(stderr, "Parameters are invalid\n");
+			fprintf(stderr, "%s: %s", argv[0], err);
+			exit(1);
+		}
+	}
 
-    if (!desc) {
-        char *desc_gen, *aux;
-        rs = random_new((void *) &seed, sizeof(time_t));
-        if (!params)
-            params = default_params();
-        printf("Generating puzzle with parameters %s\n",
-               encode_params(params, TRUE));
-        desc_gen = new_game_desc(params, rs, &aux, FALSE);
+	if (!desc) {
+		char *desc_gen, *aux;
+		rs = random_new((void *) &seed, sizeof(time_t));
+		if (!params)
+			params = default_params();
+		printf("Generating puzzle with parameters %s\n",
+			encode_params(params, TRUE));
+		desc_gen = new_game_desc(params, rs, &aux, FALSE);
 
-        if (!solver_verbose) {
-            char *fmt = game_text_format(new_game(NULL, params, desc_gen));
-            fputs(fmt, stdout);
-            sfree(fmt);
-        }
+		if (!solver_verbose) {
+			char *fmt = game_text_format(new_game(NULL, params, desc_gen));
+			fputs(fmt, stdout);
+			sfree(fmt);
+		}
 
-        printf("Game ID: %s\n", desc_gen);
-    } else {
+		printf("Game ID: %s\n", desc_gen);
+	} else {
 		game_state *input;
-        struct solver_scratch *scratch;
+		struct solver_scratch *scratch;
 		int w = params->w, h = params->h;
 		
-        err = validate_desc(params, desc);
-        if (err) {
-            fprintf(stderr, "Description is invalid\n");
-            fprintf(stderr, "%s", err);
-            exit(1);
-        }
+		err = validate_desc(params, desc);
+		if (err) {
+			fprintf(stderr, "Description is invalid\n");
+			fprintf(stderr, "%s", err);
+			exit(1);
+		}
 		
 		input = new_game(NULL, params, desc);
 		scratch = new_scratch(w, h, input->last);
@@ -1657,8 +1756,8 @@ int main(int argc, char *argv[])
 		
 		free_scratch(scratch);
 		free_game(input);
-    }
+	}
 
-    return 0;
+	return 0;
 }
 #endif
