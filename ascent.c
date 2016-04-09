@@ -62,7 +62,13 @@ static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 #define CLR_BIT(bmp, i) bmp[(i)/8] &= ~(1<<((i)%8))
 
 struct game_params {
-	int w, h, diff;
+#ifndef PORTRAIT_SCREEN
+	int w, h;
+#else
+	int h, w;
+#endif
+
+	int diff;
 	char removeends;
 };
 
@@ -79,6 +85,19 @@ static char const *const ascent_diffnames[] = { DIFFLIST(TITLE) };
 
 static char const ascent_diffchars[] = DIFFLIST(ENCODE);
 
+const static struct game_params ascent_presets[] = {
+	{ 7,  6, DIFF_EASY, FALSE },
+	{ 7,  6, DIFF_NORMAL, FALSE },
+	{ 10, 8, DIFF_EASY, FALSE },
+	{ 10, 8, DIFF_NORMAL, FALSE },
+#ifndef SMALL_SCREEN
+	{ 14, 11, DIFF_EASY, FALSE },
+	{ 14, 11, DIFF_NORMAL, FALSE },
+#endif
+};
+
+#define DEFAULT_PRESET 0
+
 struct game_state {
 	int w, h;
 	
@@ -94,28 +113,26 @@ static game_params *default_params(void)
 {
 	game_params *ret = snew(game_params);
 
-	ret->w = 7;
-	ret->h = 6;
-	ret->diff = DIFF_EASY;
-	ret->removeends = FALSE;
+	*ret = ascent_presets[DEFAULT_PRESET];        /* structure copy */
 	
 	return ret;
 }
 
 static int game_fetch_preset(int i, char **name, game_params **params)
 {
-	char buf[256];
 	game_params *ret;
-	
-	if(i != 0)
+	char buf[80];
+
+	if (i < 0 || i >= lenof(ascent_presets))
 		return FALSE;
-	ret = default_params();
-	
-	sprintf(buf, "%dx%d", ret->w, ret->h);
-	
-	*params = ret;
+
+	ret = snew(game_params);
+	*ret = ascent_presets[i];     /* structure copy */
+
+	sprintf(buf, "%dx%d %s", ret->w, ret->h, ascent_diffnames[ret->diff]);
+
 	*name = dupstr(buf);
-	
+	*params = ret;
 	return TRUE;
 }
 
@@ -1190,6 +1207,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	int gx = FROMCOORD(ox);
 	int gy = FROMCOORD(oy);
 	
+	if (IS_MOUSE_DOWN(button) && (ox < tilesize/2 || oy < tilesize/2 || gx >= w || gy >= h))
+	{
+		ui_clear(ui);
+		return "";
+	}
+
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
 	{
 		i = gy*w+gx;
@@ -1244,7 +1267,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
 				ui->held = i;
-				if(ui->select + ui->dir < state->last)
+				if(ui->select + ui->dir <= state->last)
 					ui->select += ui->dir;
 				
 				return dupstr(buf);
@@ -1561,6 +1584,13 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
 		if(n == -1 && ui->held != -1 && IS_NEAR(i, ui->held, w) && positions[ui->select] < 0)
 			n = ui->select;
+		
+		/* Draw a light circle on possible endpoints */
+		if(state->grid[i] == -1 && (n == 0 || n == state->last))
+		{
+			draw_circle(dr, tx+(tilesize/2), ty+(tilesize/2),
+				tilesize/3, colour, COL_LOWLIGHT);
+		}
 		
 		/* Draw the number */
 		if(n >= 0)
