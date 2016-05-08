@@ -901,7 +901,32 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 static char *validate_desc(const game_params *params, const char *desc)
 {
-	// TODO validate_desc
+	int s = params->w*params->h;
+	const char *p = desc;
+	number n, last = 0;
+	int i = 0;
+	while(*p)
+	{
+		if(isdigit((unsigned char) *p))
+		{
+			n = atoi(p);
+			if(n > last) last = n;
+			while (*p && isdigit((unsigned char) *p)) ++p;
+			++i;
+		}
+		else if(*p >= 'a' && *p <= 'z')
+			i += ((*p++) - 'a') + 1;
+		else
+			++p;
+	}
+	
+	if(last > s)
+		return "Number is too high";
+	if(i < s)
+		return "Not enough spaces";
+	if(i > s)
+		return "Too many spaces";
+	
 	return NULL;
 }
 
