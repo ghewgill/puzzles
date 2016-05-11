@@ -742,47 +742,34 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 {
 	int w = scratch->w, h = scratch->h, s = w*h;
 	cell i, i2;
-	number n, n1, n2;
+	number n, n1;
 	int dir, ret = 0;
 
 	for (i = 0; i < s; i++)
 	{
 		if (scratch->path[i] & FLAG_COMPLETE && scratch->grid[i] == -1)
 		{
-			solver_printf("Found an unfilled path segment at %d,%d\n", i%w, i/w);
-			n1 = n2 = -1;
+			solver_printf("Found an unfilled path segment at %d,%d", i%w, i/w);
 			for(dir = 0; dir < 8; dir++)
 			{
 				if(!(scratch->path[i] & (1<<dir))) continue;
 				i2 = dir_y[dir] * w + dir_x[dir] + i;
-				if(n1 < 0)
-					n1 = scratch->grid[i2];
-				else
-					n2 = scratch->grid[i2];
+				n1 = scratch->grid[i2];
+				if(n1 >= 0)
+				{
+					solver_printf(" connected to %d", n1+1);
+					for(n = 0; n <= scratch->end; n++)
+					{
+						if(abs(n-n1) == 1) continue;
+						
+						if(!GET_BIT(scratch->marks, i*s+n)) continue;
+						CLR_BIT(scratch->marks, i*s+n);
+						solver_printf("\nClear mark for %d", n+1);
+						ret++;
+					}
+				}
 			}
-			if(n1 < 0)
-			{
-				solver_printf("No known connections\n");
-				continue;
-			}
-			else if(n2 >= 0)
-			{
-				solver_printf("Connected to %d and %d\n", n1+1, n2+1);
-				// TODO place the actual number
-				continue;
-			}
-			
-			solver_printf("Connected to %d\n", n1+1);
-			
-			for(n = 0; n <= scratch->end; n++)
-			{
-				if(abs(n-n1) == 1) continue;
-				
-				if(!GET_BIT(scratch->marks, i*s+n)) continue;
-				CLR_BIT(scratch->marks, i*s+n);
-				solver_printf("Clear mark for %d\n", n+1);
-				ret++;
-			}
+			solver_printf("\n");
 		}
 	}
 
