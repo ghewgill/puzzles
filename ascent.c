@@ -772,7 +772,41 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 			solver_printf("\n");
 		}
 	}
+	
+	return ret;
+}
 
+static int solver_remove_path(struct solver_scratch *scratch)
+{
+	int w = scratch->w, h = scratch->h, s = w*h;
+	cell i1, i2;
+	number n1, n2;
+	int dir, ret = 0;
+	
+	for (i1 = 0; i1 < s; i1++)
+	{
+		if (scratch->path[i1] & FLAG_COMPLETE) continue;
+		n1 = scratch->grid[i1];
+		if(n1 < 0) continue;
+		for(dir = 0; dir < 4; dir++)
+		{
+			if(!(scratch->path[i1] & (1<<dir))) continue;
+			i2 = dir_y[dir] * w + dir_x[dir] + i1;
+			n2 = scratch->grid[i2];
+			if(n2 >= 0 && abs(n1-n2) != 1)
+			{
+				solver_printf("Disconnect %d,%d (%d) and %d,%d (%d)\n", i1%w, i1/w, n1+1, i2%w, i2/w, n2+1);
+				scratch->path[i1] &= ~(1 << dir);
+				scratch->path[i2] &= ~(1 << (7 - dir));
+				ret++;
+			}
+		}
+	}
+	
+	if(ret)
+	{
+		solver_debug_path(scratch);
+	}
 	return ret;
 }
 
@@ -821,6 +855,9 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		if (solver_adjacent_path(scratch))
 			continue;
 
+		if (solver_remove_path(scratch))
+			continue;
+		
 		break;
 	}
 }
