@@ -408,10 +408,19 @@ static void update_positions(cell *positions, number *grid, int s)
 
 struct solver_scratch {
 	int w, h;
+	
+	/* The position of each number. */
 	cell *positions;
+	
 	number *grid;
+	
+	/* The last number of the path. */
 	number end;
+	
+	/* All possible numbers in each cell */
 	bitmap *marks; /* GET_BIT i*s+n */
+	
+	/* The possible path segments for each cell */
 	int *path;
 	char found_endpoints;
 };
@@ -453,15 +462,19 @@ static int solver_place(struct solver_scratch *scratch, cell pos, number num)
 {
 	int w = scratch->w, s = w*scratch->h;
 	cell i; number n;
+	
+	/* Place the number and update the positions array */
 	scratch->grid[pos] = num;
 	scratch->positions[num] = (scratch->positions[num] == -1 ? pos : -2);
 	
+	/* Rule out this number in all other cells */
 	for(i = 0; i < s; i++)
 	{
 		if(i == pos) continue;
 		CLR_BIT(scratch->marks, i*s+num);
 	}
 	
+	/* Rule out all other numbers in this cell */
 	for(n = 0; n < scratch->end; n++)
 	{
 		if(n == num) continue;
@@ -475,6 +488,8 @@ static int solver_place(struct solver_scratch *scratch, cell pos, number num)
 
 static int solver_single_position(struct solver_scratch *scratch)
 {
+	/* Find numbers which have a single possible cell */
+	
 	int s = scratch->w*scratch->h;
 	cell i, found; number n;
 	int ret = 0;
@@ -505,6 +520,8 @@ static int solver_single_position(struct solver_scratch *scratch)
 
 static int solver_single_number(struct solver_scratch *scratch)
 {
+	/* Find cells which have a single possible number */
+	
 	int w = scratch->w, s = w*scratch->h;
 	cell i; number n, found;
 	int ret = 0;
@@ -534,6 +551,8 @@ static int solver_single_number(struct solver_scratch *scratch)
 
 static int solver_near(struct solver_scratch *scratch, cell near, number num)
 {
+	/* Remove marks which are too far away from a given cell */
+	
 	int w = scratch->w, s = scratch->h*w;
 	int ret = 0;
 	cell i;
@@ -559,6 +578,8 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num)
 
 static int solver_proximity(struct solver_scratch *scratch)
 {
+	/* Remove marks which are too far away from given sequential numbers */
+	
 	int end = scratch->end;
 	cell i; number n;
 	int ret = 0;
@@ -668,6 +689,10 @@ static int solver_update_path(struct solver_scratch *scratch)
 	int dir;
 	int ret = 0;
 
+	/* 
+	 * If both endpoints are found, 
+	 * set all other path segments as being somewhere in the middle. 
+	 */
 	ib = scratch->positions[0];
 	ic = scratch->positions[end];
 	if (!scratch->found_endpoints && ib != -1 && ic != -1)
@@ -681,17 +706,26 @@ static int solver_update_path(struct solver_scratch *scratch)
 		}
 	}
 
+	/* 
+	 * If the first and second numbers are known, 
+	 * set the path of the first number to point to the second number. 
+	 */
 	i = scratch->positions[1];
 	if (i != -1 && ib != -1 && !(scratch->path[ib] & FLAG_COMPLETE))
 	{
 		scratch->path[ib] = (1 << ascent_find_direction(ib, i, w)) | FLAG_ENDPOINT;
 	}
+	/* Do the same for the last number pointing to the penultimate number. */
 	i = scratch->positions[end - 1];
 	if (i != -1 && ic != -1 && !(scratch->path[ic] & FLAG_COMPLETE))
 	{
 		scratch->path[ic] = (1 << ascent_find_direction(ic, i, w)) | FLAG_ENDPOINT;
 	}
 
+	/* 
+	 * For all numbers in the middle, set the path 
+	 * if the next and previous numbers are known. 
+	 */
 	for (n = 1; n <= end-1; n++)
 	{
 		i = scratch->positions[n];
@@ -709,10 +743,17 @@ static int solver_update_path(struct solver_scratch *scratch)
 	{
 		if (scratch->path[i] & FLAG_COMPLETE) continue;
 		int count = 0;
+		
+		/* 
+		 * Count the number of possible path segments at this cell. 
+		 * If it is exactly two, rule out all other neighbouring cells 
+		 * pointing toward this cell. An endpoint counts as one path segment. 
+		 */
 		for (dir = 0; dir <= 8; dir++)
 		{
 			if (scratch->path[i] & (1 << dir)) count++;
 		}
+		
 		if (count == 2)
 		{
 			int x, y, dir;
@@ -738,6 +779,47 @@ static int solver_update_path(struct solver_scratch *scratch)
 	return ret;
 }
 
+static int solver_remove_endpoints(struct solver_scratch *scratch)
+{
+	if(scratch->found_endpoints) return 0;
+	int w = scratch->w, h = scratch->h, s = w*h;
+	number end = scratch->end;
+	cell i;
+	int ret = 0;
+	
+	for (i = 0; i < s; i++)
+	{
+		/* Unset possible endpoint if there is no mark for the first and last number */
+		if(scratch->path[i] & FLAG_ENDPOINT)
+		{
+			if(GET_BIT(scratch->marks, i*s) || GET_BIT(scratch->marks, i*s+end))
+				continue;
+			
+			scratch->path[i] &= ~FLAG_ENDPOINT;
+			solver_printf("Remove possible endpoint at %d,%d\n", i%w, i/w);
+			ret++;
+		}
+		else
+		{
+			/* Remove the mark for the first and last number on confirmed middle segments */
+			if(GET_BIT(scratch->marks, i*s))
+			{
+				CLR_BIT(scratch->marks, i*s);
+				solver_printf("Clear mark for 1 on middle %d,%d\n", i%w, i/w);
+				ret++;
+			}
+			if(GET_BIT(scratch->marks, i*s+end))
+			{
+				CLR_BIT(scratch->marks, i*s+end);
+				solver_printf("Clear mark for %d on middle %d,%d\n", end+1, i%w, i/w);
+				ret++;
+			}
+		}
+	}
+	
+	return ret;
+}
+
 static int solver_adjacent_path(struct solver_scratch *scratch)
 {
 	int w = scratch->w, h = scratch->h, s = w*h;
@@ -747,9 +829,13 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 
 	for (i = 0; i < s; i++)
 	{
+		/* Find empty cells with a confirmed path */
 		if (scratch->path[i] & FLAG_COMPLETE && scratch->grid[i] == -1)
 		{
-			solver_printf("Found an unfilled path segment at %d,%d", i%w, i/w);
+			solver_printf("Found an unfilled %s at %d,%d", 
+				scratch->path[i] & FLAG_ENDPOINT ? "endpoint" : "path segment", i%w, i/w);
+			
+			/* Check if one of the directions is a known number */
 			for(dir = 0; dir < 8; dir++)
 			{
 				if(!(scratch->path[i] & (1<<dir))) continue;
@@ -758,6 +844,10 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 				if(n1 >= 0)
 				{
 					solver_printf(" connected to %d", n1+1);
+					/* 
+					 * Rule out all pencil marks, 
+					 * except those in sequence with the other number. 
+					 */
 					for(n = 0; n <= scratch->end; n++)
 					{
 						if(abs(n-n1) == 1) continue;
@@ -769,6 +859,19 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 					}
 				}
 			}
+			
+			if(scratch->path[i] & FLAG_ENDPOINT)
+			{
+				/* Rule out all marks except the first and last number */
+				for(n = 1; n < scratch->end; n++)
+				{
+					if(!GET_BIT(scratch->marks, i*s+n)) continue;
+					CLR_BIT(scratch->marks, i*s+n);
+					solver_printf("\nClear mark for %d on endpoint", n+1);
+					ret++;
+				}
+			}
+			
 			solver_printf("\n");
 		}
 	}
@@ -778,6 +881,9 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 
 static int solver_remove_path(struct solver_scratch *scratch)
 {
+	/* 
+	 * Rule out path segments between two given numbers which are not in sequence.
+	 */
 	int w = scratch->w, h = scratch->h, s = w*h;
 	cell i1, i2;
 	number n1, n2;
@@ -855,6 +961,9 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		if (solver_adjacent_path(scratch))
 			continue;
 
+		if(solver_remove_endpoints(scratch))
+			continue;
+		
 		if (solver_remove_path(scratch))
 			continue;
 		
@@ -863,7 +972,7 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+                           char **aux, int interactive)
 {
 	int w = params->w;
 	int h = params->h;
@@ -1172,12 +1281,14 @@ static void decode_ui(game_ui *ui, const char *encoding)
 
 static void ui_clear(game_ui *ui)
 {
+	/* Deselect the current number */
 	ui->held = ui->select = ui->target = -1;
 	ui->dir = 0;
 }
 
 static void ui_seek(game_ui *ui, number last)
 {
+	/* Move the selection forward until an unplaced number is found */
 	if(ui->held == -1 || ui->select < 0 || ui->select > last)
 	{
 		ui->select = -1;
@@ -1194,6 +1305,10 @@ static void ui_seek(game_ui *ui, number last)
 
 static void ui_backtrack(game_ui *ui, number last)
 {
+	/* 
+	 * Move the selection backward until a placed number is found, 
+	 * then point the selection forward again.
+	 */
 	number n = ui->select;
 	if(!ui->dir)
 	{
@@ -1422,14 +1537,14 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-							  int *x, int *y)
+                              int *x, int *y)
 {
 	*x = (params->w+1) * tilesize;
 	*y = (params->h+1) * tilesize;
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
-						  const game_params *params, int tilesize)
+                          const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
 }
@@ -1733,9 +1848,9 @@ const struct game thegame = {
 	game_flash_length,
 	game_status,
 	FALSE, FALSE, game_print_size, game_print,
-	FALSE,			       /* wants_statusbar */
+	FALSE, /* wants_statusbar */
 	FALSE, game_timing_state,
-	0,				       /* flags */
+	0, /* flags */
 };
 
 /* ***************** *
