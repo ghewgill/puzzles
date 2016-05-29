@@ -549,11 +549,12 @@ static int solver_single_number(struct solver_scratch *scratch)
 	return ret;
 }
 
-static int solver_near(struct solver_scratch *scratch, cell near, number num)
+static int solver_near(struct solver_scratch *scratch, cell near, number num, int distance)
 {
 	/* Remove marks which are too far away from a given cell */
 	
 	int w = scratch->w, s = scratch->h*w;
+	int hdist, vdist;
 	int ret = 0;
 	cell i;
 	
@@ -562,7 +563,9 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num)
 	for(i = 0; i < s; i++)
 	{
 		if(!GET_BIT(scratch->marks, i*s+num)) continue;
-		if(IS_NEAR(i, near, w)) continue;
+		hdist = abs((i%w) - (near%w));
+		vdist = abs((i/w) - (near/w));
+		if(max(hdist, vdist) <= distance) continue;
 		CLR_BIT(scratch->marks, i*s+num);
 		ret++;
 	}
@@ -576,9 +579,9 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num)
 	return ret;
 }
 
-static int solver_proximity(struct solver_scratch *scratch)
+static int solver_proximity_simple(struct solver_scratch *scratch)
 {
-	/* Remove marks which are too far away from given sequential numbers */
+	/* Remove marks which aren't adjacent to a given sequential number */
 	
 	int end = scratch->end;
 	cell i; number n;
@@ -589,10 +592,40 @@ static int solver_proximity(struct solver_scratch *scratch)
 		i = scratch->positions[n];
 		if(i < 0) continue;
 		
-		if(n > 0)
-			ret += solver_near(scratch, i, n-1);
-		if(n < end-1)
-			ret += solver_near(scratch, i, n+1);
+		if(n > 0 && scratch->positions[n-1] == -1)
+			ret += solver_near(scratch, i, n-1, 1);
+		if(n < end-1 && scratch->positions[n+1] == -1)
+			ret += solver_near(scratch, i, n+1, 1);
+	}
+	
+	return ret;
+}
+
+static int solver_proximity_full(struct solver_scratch *scratch)
+{
+	/* Remove marks which are too far away from given sequential numbers */
+	
+	int end = scratch->end;
+	cell i; number n, n2;
+	int ret = 0;
+	
+	for(n = 0; n <= end; n++)
+	{
+		i = scratch->positions[n];
+		if(i < 0) continue;
+		
+		n2 = n-1;
+		while(n2 >= 0 && scratch->positions[n2] == -1)
+		{
+			ret += solver_near(scratch, i, n2, abs(n-n2));
+			n2--;
+		}
+		n2 = n+1;
+		while(n2 <= end-1 && scratch->positions[n2] == -1)
+		{
+			ret += solver_near(scratch, i, n2, abs(n-n2));
+			n2++;
+		}
 	}
 	
 	return ret;
@@ -947,7 +980,7 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		if(solver_single_position(scratch))
 			continue;
 		
-		if(solver_proximity(scratch))
+		if(solver_proximity_simple(scratch))
 			continue;
 		
 		if (diff < DIFF_NORMAL) break;
@@ -965,6 +998,9 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 			continue;
 		
 		if (solver_remove_path(scratch))
+			continue;
+		
+		if(solver_proximity_full(scratch))
 			continue;
 		
 		break;
