@@ -15,16 +15,16 @@ Each puzzle source file contains a TODO list.
 
 ### Playable
 
+* Ascent (based on [Hidoku](http://www.janko.at/Raetsel/Hidoku/index.htm)): Create a path of numbers, using each number exactly once.
 * Salad: Place each character once in every row and column. Some squares remain empty. Contains two modes.
    * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
    * [Number Ball](http://www.janko.at/Raetsel/Nanbaboru/index.htm) mode: Squares with a ball must contain a number.
 * [Spokes](http://puzzlepicnic.com/genre?id=12): Connect all hubs using horizontal, vertical and diagonal lines.
    
-### Needs major work
+### Abandoned
 
 * Seismic (based on [Hakyuu](http://www.janko.at/Raetsel/Hakyuu/index.htm)): Place numbers in each area, keeping enough distance between equal numbers.
 * Crossing (based on [Nansuke](http://www.nikoli.co.jp/en/puzzles/number_skeleton.html)): Place each number from the list into the crossword.
-* Ascent (based on [Hidoku](http://www.janko.at/Raetsel/Hidoku/index.htm)): Create a path of numbers, using each number exactly once.
 
 ## Building
 
