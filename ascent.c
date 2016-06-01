@@ -75,6 +75,7 @@ struct game_params {
 #define DIFFLIST(A)                             \
 	A(EASY,Easy, e)                             \
 	A(NORMAL,Normal, n)                         \
+	A(TRICKY,Tricky, t)                         \
 
 #define ENUM(upper,title,lower) DIFF_ ## upper,
 #define TITLE(upper,title,lower) #title,
@@ -88,11 +89,14 @@ static char const ascent_diffchars[] = DIFFLIST(ENCODE);
 const static struct game_params ascent_presets[] = {
 	{ 7,  6, DIFF_EASY, FALSE },
 	{ 7,  6, DIFF_NORMAL, FALSE },
+	{ 7,  6, DIFF_TRICKY, FALSE },
 	{ 10, 8, DIFF_EASY, FALSE },
 	{ 10, 8, DIFF_NORMAL, FALSE },
+	{ 10, 8, DIFF_TRICKY, FALSE },
 #ifndef SMALL_SCREEN
 	{ 14, 11, DIFF_EASY, FALSE },
 	{ 14, 11, DIFF_NORMAL, FALSE },
+	{ 14, 11, DIFF_TRICKY, FALSE },
 #endif
 };
 
@@ -985,9 +989,6 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		
 		if (diff < DIFF_NORMAL) break;
 
-		if(solver_single_number(scratch))
-			continue;
-		
 		if (solver_update_path(scratch))
 			continue;
 
@@ -1001,6 +1002,11 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 			continue;
 		
 		if(solver_proximity_full(scratch))
+			continue;
+		
+		if(diff < DIFF_TRICKY) break;
+		
+		if(solver_single_number(scratch))
 			continue;
 		
 		break;
