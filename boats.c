@@ -795,10 +795,10 @@ static int boats_adjust_ships(game_state *state)
 			watersum++;
 	}
 	
-	if(shipsum < maxships)
-		ret = STATUS_INCOMPLETE;
-	else if(shipsum > maxships || (w*h) - watersum < maxships)
+	if(shipsum > maxships || (w*h) - watersum < maxships)
 		ret = STATUS_INVALID;
+	else if(shipsum < maxships)
+		ret = STATUS_INCOMPLETE;
 	
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
