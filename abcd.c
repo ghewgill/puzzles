@@ -1157,7 +1157,7 @@ printf("Valid puzzle generated after %i attempt(s) \n", attempts);
 
 #ifdef STANDALONE_SOLVER
 debug = game_text_format(state);
-printf(debug);
+printf("%s", debug);
 sfree(debug);
 #endif
 		
@@ -2181,7 +2181,7 @@ int main(int argc, char *argv[])
 		if (errcode == 0)
 		{
 			char *fmt = game_text_format(solved);
-			printf(fmt);
+			printf("%s", fmt);
 			sfree(fmt);
 		}
 		
