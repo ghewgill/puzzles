@@ -54,6 +54,11 @@ static char const seismic_diffchars[] = DIFFLIST(ENCODE);
 #define DIFFCONFIG DIFFLIST(CONFIG)
 
 enum {
+	MODE_SEISMIC,
+	MODE_TECTONIC
+};
+
+enum {
 	COL_BACKGROUND,
 	COL_HIGHLIGHT,
 	COL_LOWLIGHT,
@@ -69,15 +74,22 @@ enum {
 struct game_params {
 	int w, h;
 	int diff;
+	int mode;
 };
 
 const static struct game_params seismic_presets[] = {
-	{ 4,  4, DIFF_EASY},
-	{ 4,  4, DIFF_HARD},
-	{ 6,  6, DIFF_EASY},
-	{ 6,  6, DIFF_HARD},
-	{ 7,  7, DIFF_EASY},
-	{ 7,  7, DIFF_HARD}
+	{ 4,  4, DIFF_EASY, MODE_SEISMIC },
+	{ 4,  4, DIFF_EASY, MODE_TECTONIC },
+	{ 4,  4, DIFF_HARD, MODE_SEISMIC },
+	{ 4,  4, DIFF_HARD, MODE_TECTONIC },
+	{ 6,  6, DIFF_EASY, MODE_SEISMIC },
+	{ 6,  6, DIFF_EASY, MODE_TECTONIC },
+	{ 6,  6, DIFF_HARD, MODE_SEISMIC },
+	{ 6,  6, DIFF_HARD, MODE_TECTONIC },
+	{ 7,  7, DIFF_EASY, MODE_SEISMIC },
+	{ 7,  7, DIFF_EASY, MODE_TECTONIC },
+	{ 7,  7, DIFF_HARD, MODE_SEISMIC },
+	{ 7,  7, DIFF_HARD, MODE_TECTONIC }
 };
 
 #define DEFAULT_PRESET 2
@@ -102,7 +114,8 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 	ret = snew(game_params);
 	*ret = seismic_presets[i];     /* structure copy */
 
-	sprintf(buf, "%dx%d %s", ret->w, ret->h, seismic_diffnames[ret->diff]);
+	sprintf(buf, "%s: %dx%d %s", ret->mode == MODE_SEISMIC ? "Seismic" : "Tectonic",
+	        ret->w, ret->h, seismic_diffnames[ret->diff]);
 
 	*name = dupstr(buf);
 	*params = ret;
@@ -135,6 +148,12 @@ static void decode_params(game_params *params, char const *string)
 		params->h = params->w;
 	}
 
+	if (*p == 'T')
+	{
+		params->mode = MODE_TECTONIC;
+		p++;
+	}
+
 	if (*p == 'd') {
 		int i;
 		p++;
@@ -152,10 +171,13 @@ static void decode_params(game_params *params, char const *string)
 static char *encode_params(const game_params *params, int full)
 {
 	char buf[80];
+	char *p = buf;
 
-	sprintf(buf, "%dx%d", params->w, params->h);
+	p += sprintf(p, "%dx%d", params->w, params->h);
+	if(params->mode == MODE_TECTONIC)
+		p += sprintf(p, "T");
 	if (full)
-		sprintf(buf + strlen(buf), "d%c", seismic_diffchars[params->diff]);
+		p += sprintf(p, "d%c", seismic_diffchars[params->diff]);
 
 	return dupstr(buf);
 }
@@ -165,7 +187,7 @@ static config_item *game_configure(const game_params *params)
 	config_item *ret;
 	char buf[80];
 
-	ret = snewn(4, config_item);
+	ret = snewn(5, config_item);
 
 	ret[0].name = "Width";
 	ret[0].type = C_STRING;
@@ -184,10 +206,15 @@ static config_item *game_configure(const game_params *params)
 	ret[2].sval = DIFFCONFIG;
 	ret[2].ival = params->diff;
 
-	ret[3].name = NULL;
-	ret[3].type = C_END;
-	ret[3].sval = NULL;
-	ret[3].ival = 0;
+	ret[3].name = "Game mode";
+	ret[3].type = C_CHOICES;
+	ret[3].sval = ":Seismic:Tectonic";
+	ret[3].ival = params->mode;
+
+	ret[4].name = NULL;
+	ret[4].type = C_END;
+	ret[4].sval = NULL;
+	ret[4].ival = 0;
 
 	return ret;
 }
@@ -199,6 +226,7 @@ static game_params *custom_params(const config_item *cfg)
 	ret->w = atoi(cfg[0].sval);
 	ret->h = atoi(cfg[1].sval);
 	ret->diff = cfg[2].ival;
+	ret->mode = cfg[3].ival;
 
 	return ret;
 }
@@ -220,7 +248,7 @@ static char *validate_params(const game_params *params, int full)
 #define FM_ERRORMASK (FM_ERRORDUP|FM_ERRORDIST)
 
 struct game_state {
-	int w, h;
+	int w, h, mode;
 	char *grid;
 	char *flags;
 	int *marks;
@@ -229,13 +257,14 @@ struct game_state {
 	char completed, cheated;
 };
 
-static game_state *blank_state(int w, int h)
+static game_state *blank_state(int w, int h, int mode)
 {
 	game_state *state = snew(game_state);
 	int s = w * h;
 
 	state->w = w;
 	state->h = h;
+	state->mode = mode;
 	state->grid = snewn(s, char);
 	state->flags = snewn(s, char);
 	state->marks = snewn(s, int);
@@ -256,7 +285,7 @@ static game_state *dup_game(const game_state *state)
 	int w = state->w;
 	int h = state->h;
 	int s = w * h;
-	game_state *ret = blank_state(w, h);
+	game_state *ret = blank_state(w, h, state->mode);
 
 	memcpy(ret->grid, state->grid, s*sizeof(char));
 	memcpy(ret->flags, state->flags, s*sizeof(char));
@@ -328,12 +357,25 @@ static int seismic_place_number(game_state *state, int x, int y, char n)
 		ret += 1;
 	}
 	
-	for(j = 1; j <= n; j++)
+	if (state->mode == MODE_SEISMIC)
 	{
-		ret += seismic_unset(state, x+j, y, n);
-		ret += seismic_unset(state, x-j, y, n);
-		ret += seismic_unset(state, x, y+j, n);
-		ret += seismic_unset(state, x, y-j, n);
+		for (j = 1; j <= n; j++)
+		{
+			ret += seismic_unset(state, x + j, y, n);
+			ret += seismic_unset(state, x - j, y, n);
+			ret += seismic_unset(state, x, y + j, n);
+			ret += seismic_unset(state, x, y - j, n);
+		}
+	}
+	else
+	{
+		int dx, dy;
+		for (dx = -1; dx <= 1; dx++)
+			for (dy = -1; dy <= 1; dy++)
+			{
+				if (!dx && !dy) continue;
+				ret += seismic_unset(state, x + dx, y + dy, n);
+			}
 	}
 	
 	c1 = dsf_canonify(state->dsf, i);
@@ -523,6 +565,8 @@ static int seismic_validate_game(game_state *state)
 	/* Find errors */
 	for(i = 0; i < s; i++)
 	{
+		int x = i % w, y = i / w;
+
 		if(state->grid[i] == 0)
 			continue;
 		
@@ -532,16 +576,30 @@ static int seismic_validate_game(game_state *state)
 		doubles[c] |= n & singles[c];
 		singles[c] |= n;
 		
-		for(j = 1; j <= state->grid[i]; j++)
+		if (state->mode == MODE_SEISMIC)
 		{
-			if((i%w)+j < w) /* Right */
-				ranges[i+j] |= n;
-			if((i%w)-j >= 0) /* Left */
-				ranges[i-j] |= n;
-			if((i/w)-j >= 0) /* Up */
-				ranges[i-(j*w)] |= n;
-			if((i/w)+j < h) /* Down */
-				ranges[i+(j*w)] |= n;
+			for (j = 1; j <= state->grid[i]; j++)
+			{
+				if (x + j < w) /* Right */
+					ranges[i + j] |= n;
+				if (x - j >= 0) /* Left */
+					ranges[i - j] |= n;
+				if (y - j >= 0) /* Up */
+					ranges[i - (j*w)] |= n;
+				if (y + j < h) /* Down */
+					ranges[i + (j*w)] |= n;
+			}
+		}
+		else
+		{
+			int dx, dy;
+			for (dx = -1; dx <= 1; dx++)
+				for (dy = -1; dy <= 1; dy++)
+				{
+					if (!dx && !dy) continue;
+					if(x + dx >= 0 && x + dx < w && y + dy >= 0 && y + dy < h)
+						ranges[i+dx+(dy*w)] |= n;
+				}
 		}
 	}
 	
@@ -648,10 +706,69 @@ static int seismic_gen_numbers(game_state *state, random_state *rs)
 				break;
 			}
 		}
+		if (k > 9)
+			return FALSE;
 	}
 	
 	sfree(spaces);
 	
+	return TRUE;
+}
+
+static int tectonic_gen_numbers(game_state *state, random_state *rs)
+{
+	int w = state->w;
+	int h = state->h;
+	int s = w * h;
+	int i, j, k;
+	int spaces[5] = { 1, 2, 3, 4, 5 };
+	int counts[5] = { 0, 0, 0, 0, 0 };
+	for (i = 0; i < s; i++)
+	{
+		state->marks[i] = AREA_BITS(5);
+	}
+
+	/* Visit all grid spaces sequentially and place a random number. */
+	for (i = 0; i < s; i++)
+	{
+		shuffle(spaces, 5, sizeof(int), rs);
+		for (j = 0; j < 5; j++)
+		{
+			k = spaces[j];
+			if (state->marks[i] & NUM_BIT(k))
+			{
+				seismic_place_number(state, i%w, i/w, k);
+				counts[k - 1]++;
+				break;
+			}
+		}
+	}
+
+	/* Build a map of each number based on how often it appears in the grid. */
+	for (j = 0; j < 5; j++)
+	{
+		int imax = -1;
+		int cmax = -1;
+		for (k = 0; k < 5; k++)
+		{
+			if (counts[k] > cmax)
+			{
+				imax = k;
+				cmax = counts[k];
+			}
+		}
+
+		spaces[j] = imax + 1;
+		counts[imax] = -1;
+	}
+
+	/*
+	 * Translate the grid numbers based on the map.
+	 * The 1 must appear most often in the grid, followed by 2, then 3, etc. 
+	 */
+	for (i = 0; i < s; i++)
+		state->grid[i] = spaces[state->grid[i] - 1];
+
 	return TRUE;
 }
 
@@ -796,7 +913,9 @@ static int seismic_gen_diff(game_state *state, int diff)
 
 static int seismic_gen_puzzle(game_state *state, random_state *rs, int diff)
 {
-	if(!seismic_gen_numbers(state, rs))
+	if (state->mode == MODE_TECTONIC && !tectonic_gen_numbers(state, rs))
+		return FALSE;
+	if(state->mode == MODE_SEISMIC && !seismic_gen_numbers(state, rs))
 		return FALSE;
 	if(!seismic_gen_areas(state, rs))
 		return FALSE;
@@ -820,7 +939,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	char *ret, *p, c;
 	
 	char *walls = snewn(ws, char);
-	game_state *state = blank_state(w, h);
+	game_state *state = blank_state(w, h, params->mode);
 	
 	do
 	{
@@ -929,7 +1048,7 @@ static int seismic_read_desc(const game_params *params, const char *desc, game_s
 	int hs = ((w-1)*h);
 	int ws = hs + (w*(h-1));
 	char *walls = snewn(ws, char);
-	game_state *state = blank_state(w, h);
+	game_state *state = blank_state(w, h, params->mode);
 	
 	dsf_init(state->dsf, w*h);
 	

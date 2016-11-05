@@ -23,7 +23,9 @@ Each puzzle source file contains a TODO list.
    
 ### Abandoned
 
-* Seismic (based on [Hakyuu](http://www.janko.at/Raetsel/Hakyuu/index.htm)): Place numbers in each area, keeping enough distance between equal numbers.
+* Seismic (based on [Hakyuu](http://www.janko.at/Raetsel/Hakyuu/index.htm)): Place numbers in each area, keeping enough distance between equal numbers. Contains two modes.
+   * Seismic: Two equal numbers N in the same row or column must have at least N spaces between them.
+   * Tectonic: Two equal numbers cannot be horizontally, vertically or diagonally adjacent. 
 * Crossing (based on [Nansuke](http://www.nikoli.co.jp/en/puzzles/number_skeleton.html)): Place each number from the list into the crossword.
 
 ## Building
