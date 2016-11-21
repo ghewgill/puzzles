@@ -1317,7 +1317,8 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
                     if (ndirs > 0) {
                         int which, dir;
                         struct rect r1, r2;
-
+                        memset(&r1, 0, sizeof(struct rect));
+                        memset(&r2, 0, sizeof(struct rect));
                         which = random_upto(rs, ndirs);
                         dir = dirs[which];
 
@@ -2187,18 +2188,24 @@ struct game_ui {
     int cur_x, cur_y, cur_visible, cur_dragging;
 };
 
-static game_ui *new_ui(const game_state *state)
+static void reset_ui(game_ui *ui)
 {
-    game_ui *ui = snew(game_ui);
     ui->drag_start_x = -1;
     ui->drag_start_y = -1;
     ui->drag_end_x = -1;
     ui->drag_end_y = -1;
-    ui->dragged = ui->erasing = FALSE;
     ui->x1 = -1;
     ui->y1 = -1;
     ui->x2 = -1;
     ui->y2 = -1;
+    ui->dragged = FALSE;
+}
+
+static game_ui *new_ui(const game_state *state)
+{
+    game_ui *ui = snew(game_ui);
+    reset_ui(ui);
+    ui->erasing = FALSE;
     ui->cur_x = ui->cur_y = ui->cur_visible = ui->cur_dragging = 0;
     return ui;
 }
@@ -2381,21 +2388,8 @@ static char *interpret_move(const game_state *from, game_ui *ui,
     coord_round(FROMCOORD((float)x), FROMCOORD((float)y), &xc, &yc);
 
     if (button == LEFT_BUTTON || button == RIGHT_BUTTON) {
-        if (ui->drag_start_x >= 0 && ui->cur_dragging) {
-            /*
-             * If a keyboard drag is in progress, unceremoniously
-             * cancel it.
-             */
-            ui->drag_start_x = -1;
-            ui->drag_start_y = -1;
-            ui->drag_end_x = -1;
-            ui->drag_end_y = -1;
-            ui->x1 = -1;
-            ui->y1 = -1;
-            ui->x2 = -1;
-            ui->y2 = -1;
-            ui->dragged = FALSE;
-        }
+        if (ui->drag_start_x >= 0 && ui->cur_dragging)
+            reset_ui(ui); /* cancel keyboard dragging */
         startdrag = TRUE;
         ui->cur_visible = ui->cur_dragging = FALSE;
         active = TRUE;
@@ -2439,6 +2433,15 @@ static char *interpret_move(const game_state *from, game_ui *ui,
             startdrag = TRUE;
             active = TRUE;
         }
+    } else if (button == '\b' || button == 27) {
+        if (!ui->cur_dragging) {
+            ui->cur_visible = FALSE;
+        } else {
+            assert(ui->cur_visible);
+            reset_ui(ui); /* cancel keyboard dragging */
+            ui->cur_dragging = FALSE;
+        }
+        return "";
     } else if (button != LEFT_DRAG && button != RIGHT_DRAG) {
         return NULL;
     }
@@ -2515,15 +2518,7 @@ static char *interpret_move(const game_state *from, game_ui *ui,
 	    }
 	}
 
-	ui->drag_start_x = -1;
-	ui->drag_start_y = -1;
-	ui->drag_end_x = -1;
-	ui->drag_end_y = -1;
-	ui->x1 = -1;
-	ui->y1 = -1;
-	ui->x2 = -1;
-	ui->y2 = -1;
-	ui->dragged = FALSE;
+        reset_ui(ui);
 	active = TRUE;
     }
 
@@ -2965,7 +2960,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 #endif
 
 const struct game thegame = {
-    "Rectangles", "games.rectangles", "rectangles",
+    "Rectangles", "games.rectangles", "rect",
     default_params,
     game_fetch_preset,
     decode_params,

@@ -608,7 +608,7 @@ static void win_draw_text(void *handle, int x, int y, int fonttype,
 	HFONT oldfont;
 	TEXTMETRIC tm;
 	SIZE size;
-	TCHAR wText[256];
+	WCHAR wText[256];
 	MultiByteToWideChar (CP_UTF8, 0, text, -1, wText, 256);
 
 	oldfont = SelectObject(fe->hdc, fe->fonts[i].font);
@@ -1702,7 +1702,8 @@ static int fe_set_midend(frontend *fe, midend *me)
     if (fe->statusbar)
         DestroyWindow(fe->statusbar);
     if (midend_wants_statusbar(fe->me)) {
-	fe->statusbar = CreateWindowEx(0, STATUSCLASSNAME, TEXT("ooh"),
+	fe->statusbar = CreateWindowEx(0, STATUSCLASSNAME,
+				       TEXT(DEFAULT_STATUSBAR_TEXT),
 				       WS_CHILD | WS_VISIBLE,
 				       0, 0, 0, 0, /* status bar does these */
 				       NULL, NULL, fe->inst, NULL);

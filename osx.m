@@ -569,7 +569,7 @@ struct frontend {
 	[status setBezeled:YES];
 	[status setBezelStyle:NSTextFieldSquareBezel];
 	[status setDrawsBackground:YES];
-	[[status cell] setTitle:@""];
+	[[status cell] setTitle:@DEFAULT_STATUSBAR_TEXT];
 	[status sizeToFit];
 	rect2 = [status frame];
 	rect.size.height += rect2.size.height;
@@ -761,7 +761,24 @@ struct frontend {
     [op setAllowsMultipleSelection:NO];
 
     if ([op runModalForTypes:nil] == NSOKButton) {
-	const char *name = [[[op filenames] objectAtIndex:0] cString];
+        /*
+         * This used to be
+         *
+         *    [[[op filenames] objectAtIndex:0] cString]
+         *
+         * but the plain cString method became deprecated and Xcode 7
+         * started complaining about it. Since OS X 10.9 we can
+         * apparently use the more modern API
+         *
+         *    [[[op URLs] objectAtIndex:0] fileSystemRepresentation]
+         *
+         * but the alternative below still compiles with Xcode 7 and
+         * is a bit more backwards compatible, so I'll try it for the
+         * moment.
+         */
+	const char *name = [[[op filenames] objectAtIndex:0]
+                               cStringUsingEncoding:
+                                   [NSString defaultCStringEncoding]];
 	char *err;
 
         FILE *fp = fopen(name, "r");
@@ -1352,6 +1369,26 @@ static void osx_draw_line(void *handle, int x1, int y1, int x2, int y2, int colo
     NSRectFill(NSMakeRect(x1, fe->h-y1-1, 1, 1));
     NSRectFill(NSMakeRect(x2, fe->h-y2-1, 1, 1));
 }
+
+static void osx_draw_thick_line(
+    void *handle, float thickness,
+    float x1, float y1,
+    float x2, float y2,
+    int colour)
+{
+    frontend *fe = (frontend *)handle;
+    NSBezierPath *path = [NSBezierPath bezierPath];
+
+    assert(colour >= 0 && colour < fe->ncolours);
+    [fe->colours[colour] set];
+    [[NSGraphicsContext currentContext] setShouldAntialias: YES];
+    [path setLineWidth: thickness];
+    [path setLineCapStyle: NSButtLineCapStyle];
+    [path moveToPoint: NSMakePoint(x1, fe->h-y1)];
+    [path lineToPoint: NSMakePoint(x2, fe->h-y2)];
+    [path stroke];
+}
+
 static void osx_draw_rect(void *handle, int x, int y, int w, int h, int colour)
 {
     frontend *fe = (frontend *)handle;
@@ -1541,6 +1578,7 @@ const struct drawing_api osx_drawing = {
     NULL, NULL, NULL, NULL, NULL, NULL, /* {begin,end}_{doc,page,puzzle} */
     NULL, NULL,			       /* line_width, line_dotted */
     osx_text_fallback,
+    osx_draw_thick_line,
 };
 
 void deactivate_timer(frontend *fe)

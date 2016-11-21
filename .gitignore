@@ -5,6 +5,7 @@
 /cube
 /dominosa
 /fifteen
+/fifteensolver
 /filling
 /fillingsolver
 /flip
@@ -32,8 +33,10 @@
 /nullgame
 /numgame
 /obfusc
+/palisade
 /path
 /pattern
+/patternpicture
 /patternsolver
 /pearl
 /pearlbench

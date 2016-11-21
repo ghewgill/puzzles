@@ -609,7 +609,7 @@ static char *validate_desc(const game_params *params, const char *desc)
             c = 10 + (c - 'A');
         else
             return "Bad character in grid description";
-        if (c < 0 || c >= params->colours)
+        if ((unsigned)c >= params->colours)
             return "Colour out of range in grid description";
     }
     if (*desc != ',')
@@ -697,8 +697,10 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     char buf[256];
     struct solver_scratch *scratch;
 
-    if (currstate->complete)
+    if (currstate->complete) {
+        *error = "Puzzle is already solved";
         return NULL;
+    }
 
     /*
      * Find the best solution our solver can give.

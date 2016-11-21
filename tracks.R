@@ -1,6 +1,6 @@
 # -*- makefile -*-
 
-TRACKS_EXTRA = dsf
+TRACKS_EXTRA = dsf findloop
 
 tracks  : [X] GTK COMMON tracks TRACKS_EXTRA tracks-icon|no-icon
 
@@ -8,7 +8,7 @@ tracks  : [G] WINDOWS COMMON tracks TRACKS_EXTRA tracks.res|noicon.res
 
 ALL += tracks[COMBINED] TRACKS_EXTRA
 
-!begin gtk
+!begin am gtk
 GAMES += tracks
 !end
 

@@ -156,7 +156,7 @@ struct island {
 
 struct game_state {
     int w, h, completed, solved, allowloops, maxb;
-    grid_type *grid, *scratch;
+    grid_type *grid;
     struct island *islands;
     int n_islands, n_islands_alloc;
     game_params params; /* used by the aux solver. */
@@ -175,7 +175,6 @@ struct game_state {
 #define INDEX(s,g,x,y) ((s)->g[(y)*((s)->w) + (x)])
 #define IDX(s,g,i) ((s)->g[(i)])
 #define GRID(s,x,y) INDEX(s,grid,x,y)
-#define SCRATCH(s,x,y) INDEX(s,scratch,x,y)
 #define POSSIBLES(s,dx,x,y) ((dx) ? (INDEX(s,possh,x,y)) : (INDEX(s,possv,x,y)))
 #define MAXIMUM(s,dx,x,y) ((dx) ? (INDEX(s,maxh,x,y)) : (INDEX(s,maxv,x,y)))
 
@@ -1051,95 +1050,84 @@ static void map_find_orthogonal(game_state *state)
     }
 }
 
-static int grid_degree(game_state *state, int x, int y, int *nx_r, int *ny_r)
+struct bridges_neighbour_ctx {
+    game_state *state;
+    int i, n, neighbours[4];
+};
+static int bridges_neighbour(int vertex, void *vctx)
 {
-    grid_type grid = SCRATCH(state, x, y), gline = grid & G_LINE;
-    struct island *is;
-    int x1, y1, x2, y2, c = 0, i, nx, ny;
+    struct bridges_neighbour_ctx *ctx = (struct bridges_neighbour_ctx *)vctx;
+    if (vertex >= 0) {
+        game_state *state = ctx->state;
+        int w = state->w, x = vertex % w, y = vertex / w;
+        grid_type grid = GRID(state, x, y), gline = grid & G_LINE;
+        struct island *is;
+        int x1, y1, x2, y2, i;
 
-    nx = ny = -1; /* placate optimiser */
-    is = INDEX(state, gridi, x, y);
-    if (is) {
-        for (i = 0; i < is->adj.npoints; i++) {
-            gline = is->adj.points[i].dx ? G_LINEH : G_LINEV;
-            if (SCRATCH(state,
-                        is->adj.points[i].x,
-                        is->adj.points[i].y) & gline) {
-                nx = is->adj.points[i].x;
-                ny = is->adj.points[i].y;
-                c++;
+        ctx->i = ctx->n = 0;
+
+        is = INDEX(state, gridi, x, y);
+        if (is) {
+            for (i = 0; i < is->adj.npoints; i++) {
+                gline = is->adj.points[i].dx ? G_LINEH : G_LINEV;
+                if (GRID(state, is->adj.points[i].x,
+                         is->adj.points[i].y) & gline) {
+                    ctx->neighbours[ctx->n++] =
+                        (is->adj.points[i].y * w + is->adj.points[i].x);
+                }
             }
-        }
-    } else if (gline) {
-        if (gline & G_LINEV) {
-            x1 = x2 = x;
-            y1 = y-1; y2 = y+1;
-        } else {
-            x1 = x-1; x2 = x+1;
-            y1 = y2 = y;
-        }
-        /* Non-island squares with edges in should never be pointing off the
-         * edge of the grid. */
-        assert(INGRID(state, x1, y1));
-        assert(INGRID(state, x2, y2));
-        if (SCRATCH(state, x1, y1) & (gline | G_ISLAND)) {
-            nx = x1; ny = y1; c++;
-        }
-        if (SCRATCH(state, x2, y2) & (gline | G_ISLAND)) {
-            nx = x2; ny = y2; c++;
+        } else if (gline) {
+            if (gline & G_LINEV) {
+                x1 = x2 = x;
+                y1 = y-1; y2 = y+1;
+            } else {
+                x1 = x-1; x2 = x+1;
+                y1 = y2 = y;
+            }
+            /* Non-island squares with edges in should never be
+             * pointing off the edge of the grid. */
+            assert(INGRID(state, x1, y1));
+            assert(INGRID(state, x2, y2));
+            if (GRID(state, x1, y1) & (gline | G_ISLAND))
+                ctx->neighbours[ctx->n++] = y1 * w + x1;
+            if (GRID(state, x2, y2) & (gline | G_ISLAND))
+                ctx->neighbours[ctx->n++] = y2 * w + x2;
         }
     }
-    if (c == 1) {
-        assert(nx != -1 && ny != -1); /* paranoia */
-        *nx_r = nx; *ny_r = ny;
-    }
-    return c;
+
+    if (ctx->i < ctx->n)
+        return ctx->neighbours[ctx->i++];
+    else
+        return -1;
 }
 
 static int map_hasloops(game_state *state, int mark)
 {
-    int x, y, ox, oy, nx = 0, ny = 0, loop = 0;
+    int x, y;
+    struct findloopstate *fls;
+    struct bridges_neighbour_ctx ctx;
+    int ret;
 
-    memcpy(state->scratch, state->grid, GRIDSZ(state));
+    fls = findloop_new_state(state->w * state->h);
+    ctx.state = state;
+    ret = findloop_run(fls, state->w * state->h, bridges_neighbour, &ctx);
 
-    /* This algorithm is actually broken; if there are two loops connected
-     * by bridges this will also highlight bridges. The correct algorithm
-     * uses a dsf and a two-pass edge-detection algorithm (see check_correct
-     * in slant.c); this is BALGE for now, especially since disallow-loops
-     * is not the default for this puzzle. If we want to fix this later then
-     * copy the alg in slant.c to the empty statement in map_group. */
-
-    /* Remove all 1-degree edges. */
-    for (y = 0; y < state->h; y++) {
-        for (x = 0; x < state->w; x++) {
-            ox = x; oy = y;
-            while (grid_degree(state, ox, oy, &nx, &ny) == 1) {
-                /*debug(("hasloops: removing 1-degree at (%d,%d).\n", ox, oy));*/
-                SCRATCH(state, ox, oy) &= ~(G_LINE|G_ISLAND);
-                ox = nx; oy = ny;
-            }
-        }
-    }
-    /* Mark any remaining edges as G_WARN, if required. */
-    for (x = 0; x < state->w; x++) {
+    if (mark) {
         for (y = 0; y < state->h; y++) {
-            if (GRID(state,x,y) & G_ISLAND) continue;
+            for (x = 0; x < state->w; x++) {
+                int u, v;
 
-            if (SCRATCH(state, x, y) & G_LINE) {
-                if (mark) {
-                    /*debug(("hasloops: marking loop square at (%d,%d).\n",
-                           x, y));*/
-                    GRID(state,x,y) |= G_WARN;
-                    loop = 1;
-                } else
-                    return 1; /* short-cut as soon as we find one */
-            } else {
-                if (mark)
-                    GRID(state,x,y) &= ~G_WARN;
+                u = y * state->w + x;
+                for (v = bridges_neighbour(u, &ctx); v >= 0;
+                     v = bridges_neighbour(-1, &ctx))
+                    if (findloop_is_loop_edge(fls, u, v))
+                        GRID(state,x,y) |= G_WARN;
             }
         }
     }
-    return loop;
+
+    findloop_free_state(fls);
+    return ret;
 }
 
 static void map_group(game_state *state)
@@ -1743,8 +1731,6 @@ static game_state *new_state(const game_params *params)
 
     ret->grid = snewn(wh, grid_type);
     memset(ret->grid, 0, GRIDSZ(ret));
-    ret->scratch = snewn(wh, grid_type);
-    memset(ret->scratch, 0, GRIDSZ(ret));
 
     ret->wha = snewn(wh*N_WH_ARRAYS, char);
     memset(ret->wha, 0, wh*N_WH_ARRAYS*sizeof(char));
@@ -1789,8 +1775,6 @@ static game_state *dup_game(const game_state *state)
 
     ret->grid = snewn(wh, grid_type);
     memcpy(ret->grid, state->grid, GRIDSZ(ret));
-    ret->scratch = snewn(wh, grid_type);
-    memcpy(ret->scratch, state->scratch, GRIDSZ(ret));
 
     ret->wha = snewn(wh*N_WH_ARRAYS, char);
     memcpy(ret->wha, state->wha, wh*N_WH_ARRAYS*sizeof(char));
@@ -1830,7 +1814,6 @@ static void free_game(game_state *state)
 
     sfree(state->wha);
 
-    sfree(state->scratch);
     sfree(state->grid);
     sfree(state);
 }
@@ -2029,7 +2012,7 @@ static char *validate_desc(const game_params *params, const char *desc)
         else if (!*desc)
             return "Game description shorter than expected";
         else
-            return "Game description containers unexpected character";
+            return "Game description contains unexpected character";
         desc++;
     }
     if (*desc || i > wh)
@@ -2333,18 +2316,22 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     int gx = FROMCOORD(x), gy = FROMCOORD(y);
     char buf[80], *ret;
     grid_type ggrid = INGRID(state,gx,gy) ? GRID(state,gx,gy) : 0;
+    int shift = button & MOD_SHFT, control = button & MOD_CTRL;
+    button &= ~MOD_MASK;
 
     if (button == LEFT_BUTTON || button == RIGHT_BUTTON) {
         if (!INGRID(state, gx, gy)) return NULL;
         ui->cur_visible = 0;
-        if ((ggrid & G_ISLAND) && !(ggrid & G_MARK)) {
+        if (ggrid & G_ISLAND) {
             ui->dragx_src = gx;
             ui->dragy_src = gy;
             return "";
         } else
             return ui_cancel_drag(ui);
     } else if (button == LEFT_DRAG || button == RIGHT_DRAG) {
-        if (gx != ui->dragx_src || gy != ui->dragy_src) {
+        if (INGRID(state, ui->dragx_src, ui->dragy_src)
+                && (gx != ui->dragx_src || gy != ui->dragy_src)
+                && !(GRID(state,ui->dragx_src,ui->dragy_src) & G_MARK)) {
             ui->dragging = 1;
             ui->drag_is_noline = (button == RIGHT_DRAG) ? 1 : 0;
             return update_drag_dst(state, ui, ds, x, y);
@@ -2358,6 +2345,10 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         if (ui->dragging) {
             return finish_drag(state, ui);
         } else {
+            if (!INGRID(state, ui->dragx_src, ui->dragy_src)
+                    || gx != ui->dragx_src || gy != ui->dragy_src) {
+                return ui_cancel_drag(ui);
+            }
             ui_cancel_drag(ui);
             if (!INGRID(state, gx, gy)) return NULL;
             if (!(GRID(state, gx, gy) & G_ISLAND)) return NULL;
@@ -2372,10 +2363,18 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         return ret;
     } else if (IS_CURSOR_MOVE(button)) {
         ui->cur_visible = 1;
+        if (control || shift) {
+            ui->dragx_src = ui->cur_x;
+            ui->dragy_src = ui->cur_y;
+            ui->dragging = TRUE;
+            ui->drag_is_noline = !control;
+        }
         if (ui->dragging) {
             int nx = ui->cur_x, ny = ui->cur_y;
 
             move_cursor(button, &nx, &ny, state->w, state->h, 0);
+            if (nx == ui->cur_x && ny == ui->cur_y)
+                return NULL;
             update_drag_dst(state, ui, ds,
                              COORD(nx)+TILE_SIZE/2,
                              COORD(ny)+TILE_SIZE/2);
@@ -2439,7 +2438,7 @@ found:
             ui->cur_visible = 1;
             return "";
         }
-        if (ui->dragging) {
+        if (ui->dragging || button == CURSOR_SELECT2) {
             ui_cancel_drag(ui);
             if (ui->dragx_dst == -1 && ui->dragy_dst == -1) {
                 sprintf(buf, "M%d,%d", ui->cur_x, ui->cur_y);
@@ -2457,6 +2456,51 @@ found:
                 return "";
             }
         }
+    } else if ((button >= '0' && button <= '9') ||
+               (button >= 'a' && button <= 'f') ||
+               (button >= 'A' && button <= 'F')) {
+        /* jump to island with .count == number closest to cur_{x,y} */
+        int best_x = -1, best_y = -1, best_sqdist = -1, number = -1, i;
+
+        if (button >= '0' && button <= '9')
+            number = (button == '0' ? 16 : button - '0');
+        else if (button >= 'a' && button <= 'f')
+            number = 10 + button - 'a';
+        else if (button >= 'A' && button <= 'F')
+            number = 10 + button - 'A';
+
+        if (!ui->cur_visible) {
+            ui->cur_visible = 1;
+            return "";
+        }
+
+        for (i = 0; i < state->n_islands; ++i) {
+            int x = state->islands[i].x, y = state->islands[i].y;
+            int dx = x - ui->cur_x, dy = y - ui->cur_y;
+            int sqdist = dx*dx + dy*dy;
+
+            if (state->islands[i].count != number)
+                continue;
+            if (x == ui->cur_x && y == ui->cur_y)
+                continue;
+
+            /* new_game() reads the islands in row-major order, so by
+             * breaking ties in favor of `first in state->islands' we
+             * also break ties by `lexicographically smallest (y, x)'.
+             * Thus, there's a stable pattern to how ties are broken
+             * which the user can learn and use to navigate faster. */
+            if (best_sqdist == -1 || sqdist < best_sqdist) {
+                best_x = x;
+                best_y = y;
+                best_sqdist = sqdist;
+            }
+        }
+        if (best_x != -1 && best_y != -1) {
+            ui->cur_x = best_x;
+            ui->cur_y = best_y;
+            return "";
+        } else
+            return NULL;
     } else if (button == 'g' || button == 'G') {
         ui->show_hints = 1 - ui->show_hints;
         return "";

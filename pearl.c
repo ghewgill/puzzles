@@ -130,7 +130,6 @@ struct game_state {
     char *errors;       /* size w*h: errors detected */
     char *marks;        /* size w*h: 'no line here' marks placed. */
     int completed, used_solve;
-    int loop_length;    /* filled in by check_completion when complete. */
 };
 
 #define DEFAULT_PRESET 3
@@ -1496,12 +1495,11 @@ static char nbits[16] = { 0, 1, 1, 2,
 
 #define ERROR_CLUE 16
 
-static void dsf_update_completion(game_state *state, int *loopclass,
-                                 int ax, int ay, char dir,
-                                 int *dsf, int *dsfsize)
+static void dsf_update_completion(game_state *state, int ax, int ay, char dir,
+                                 int *dsf)
 {
     int w = state->shared->w /*, h = state->shared->h */;
-    int ac = ay*w+ax, ae, bx, by, bc, be;
+    int ac = ay*w+ax, bx, by, bc;
 
     if (!(state->lines[ac] & dir)) return; /* no link */
     bx = ax + DX(dir); by = ay + DY(dir);
@@ -1509,34 +1507,19 @@ static void dsf_update_completion(game_state *state, int *loopclass,
     assert(INGRID(state, bx, by)); /* should not have a link off grid */
 
     bc = by*w+bx;
-#if 0
     assert(state->lines[bc] & F(dir)); /* should have reciprocal link */
-#endif
-    /* TODO put above assertion back in once we stop generating partially
-     * soluble puzzles. */
     if (!(state->lines[bc] & F(dir))) return;
 
-    ae = dsf_canonify(dsf, ac);
-    be = dsf_canonify(dsf, bc);
-
-    if (ae == be) { /* detected a loop! */
-        if (*loopclass != -1) /* this is the second loop, doom. */
-            return;
-        *loopclass = ae;
-    } else {
-        int size = dsfsize[ae] + dsfsize[be];
-        dsf_merge(dsf, ac, bc);
-        ae = dsf_canonify(dsf, ac);
-        dsfsize[ae] = size;
-    }
-    return;
+    dsf_merge(dsf, ac, bc);
 }
 
 static void check_completion(game_state *state, int mark)
 {
     int w = state->shared->w, h = state->shared->h, x, y, i, d;
-    int had_error = FALSE /*, is_complete = FALSE */, loopclass;
-    int *dsf, *dsfsize;
+    int had_error = FALSE;
+    int *dsf, *component_state;
+    int nsilly, nloop, npath, largest_comp, largest_size, total_pathsize;
+    enum { COMP_NONE, COMP_LOOP, COMP_PATH, COMP_SILLY, COMP_EMPTY };
 
     if (mark) {
         for (i = 0; i < w*h; i++) {
@@ -1547,57 +1530,111 @@ static void check_completion(game_state *state, int mark)
 #define ERROR(x,y,e) do { had_error = TRUE; if (mark) state->errors[(y)*w+(x)] |= (e); } while(0)
 
     /*
-     * First of all: we should have one single closed loop, passing through all clues.
+     * Analyse the solution into loops, paths and stranger things.
+     * Basic strategy here is all the same as in Loopy - see the big
+     * comment in loopy.c's check_completion() - and for exactly the
+     * same reasons, since Loopy and Pearl have basically the same
+     * form of expected solution.
      */
-    dsf = snewn(w*h, int);
-    dsfsize = snewn(w*h, int);
-    dsf_init(dsf, w*h);
-    for (i = 0; i < w*h; i++) dsfsize[i] = 1;
-    loopclass = -1;
+    dsf = snew_dsf(w*h);
 
+    /* Build the dsf. */
     for (x = 0; x < w; x++) {
         for (y = 0; y < h; y++) {
-            dsf_update_completion(state, &loopclass, x, y, R, dsf, dsfsize);
-            dsf_update_completion(state, &loopclass, x, y, D, dsf, dsfsize);
+            dsf_update_completion(state, x, y, R, dsf);
+            dsf_update_completion(state, x, y, D, dsf);
         }
     }
-    if (loopclass != -1) {
-        /* We have a loop. Check all squares with lines on. */
-        for (x = 0; x < w; x++) {
-            for (y = 0; y < h; y++) {
-                if (state->lines[y*w+x] == BLANK) {
-                    if (state->shared->clues[y*w+x] != NOCLUE) {
-                        /* the loop doesn't include this clue square! */
-                        ERROR(x, y, ERROR_CLUE);
-                    }
-                } else {
-                    if (dsf_canonify(dsf, y*w+x) != loopclass) {
-                        /* these lines are not on the loop: mark them as error. */
-                        ERROR(x, y, state->lines[y*w+x]);
-                    }
-                }
-            }
-        }
+
+    /* Initialise a state variable for each connected component. */
+    component_state = snewn(w*h, int);
+    for (i = 0; i < w*h; i++) {
+        if (dsf_canonify(dsf, i) == i)
+            component_state[i] = COMP_LOOP;
+        else
+            component_state[i] = COMP_NONE;
     }
 
     /*
-     * Second: check no clues are contradicted.
+     * Classify components, and mark errors where a square has more
+     * than two line segments.
      */
-
     for (x = 0; x < w; x++) {
         for (y = 0; y < h; y++) {
             int type = state->lines[y*w+x];
-            /*
-             * Check that no square has more than two line segments.
-             */
-            if (NBITS(type) > 2) {
+            int degree = NBITS(type);
+            int comp = dsf_canonify(dsf, y*w+x);
+            if (degree > 2) {
                 ERROR(x,y,type);
+                component_state[comp] = COMP_SILLY;
+            } else if (degree == 0) {
+                component_state[comp] = COMP_EMPTY;
+            } else if (degree == 1) {
+                if (component_state[comp] != COMP_SILLY)
+                    component_state[comp] = COMP_PATH;
             }
-            /*
-             * Check that no clues are contradicted. This code is similar to
-             * the code that sets up the maximal clue array for any given
-             * loop.
-             */
+        }
+    }
+
+    /* Count the components, and find the largest sensible one. */
+    nsilly = nloop = npath = 0;
+    total_pathsize = 0;
+    largest_comp = largest_size = -1;
+    for (i = 0; i < w*h; i++) {
+        if (component_state[i] == COMP_SILLY) {
+            nsilly++;
+        } else if (component_state[i] == COMP_PATH) {
+            total_pathsize += dsf_size(dsf, i);
+            npath = 1;
+        } else if (component_state[i] == COMP_LOOP) {
+            int this_size;
+
+            nloop++;
+
+            if ((this_size = dsf_size(dsf, i)) > largest_size) {
+                largest_comp = i;
+                largest_size = this_size;
+            }
+        }
+    }
+    if (largest_size < total_pathsize) {
+        largest_comp = -1;             /* means the paths */
+        largest_size = total_pathsize;
+    }
+
+    if (nloop > 0 && nloop + npath > 1) {
+        /*
+         * If there are at least two sensible components including at
+         * least one loop, highlight every sensible component that is
+         * not the largest one.
+         */
+        for (i = 0; i < w*h; i++) {
+            int comp = dsf_canonify(dsf, i);
+            if (component_state[comp] == COMP_PATH)
+                comp = -1; /* part of the 'all paths' quasi-component */
+            if ((component_state[comp] == COMP_PATH &&
+                 -1 != largest_comp) ||
+                (component_state[comp] == COMP_LOOP &&
+                 comp != largest_comp))
+                ERROR(i%w, i/w, state->lines[i]);
+        }
+    }
+
+    /* Now we've finished with the dsf and component states. The only
+     * thing we'll need to remember later on is whether all edges were
+     * part of a single loop, for which our counter variables
+     * nsilly,nloop,npath are enough. */
+    sfree(component_state);
+    sfree(dsf);
+
+    /*
+     * Check that no clues are contradicted. This code is similar to
+     * the code that sets up the maximal clue array for any given
+     * loop.
+     */
+    for (x = 0; x < w; x++) {
+        for (y = 0; y < h; y++) {
+            int type = state->lines[y*w+x];
             if (state->shared->clues[y*w+x] == CORNER) {
                 /* Supposed to be a corner: will find a contradiction if
                  * it actually contains a straight line, or if it touches any
@@ -1638,15 +1675,30 @@ static void check_completion(game_state *state, int mark)
             }
         }
     }
-    if (!had_error && loopclass != -1) {
-        state->completed = TRUE;
-        state->loop_length = dsfsize[loopclass];
+
+    if (nloop == 1 && nsilly == 0 && npath == 0) {
+        /*
+         * If there's exactly one loop (so that the puzzle is at least
+         * potentially complete), we need to ensure it hasn't left any
+         * clue out completely.
+         */
+        for (x = 0; x < w; x++) {
+            for (y = 0; y < h; y++) {
+                if (state->lines[y*w+x] == BLANK) {
+                    if (state->shared->clues[y*w+x] != NOCLUE) {
+                        /* the loop doesn't include this clue square! */
+                        ERROR(x, y, ERROR_CLUE);
+                    }
+                }
+            }
+        }
+
+        /*
+         * But if not, then we're done!
+         */
+        if (!had_error)
+            state->completed = TRUE;
     }
-
-    sfree(dsf);
-    sfree(dsfsize);
-
-    return;
 }
 
 /* completion check:
@@ -1654,7 +1706,7 @@ static void check_completion(game_state *state, int mark)
  * - no clues must be contradicted (highlight clue itself in error if so)
  * - if there is a closed loop it must include every line segment laid
  *    - if there's a smaller closed loop then highlight whole loop as error
- * - no square must have more than 3 lines radiating from centre point
+ * - no square must have more than 2 lines radiating from centre point
  *   (highlight all lines in that square as error if so)
  */
 
@@ -1722,12 +1774,38 @@ done:
 
 static int game_can_format_as_text_now(const game_params *params)
 {
-    return FALSE;
+    return TRUE;
 }
 
 static char *game_text_format(const game_state *state)
 {
-    return NULL;
+    int w = state->shared->w, h = state->shared->h, cw = 4, ch = 2;
+    int gw = cw*(w-1) + 2, gh = ch*(h-1) + 1, len = gw * gh, r, c, j;
+    char *board = snewn(len + 1, char);
+
+    assert(board);
+    memset(board, ' ', len);
+
+    for (r = 0; r < h; ++r) {
+	for (c = 0; c < w; ++c) {
+	    int i = r*w + c, cell = r*ch*gw + c*cw;
+	    board[cell] = "+BW"[(unsigned char)state->shared->clues[i]];
+	    if (c < w - 1 && (state->lines[i] & R || state->lines[i+1] & L))
+		memset(board + cell + 1, '-', cw - 1);
+	    if (r < h - 1 && (state->lines[i] & D || state->lines[i+w] & U))
+		for (j = 1; j < ch; ++j) board[cell + j*gw] = '|';
+	    if (c < w - 1 && (state->marks[i] & R || state->marks[i+1] & L))
+		board[cell + cw/2] = 'x';
+	    if (r < h - 1 && (state->marks[i] & D || state->marks[i+w] & U))
+		board[cell + (ch/2 * gw)] = 'x';
+	}
+
+	for (j = 0; j < (r == h - 1 ? 1 : ch); ++j)
+	    board[r*ch*gw + (gw - 1) + j*gw] = '\n';
+    }
+
+    board[len] = '\0';
+    return board;
 }
 
 struct game_ui {
@@ -1937,23 +2015,20 @@ static void interpret_ui_drag(const game_state *state, const game_ui *ui,
 }
 
 static char *mark_in_direction(const game_state *state, int x, int y, int dir,
-			       int ismark, char *buf)
+			       int primary, char *buf)
 {
     int w = state->shared->w /*, h = state->shared->h, sz = state->shared->sz */;
     int x2 = x + DX(dir);
     int y2 = y + DY(dir);
     int dir2 = F(dir);
-    char ch = ismark ? 'M' : 'F';
+
+    char ch = primary ? 'F' : 'M', *other;
 
     if (!INGRID(state, x, y) || !INGRID(state, x2, y2)) return "";
+
     /* disallow laying a mark over a line, or vice versa. */
-    if (ismark) {
-	if ((state->lines[y*w+x] & dir) || (state->lines[y2*w+x2] & dir2))
-	    return "";
-    } else {
-	if ((state->marks[y*w+x] & dir) || (state->marks[y2*w+x2] & dir2))
-	    return "";
-    }
+    other = primary ? state->marks : state->lines;
+    if (other[y*w+x] & dir || other[y2*w+x2] & dir2) return "";
     
     sprintf(buf, "%c%d,%d,%d;%c%d,%d,%d", ch, dir, x, y, ch, dir2, x2, y2);
     return dupstr(buf);
@@ -1971,6 +2046,9 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     int gx = FROMCOORD(x), gy = FROMCOORD(y), i;
     int release = FALSE;
     char tmpbuf[80];
+
+    int shift = button & MOD_SHFT, control = button & MOD_CTRL;
+    button &= ~MOD_MASK;
 
     if (IS_MOUSE_DOWN(button)) {
 	ui->cursor_active = FALSE;
@@ -1994,15 +2072,18 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
     if (IS_MOUSE_RELEASE(button)) release = TRUE;
 
-    if (IS_CURSOR_MOVE(button & ~MOD_MASK)) {
+    if (IS_CURSOR_MOVE(button)) {
 	if (!ui->cursor_active) {
 	    ui->cursor_active = TRUE;
-	} else if (button & (MOD_SHFT | MOD_CTRL)) {
+	} else if (control | shift) {
+	    char *move;
 	    if (ui->ndragcoords > 0) return NULL;
 	    ui->ndragcoords = -1;
-	    return mark_in_direction(state, ui->curx, ui->cury,
-				     KEY_DIRECTION(button & ~MOD_MASK),
-				     (button & MOD_SHFT), tmpbuf);
+	    move = mark_in_direction(state, ui->curx, ui->cury,
+				     KEY_DIRECTION(button), control, tmpbuf);
+	    if (control && !shift && *move)
+		move_cursor(button, &ui->curx, &ui->cury, w, h, FALSE);
+	    return move;
 	} else {
 	    move_cursor(button, &ui->curx, &ui->cury, w, h, FALSE);
 	    if (ui->ndragcoords >= 0)
@@ -2011,7 +2092,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	return "";
     }
 
-    if (IS_CURSOR_SELECT(button & ~MOD_MASK)) {
+    if (IS_CURSOR_SELECT(button)) {
 	if (!ui->cursor_active) {
 	    ui->cursor_active = TRUE;
 	    return "";
@@ -2027,6 +2108,11 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	    ui->ndragcoords = -1;
 	    return "";
 	}
+    }
+
+    if (button == 27 || button == '\b') {
+        ui->ndragcoords = -1;
+        return "";
     }
 
     if (release) {
@@ -2095,7 +2181,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                     direction = (x < cx) ? L : R;
                 }
 		return mark_in_direction(state, gx, gy, direction,
-					 (button == RIGHT_RELEASE), tmpbuf);
+					 (button == LEFT_RELEASE), tmpbuf);
             }
         }
     }
@@ -2537,7 +2623,7 @@ const struct game thegame = {
     dup_game,
     free_game,
     TRUE, solve_game,
-    FALSE, game_can_format_as_text_now, game_text_format,
+    TRUE, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
