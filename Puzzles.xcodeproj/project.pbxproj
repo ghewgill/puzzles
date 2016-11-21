@@ -241,6 +241,8 @@
 		37DDFDBE16F70606007B6287 /* Default-Portrait.png in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDBA16F70606007B6287 /* Default-Portrait.png */; };
 		37DDFDBF16F70606007B6287 /* Default-Portrait@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDBB16F70606007B6287 /* Default-Portrait@2x.png */; };
 		37DDFDC116F78FE2007B6287 /* inprogress.png in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDC016F78FE2007B6287 /* inprogress.png */; };
+		F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA971DE3A09C008C6D7F /* findloop.c */; };
+		F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA981DE3A09C008C6D7F /* palisade.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -511,6 +513,8 @@
 		37DDFDBA16F70606007B6287 /* Default-Portrait.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default-Portrait.png"; sourceTree = SOURCE_ROOT; };
 		37DDFDBB16F70606007B6287 /* Default-Portrait@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default-Portrait@2x.png"; sourceTree = SOURCE_ROOT; };
 		37DDFDC016F78FE2007B6287 /* inprogress.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = inprogress.png; sourceTree = SOURCE_ROOT; };
+		F1EFAA971DE3A09C008C6D7F /* findloop.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = findloop.c; sourceTree = "<group>"; };
+		F1EFAA981DE3A09C008C6D7F /* palisade.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = palisade.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -622,6 +626,8 @@
 		3701DC2E16E7330700896D7D /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				F1EFAA971DE3A09C008C6D7F /* findloop.c */,
+				F1EFAA981DE3A09C008C6D7F /* palisade.c */,
 				3701DD3B16F398EA00896D7D /* help */,
 				3701DCE116EB16B400896D7D /* icons */,
 				3701DCA416E7391800896D7D /* printing.c */,
@@ -1098,6 +1104,7 @@
 				3701DC1916E730ED00896D7D /* AppDelegate.m in Sources */,
 				3701DC6716E734A800896D7D /* blackbox.c in Sources */,
 				3701DC6816E734A800896D7D /* bridges.c in Sources */,
+				F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */,
 				3701DC6916E734A800896D7D /* combi.c in Sources */,
 				3701DC6A16E734A800896D7D /* cube.c in Sources */,
 				3701DC6B16E734A800896D7D /* divvy.c in Sources */,
@@ -1161,6 +1168,7 @@
 				3701DD3A16F3959400896D7D /* GameHelpController.m in Sources */,
 				371ADF9516F431A100A529A2 /* NSIndexPath+PSTCollectionViewAdditions.m in Sources */,
 				371ADF9616F431A100A529A2 /* PSTCollectionView.m in Sources */,
+				F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */,
 				371ADF9716F431A100A529A2 /* PSTCollectionViewCell.m in Sources */,
 				371ADF9816F431A100A529A2 /* PSTCollectionViewController.m in Sources */,
 				371ADF9916F431A100A529A2 /* PSTCollectionViewData.m in Sources */,
