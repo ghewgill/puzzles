@@ -243,6 +243,7 @@
 		37DDFDC116F78FE2007B6287 /* inprogress.png in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDC016F78FE2007B6287 /* inprogress.png */; };
 		F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA971DE3A09C008C6D7F /* findloop.c */; };
 		F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA981DE3A09C008C6D7F /* palisade.c */; };
+		F1EFAA9C1DE3A88C008C6D7F /* palisade.html in Resources */ = {isa = PBXBuildFile; fileRef = F1EFAA9B1DE3A88C008C6D7F /* palisade.html */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -515,6 +516,7 @@
 		37DDFDC016F78FE2007B6287 /* inprogress.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = inprogress.png; sourceTree = SOURCE_ROOT; };
 		F1EFAA971DE3A09C008C6D7F /* findloop.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = findloop.c; sourceTree = "<group>"; };
 		F1EFAA981DE3A09C008C6D7F /* palisade.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = palisade.c; sourceTree = "<group>"; };
+		F1EFAA9B1DE3A88C008C6D7F /* palisade.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = palisade.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -785,6 +787,7 @@
 		3701DD3B16F398EA00896D7D /* help */ = {
 			isa = PBXGroup;
 			children = (
+				F1EFAA9B1DE3A88C008C6D7F /* palisade.html */,
 				3782E80316F9B30F0040B261 /* help-back.png */,
 				3782E80716F9B9040040B261 /* help-back@2x.png */,
 				3782E80516F9B6700040B261 /* help-forward.png */,
@@ -982,6 +985,7 @@
 				3701DD6E16F3997400896D7D /* galaxies.html in Resources */,
 				3701DD6F16F3997400896D7D /* guess.html in Resources */,
 				3701DD7016F3997400896D7D /* index.html in Resources */,
+				F1EFAA9C1DE3A88C008C6D7F /* palisade.html in Resources */,
 				3701DD7116F3997400896D7D /* inertia.html in Resources */,
 				3701DD7216F3997400896D7D /* intro.html in Resources */,
 				3701DD7316F3997400896D7D /* keen.html in Resources */,

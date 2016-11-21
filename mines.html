@@ -6,13 +6,13 @@
 <title>Mines</title>
 <link rel="previous" href="solo.html">
 <link rel="ToC" href="index.html">
-<link rel="index" href="docindex.html">
+<link rel="up" href="index.html">
+<link rel="index" href="indexpage.html">
 <link rel="next" href="samegame.html">
-<link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-<p><a href="solo.html">Previous</a> | <a href="index.html">Contents</a> | <a href="docindex.html">Index</a> | <a href="samegame.html">Next</a></p>
-<h1><a name="C12"></a>Chapter 12: <a name="i0"></a>Mines</h1>
+<p><a href="solo.html">Previous</a> | <a href="index.html">Contents</a> | <a href="indexpage.html">Index</a> | <a href="samegame.html">Next</a></p>
+<h1><a name="mines"></a>Chapter 12: <a name="i0"></a>Mines</h1>
 <p>
 You have a grid of covered squares, some of which contain mines, but you don't know which. Your job is to uncover every square which does <em>not</em> contain a mine. If you uncover a square containing a mine, you lose. If you uncover a square which does not contain a mine, you are told how many mines are contained within the eight surrounding squares.
 </p>
@@ -22,7 +22,7 @@ This game needs no introduction; popularised by Windows, it is perhaps the singl
 <p>
 This version of it has an unusual property. By default, it will generate its mine positions in such a way as to ensure that you never need to <em>guess</em> where a mine is: you will always be able to deduce it somehow. So you will never, as can happen in other versions, get to the last four squares and discover that there are two mines left but you have no way of knowing for sure where they are.
 </p>
-<h2><a name="S12.1"></a>12.1 <a name="i1"></a>Mines controls</h2>
+<h2><a name="mines-controls"></a>12.1 <a name="i1"></a>Mines controls</h2>
 <p>
 This game is played with the mouse.
 </p>
@@ -42,7 +42,7 @@ If you uncover a square which has <em>no</em> mines in the surrounding eight squ
 You can also use the cursor keys to move around the minefield. Pressing the return key in a covered square uncovers it, and in an uncovered square will clear around it (so it acts as the left button), pressing the space bar in a covered square will place a flag (similarly, it acts as the right button).
 </p>
 <p>
-All the actions described in <a href="common.html#S2.1">section 2.1</a> are also available.
+All the actions described in <a href="common.html#common-actions">section 2.1</a> are also available.
 </p>
 <p>
 Even Undo is available, although you might consider it cheating to use it. If you step on a mine, the program will only reveal the mine in question (unlike most other implementations, which reveal all of them). You can then Undo your fatal move and continue playing if you like. The program will track the number of times you died (and Undo will not reduce that counter), so when you get to the end of the game you know whether or not you did it without making any errors.
@@ -50,7 +50,7 @@ Even Undo is available, although you might consider it cheating to use it. If yo
 <p>
 (If you really want to know the full layout of the grid, which other implementations will show you after you die, you can always use the Solve menu option.)
 </p>
-<h2><a name="S12.2"></a>12.2 <a name="i2"></a>Mines parameters</h2>
+<h2><a name="mines-parameters"></a>12.2 <a name="i2"></a>Mines parameters</h2>
 <p>
 The options available from the &#8216;Custom...&#8217; option on the &#8216;Type&#8217; menu are:
 </p>
