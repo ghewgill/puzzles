@@ -895,7 +895,7 @@ struct game_drawstate {
 
 #define TILESIZE (ds->tilesize)
 #define MARGIN (ds->tilesize / 2)
-#define WIDTH (1 + (TILESIZE >= 16) + (TILESIZE >= 32) + (TILESIZE >= 64))
+#define WIDTH (4 + (TILESIZE >= 16) + (TILESIZE >= 32) + (TILESIZE >= 64))
 #define CENTER ((ds->tilesize / 2) + WIDTH/2)
 
 #define FROMCOORD(x) (((x) - MARGIN) / TILESIZE)
@@ -943,7 +943,6 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 ((state->borders[i] & DISABLED(BORDER(dir))) >> dir >> 2)) {
 
         case MAYBE_LEFT:
-        case ON_LEFT:
         case ON_RIGHT:
             return string(80, "F%d,%d,%dF%d,%d,%d",
                           gx, gy, BORDER(dir),
@@ -951,10 +950,21 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
         case MAYBE_RIGHT:
         case OFF_LEFT:
-        case OFF_RIGHT:
             return string(80, "F%d,%d,%dF%d,%d,%d",
                           gx, gy, DISABLED(BORDER(dir)),
                           hx, hy, DISABLED(BORDER(FLIP(dir))));
+        case ON_LEFT:
+            return string(80, "F%d,%d,%dF%d,%d,%dF%d,%d,%dF%d,%d,%d",
+                          gx, gy, BORDER(dir),
+                          hx, hy, BORDER(FLIP(dir)),
+                          gx, gy, DISABLED(BORDER(dir)),
+                          hx, hy, DISABLED(BORDER(FLIP(dir))));
+        case OFF_RIGHT:
+            return string(80, "F%d,%d,%dF%d,%d,%dF%d,%d,%dF%d,%d,%d",
+                          gx, gy, DISABLED(BORDER(dir)),
+                          hx, hy, DISABLED(BORDER(FLIP(dir))),
+                          gx, gy, BORDER(dir),
+                          hx, hy, BORDER(FLIP(dir)));
         }
     }
 
