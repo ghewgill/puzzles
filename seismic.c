@@ -92,7 +92,7 @@ const static struct game_params seismic_presets[] = {
 	{ 7,  7, DIFF_HARD, MODE_TECTONIC }
 };
 
-#define DEFAULT_PRESET 2
+#define DEFAULT_PRESET 4
 
 static game_params *default_params(void)
 {
