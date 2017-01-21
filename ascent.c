@@ -76,6 +76,7 @@ struct game_params {
 	A(EASY,Easy, e)                             \
 	A(NORMAL,Normal, n)                         \
 	A(TRICKY,Tricky, t)                         \
+	A(HARD,Hard, h)                             \
 
 #define ENUM(upper,title,lower) DIFF_ ## upper,
 #define TITLE(upper,title,lower) #title,
@@ -90,13 +91,16 @@ const static struct game_params ascent_presets[] = {
 	{ 7,  6, DIFF_EASY, FALSE },
 	{ 7,  6, DIFF_NORMAL, FALSE },
 	{ 7,  6, DIFF_TRICKY, FALSE },
+	{ 7,  6, DIFF_HARD, FALSE },
 	{ 10, 8, DIFF_EASY, FALSE },
 	{ 10, 8, DIFF_NORMAL, FALSE },
 	{ 10, 8, DIFF_TRICKY, FALSE },
+	{ 10, 8, DIFF_HARD, FALSE },
 #ifndef SMALL_SCREEN
 	{ 14, 11, DIFF_EASY, FALSE },
 	{ 14, 11, DIFF_NORMAL, FALSE },
 	{ 14, 11, DIFF_TRICKY, FALSE },
+	{ 14, 11, DIFF_HARD, FALSE },
 #endif
 };
 
@@ -522,7 +526,7 @@ static int solver_single_position(struct solver_scratch *scratch)
 	return ret;
 }
 
-static int solver_single_number(struct solver_scratch *scratch)
+static int solver_single_number(struct solver_scratch *scratch, char simple)
 {
 	/* Find cells which have a single possible number */
 	
@@ -545,6 +549,14 @@ static int solver_single_number(struct solver_scratch *scratch)
 		assert(found != -1);
 		if(found >= 0)
 		{
+			if(simple && 
+				(found == 0 || scratch->positions[found-1] == -1) && 
+				(found == scratch->end || scratch->positions[found+1] == -1))
+			{
+				solver_printf("Ignoring possibility %d for cell %d,%d\n", found+1, i%w,i/w);
+				continue;
+			}
+			
 			solver_printf("Single possibility for cell %d,%d\n", i%w,i/w);
 			ret += solver_place(scratch, i, found);
 		}
@@ -1006,7 +1018,12 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		
 		if(diff < DIFF_TRICKY) break;
 		
-		if(solver_single_number(scratch))
+		if(solver_single_number(scratch, TRUE))
+			continue;
+		
+		if(diff < DIFF_HARD) break;
+		
+		if(solver_single_number(scratch, FALSE))
 			continue;
 		
 		break;
