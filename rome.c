@@ -1620,27 +1620,29 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		if(ui->kmode != KEYMODE_OFF
 			&& !(state->grid[y*w+x] & FM_FIXED))
 		{
+			m = ui->kmode == KEYMODE_PENCIL ? 'P' : 'R';
+
 			if(button == '8')
 			{
-				sprintf(buf, "R%d,%d,U", x, y);
+				sprintf(buf, "%c%d,%d,U", m, x, y);
 				ui->kmode = KEYMODE_MOVE;
 				return dupstr(buf);
 			}
 			if(button == '2')
 			{
-				sprintf(buf, "R%d,%d,D", x, y);
+				sprintf(buf, "%c%d,%d,D", m, x, y);
 				ui->kmode = KEYMODE_MOVE;
 				return dupstr(buf);
 			}
 			if(button == '4')
 			{
-				sprintf(buf, "R%d,%d,L", x, y);
+				sprintf(buf, "%c%d,%d,L", m, x, y);
 				ui->kmode = KEYMODE_MOVE;
 				return dupstr(buf);
 			}
 			if(button == '6')
 			{
-				sprintf(buf, "R%d,%d,R", x, y);
+				sprintf(buf, "%c%d,%d,R", m, x, y);
 				ui->kmode = KEYMODE_MOVE;
 				return dupstr(buf);
 			}
