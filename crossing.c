@@ -36,7 +36,6 @@
 #include <math.h>
 
 #include "puzzles.h"
-#include "tree234.h"
 
 #ifdef STANDALONE_SOLVER
 int solver_verbose = FALSE;
@@ -77,15 +76,16 @@ struct crossing_puzzle {
 	char *walls;
 	
 	int maxrow;
-	tree234 *numbers;
+	char **numbers;
+	int numcount;
 	
 	int refcount;
 };
 
 static int cmp_numbers(void* va, void* vb)
 {
-	char *a = (char*)va;
-	char *b = (char*)vb;
+	char *a = *(char**)va;
+	char *b = *(char**)vb;
 	int ca, cb;
 	
 	ca = strlen(a);
@@ -236,7 +236,9 @@ static struct crossing_puzzle *blank_puzzle(int w, int h)
 	memset(puzzle->walls, FALSE, w*h*sizeof(char));
 	
 	puzzle->maxrow = 0;
-	puzzle->numbers = newtree234(cmp_numbers);
+	puzzle->numbers = snewn(w*h, char*);
+	memset(puzzle->numbers, NULL, w*h * sizeof(char*));
+	puzzle->numcount = 0;
 	
 	puzzle->refcount = 1;
 	
@@ -246,13 +248,13 @@ static struct crossing_puzzle *blank_puzzle(int w, int h)
 static void free_puzzle(struct crossing_puzzle *puzzle)
 {
 	return; // TODO FIX!
-	char *num;
 	
 	if(!--puzzle->refcount)
 	{
-		while ( (num = delpos234(puzzle->numbers, 0)) != NULL )
-			sfree(num);
-		freetree234(puzzle->numbers);
+		int i;
+		for(i = 0; i < puzzle->numcount; i++)
+			sfree(puzzle->numbers[i]);
+		sfree(puzzle->numbers);
 		sfree(puzzle->walls);
 		sfree(puzzle);
 	}
@@ -294,7 +296,6 @@ enum {
 	INVALID_TOO_LONG,
 	INVALID_MAXROW,
 	INVALID_DUPLICATE, 
-	INVALID_UNORDERED,
 	INVALID_NUMBER
 };
 
@@ -372,25 +373,31 @@ static int crossing_read_desc(const game_params *params,
 		pp++;
 		l = pp - (p+1);
 		
-		num = snewn(l+1, char);
-		memcpy(num, p, l);
-		num[l] = '\0';
-		
-		if(l < 2 || l > maxrow)
+		if(l > maxrow)
 			valid = INVALID_NUMBER;
-		
-		if(add234(state->puzzle->numbers, num) != num)
+
+		if (l >= 2)
 		{
-			valid = INVALID_DUPLICATE;
-			sfree(num);
+			num = snewn(l + 1, char);
+			memcpy(num, p, l);
+			num[l] = '\0';
+
+			state->puzzle->numbers[state->puzzle->numcount++] = num;
 		}
-		
+
 		p = pp;
 	}
+
+	qsort(state->puzzle->numbers, state->puzzle->numcount, sizeof(char*), cmp_numbers);
 	
+	for (i = 0; i < state->puzzle->numcount - 1; i++)
+	{
+		if (!strcmp(state->puzzle->numbers[i], state->puzzle->numbers[i + 1]))
+			valid = INVALID_DUPLICATE;
+	}
+
 	*retstate = state;
 	return valid;
-	return VALID;
 }
 
 static char *validate_desc(const game_params *params, const char *desc)
@@ -410,11 +417,9 @@ static char *validate_desc(const game_params *params, const char *desc)
 		case INVALID_MAXROW:
 			return "One of the rows is too long";
 		case INVALID_NUMBER:
-			return "Invalid number";
+			return "One of the numbers is too long";
 		case INVALID_DUPLICATE:
 			return "Duplicate numbers are not supported";
-		case INVALID_UNORDERED:
-			return "Numbers must be entered in ascending order";
 		default:
 			return NULL;
 	}
@@ -430,7 +435,6 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 	assert(valid != INVALID_TOO_LONG);
 	assert(valid != INVALID_MAXROW);
 	assert(valid != INVALID_DUPLICATE);
-	assert(valid != INVALID_UNORDERED);
 	assert(valid != INVALID_NUMBER);
 	
 	return state;
@@ -468,8 +472,9 @@ static char *game_text_format(const game_state *state)
 	
 	s = 3;
 	pl = 0;
-	for (i = 0; (num = index234(puzzle->numbers, i)) != NULL; i++)
+	for (i = 0; i < puzzle->numcount; i++)
 	{
+		num = puzzle->numbers[i];
 		l = strlen(num);
 		if(l != pl)
 			s+= 3;
@@ -492,8 +497,9 @@ static char *game_text_format(const game_state *state)
 	*p++ = 'Q';
 	
 	pl = 0;
-	for (i = 0; (num = index234(puzzle->numbers, i)) != NULL; i++)
+	for (i = 0; i < puzzle->numcount; i++)
 	{
+		num = puzzle->numbers[i];
 		l = strlen(num);
 		if(pl != l)
 		{
@@ -624,7 +630,7 @@ static struct crossing_solver *crossing_solver_init(game_state *state)
 	ret->runcount = 0;
 	ret->runs = snewn(w*h, struct crossing_run);
 	
-	ts = count234(state->puzzle->numbers);
+	ts = state->puzzle->numcount;
 	ret->done = snewn(ts, int);
 	memset(ret->done, 0, ts * sizeof(int));
 	
@@ -678,7 +684,7 @@ static int crossing_validate(const game_state *state, int runcount, struct cross
 	}
 	if(!hasdone)
 	{
-		int ts = count234(state->puzzle->numbers);
+		int ts = state->puzzle->numcount;
 		done = snewn(ts, int);
 		memset(done, 0, ts);
 	}
@@ -695,8 +701,9 @@ static int crossing_validate(const game_state *state, int runcount, struct cross
 		any = FALSE;
 		full = TRUE;
 		
-		for (l = 0; (num = index234(state->puzzle->numbers, l)) != NULL; l++)
+		for (l = 0; l < state->puzzle->numcount; l++)
 		{
+			num = state->puzzle->numbers[l];
 			if(strlen(num) != len)
 				continue;
 			
@@ -767,8 +774,9 @@ static int crossing_solver_marks(game_state *state, struct crossing_solver *solv
 		
 		memset(marks, 0, len*sizeof(int));	
 		
-		for (l = 0; (num = index234(state->puzzle->numbers, l)) != NULL; l++)
+		for (l = 0; l < state->puzzle->numcount; l++)
 		{
+			num = state->puzzle->numbers[l];
 			if(solver->done[l]) continue;
 			if(strlen(num) != len) continue;
 			
@@ -1045,13 +1053,17 @@ static char crossing_gen_numbers(struct crossing_puzzle *puzzle, char *grid)
 		buf[k] = '\0';
 		//printf("%s\n", buf);
 		num = dupstr(buf);
-		if(add234(puzzle->numbers, num) != num) /* Duplicate */
-		{
-			ret = FALSE;
-			sfree(num);
-		}
+		puzzle->numbers[puzzle->numcount++] = num;
 	}
+
+	qsort(puzzle->numbers, puzzle->numcount, sizeof(char*), cmp_numbers);
 	
+	for (i = 0; i < puzzle->numcount - 1; i++)
+	{
+		if (!strcmp(puzzle->numbers[i], puzzle->numbers[i + 1]))
+			ret = FALSE;
+	}
+
 	sfree(runs);
 	return ret;
 }
@@ -1103,7 +1115,6 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	int i, erun, wrun;
 	char success;
 	char *buf, *p;
-	char *num;
 	
 	struct crossing_puzzle *puzzle = blank_puzzle(w, h);
 	
@@ -1112,8 +1123,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		success = crossing_generate(puzzle, rs, params);
 		if(!success)
 		{
-			while ( (num = delpos234(puzzle->numbers, 0)) != NULL )
-				sfree(num);
+			for (i = 0; i < puzzle->numcount; i++)
+				sfree(puzzle->numbers[i]);
+			puzzle->numcount = 0;
 		}
 	} while(!success);
 	
@@ -1148,9 +1160,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	
 	*p++ = ',';
 	
-	for (i = 0; (num = index234(puzzle->numbers, i)) != NULL; i++)
+	for (i = 0; i < puzzle->numcount; i++)
 	{
-		p += sprintf(p, "%s,", num);
+		p += sprintf(p, "%s,", puzzle->numbers[i]);
 	}
 	p--;
 	*p++ = '\0';
@@ -1577,7 +1589,7 @@ static void draw_triangle(drawing *dr, int tx, int ty, int tilesize)
 	draw_polygon(dr, coords, 3, COL_LOWLIGHT, COL_LOWLIGHT);
 }
 
-static void draw_numbers(drawing *dr, game_drawstate *ds, float iy, tree234 *numbers)
+static void draw_numbers(drawing *dr, game_drawstate *ds, float iy, char **numbers, int numcount)
 {
 	float tilesize = ds->tilesize;
 	float x = 0.5;
@@ -1588,8 +1600,9 @@ static void draw_numbers(drawing *dr, game_drawstate *ds, float iy, tree234 *num
 	int color;
 	int l = 0;
 	
-	for (i = 0; (num = index234(numbers, i)) != NULL; i++)
+	for (i = 0; i < numcount; i++)
 	{
+		num = numbers[i];
 		l = strlen(num);
 		color = ds->done[i] == 0 ? COL_GRID : ds->done[i] == 1 ? COL_LOWLIGHT : COL_ERROR;
 		draw_text(dr,
@@ -1764,7 +1777,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		draw_rect_outline(dr, tx, ty, tilesize+1, tilesize+1, COL_GRID);
 	}
 	
-	draw_numbers(dr, ds, h+1, puzzle->numbers);
+	draw_numbers(dr, ds, h+1, puzzle->numbers, puzzle->numcount);
 }
 
 static float game_anim_length(const game_state *oldstate,

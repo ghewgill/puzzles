@@ -1,5 +1,5 @@
 
-CROSSING_EXTRA = dsf tree234
+CROSSING_EXTRA = dsf
 
 crossing : [X] GTK COMMON crossing CROSSING_EXTRA crossing-icon|no-icon
 crossing : [G] WINDOWS COMMON crossing CROSSING_EXTRA crossing.res|noicon.res
