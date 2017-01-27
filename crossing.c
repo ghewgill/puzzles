@@ -82,10 +82,10 @@ struct crossing_puzzle {
 	int refcount;
 };
 
-static int cmp_numbers(void* va, void* vb)
+static int cmp_numbers(const void* va, const void* vb)
 {
-	char *a = *(char**)va;
-	char *b = *(char**)vb;
+	const char *a = *(const char**)va;
+	const char *b = *(const char**)vb;
 	int ca, cb;
 	
 	ca = strlen(a);
@@ -237,7 +237,6 @@ static struct crossing_puzzle *blank_puzzle(int w, int h)
 	
 	puzzle->maxrow = 0;
 	puzzle->numbers = snewn(w*h, char*);
-	memset(puzzle->numbers, NULL, w*h * sizeof(char*));
 	puzzle->numcount = 0;
 	
 	puzzle->refcount = 1;
