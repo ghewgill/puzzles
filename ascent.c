@@ -1754,7 +1754,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		
 		colour = flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
 			ui->held == i ? COL_LOWLIGHT : 
-			positions[ui->target] == i ? COL_HIGHLIGHT : COL_MIDLIGHT;
+			ui->target >= 0 && positions[ui->target] == i ? COL_HIGHLIGHT :
+			COL_MIDLIGHT;
 		
 		if(ds->colours[i] == colour) continue;
 		
