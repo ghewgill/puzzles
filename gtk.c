@@ -144,6 +144,9 @@ struct frontend {
     GtkWidget *area;
     GtkWidget *statusbar;
     GtkWidget *menubar;
+#if GTK_CHECK_VERSION(3,20,0)
+    GtkCssProvider *css_provider;
+#endif
     guint statusctx;
     int w, h;
     midend *me;
@@ -290,7 +293,27 @@ static void set_colour(frontend *fe, int colour)
 
 static void set_window_background(frontend *fe, int colour)
 {
-#if GTK_CHECK_VERSION(3,0,0)
+#if GTK_CHECK_VERSION(3,20,0)
+    char css_buf[512];
+    sprintf(css_buf, ".background { "
+            "background-color: #%02x%02x%02x; }",
+            (unsigned)(fe->colours[3*colour + 0] * 255),
+            (unsigned)(fe->colours[3*colour + 1] * 255),
+            (unsigned)(fe->colours[3*colour + 2] * 255));
+    if (!fe->css_provider)
+        fe->css_provider = gtk_css_provider_new();
+    if (!gtk_css_provider_load_from_data(
+            GTK_CSS_PROVIDER(fe->css_provider), css_buf, -1, NULL))
+        assert(0 && "Couldn't load CSS");
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(fe->window),
+        GTK_STYLE_PROVIDER(fe->css_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(fe->area),
+        GTK_STYLE_PROVIDER(fe->css_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+#elif GTK_CHECK_VERSION(3,0,0)
     GdkRGBA rgba;
     rgba.red = fe->colours[3*colour + 0];
     rgba.green = fe->colours[3*colour + 1];
@@ -439,11 +462,13 @@ static void clear_backing_store(frontend *fe)
     fe->image = NULL;
 }
 
-static void wipe_and_destroy_cairo(frontend *fe, cairo_t *cr)
+static void wipe_and_maybe_destroy_cairo(frontend *fe, cairo_t *cr,
+                                         int destroy)
 {
     cairo_set_source_rgb(cr, fe->colours[0], fe->colours[1], fe->colours[2]);
     cairo_paint(cr);
-    cairo_destroy(cr);
+    if (destroy)
+        cairo_destroy(cr);
 }
 
 static void setup_backing_store(frontend *fe)
@@ -455,12 +480,29 @@ static void setup_backing_store(frontend *fe)
     fe->image = cairo_image_surface_create(CAIRO_FORMAT_RGB24,
 					   fe->pw, fe->ph);
 
-    wipe_and_destroy_cairo(fe, cairo_create(fe->image));
+    wipe_and_maybe_destroy_cairo(fe, cairo_create(fe->image), TRUE);
 #ifndef USE_CAIRO_WITHOUT_PIXMAP
-    wipe_and_destroy_cairo(fe, gdk_cairo_create(fe->pixmap));
+    wipe_and_maybe_destroy_cairo(fe, gdk_cairo_create(fe->pixmap), TRUE);
 #endif
-    wipe_and_destroy_cairo(fe, gdk_cairo_create
-                           (gtk_widget_get_window(fe->area)));
+#if GTK_CHECK_VERSION(3,22,0)
+    {
+        GdkWindow *gdkwin;
+        cairo_region_t *region;
+        GdkDrawingContext *drawctx;
+        cairo_t *cr;
+
+        gdkwin = gtk_widget_get_window(fe->area);
+        region = gdk_window_get_clip_region(gdkwin);
+        drawctx = gdk_window_begin_draw_frame(gdkwin, region);
+        cr = gdk_drawing_context_get_cairo_context(drawctx);
+        wipe_and_maybe_destroy_cairo(fe, cr, FALSE);
+        gdk_window_end_draw_frame(gdkwin, drawctx);
+        cairo_region_destroy(region);
+    }
+#else
+    wipe_and_maybe_destroy_cairo(
+        fe, gdk_cairo_create(gtk_widget_get_window(fe->area)), TRUE);
+#endif
 }
 
 static int backing_store_ok(frontend *fe)
@@ -1988,6 +2030,7 @@ static void menu_preset_event(GtkMenuItem *menuitem, gpointer data)
     midend_new_game(fe->me);
     changed_preset(fe);
     resize_fe(fe);
+    midend_redraw(fe->me);
 }
 
 GdkAtom compound_text_atom, utf8_string_atom;
@@ -2231,6 +2274,7 @@ static void menu_load_event(GtkMenuItem *menuitem, gpointer data)
 
 	changed_preset(fe);
         resize_fe(fe);
+        midend_redraw(fe->me);
     }
 }
 
@@ -2268,6 +2312,7 @@ static void menu_config_event(GtkMenuItem *menuitem, gpointer data)
 
     midend_new_game(fe->me);
     resize_fe(fe);
+    midend_redraw(fe->me);
 }
 
 static void menu_about_event(GtkMenuItem *menuitem, gpointer data)
@@ -2352,6 +2397,9 @@ static frontend *new_window(char *arg, int argtype, char **error)
     extern const int n_xpm_icons;
 
     fe = snew(frontend);
+#if GTK_CHECK_VERSION(3,20,0)
+    fe->css_provider = NULL;
+#endif
 
     fe->timer_active = FALSE;
     fe->timer_id = -1;

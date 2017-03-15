@@ -2411,24 +2411,31 @@ static game_state *execute_move(const game_state *from, const char *move)
     /*
      * Check whether the game has been completed.
      * 
-     * For this purpose it doesn't matter where the source square
-     * is, because we can start from anywhere and correctly
-     * determine whether the game is completed.
+     * For this purpose it doesn't matter where the source square is,
+     * because we can start from anywhere (or, at least, any square
+     * that's non-empty!), and correctly determine whether the game is
+     * completed.
      */
     {
-	unsigned char *active = compute_active(ret, 0, 0);
-	int x1, y1;
+	unsigned char *active;
+	int pos;
 	int complete = TRUE;
 
-	for (x1 = 0; x1 < ret->width; x1++)
-	    for (y1 = 0; y1 < ret->height; y1++)
-		if ((tile(ret, x1, y1) & 0xF) && !index(ret, active, x1, y1)) {
-		    complete = FALSE;
-		    goto break_label;  /* break out of two loops at once */
-		}
-	break_label:
+	for (pos = 0; pos < ret->width * ret->height; pos++)
+            if (ret->tiles[pos] & 0xF)
+                break;
 
-	sfree(active);
+        if (pos < ret->width * ret->height) {
+            active = compute_active(ret, pos % ret->width, pos / ret->width);
+
+            for (pos = 0; pos < ret->width * ret->height; pos++)
+                if ((ret->tiles[pos] & 0xF) && !active[pos]) {
+		    complete = FALSE;
+                    break;
+                }
+
+            sfree(active);
+        }
 
 	if (complete)
 	    ret->completed = TRUE;
@@ -2985,20 +2992,43 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      * Update the status bar.
      */
     {
-	char statusbuf[256];
+	char statusbuf[256], *p;
 	int i, n, n2, a;
+        int complete = FALSE;
 
-	n = state->width * state->height;
-	for (i = a = n2 = 0; i < n; i++) {
-	    if (active[i])
-		a++;
-            if (state->tiles[i] & 0xF)
-                n2++;
+        p = statusbuf;
+        *p = '\0';     /* ensure even an empty status string is terminated */
+
+        if (state->used_solve) {
+            p += sprintf(p, "Auto-solved. ");
+            complete = TRUE;
+        } else if (state->completed) {
+            p += sprintf(p, "COMPLETED! ");
+            complete = TRUE;
         }
 
-	sprintf(statusbuf, "%sActive: %d/%d",
-		(state->used_solve ? "Auto-solved. " :
-		 state->completed ? "COMPLETED! " : ""), a, n2);
+        /*
+         * Omit the 'Active: n/N' counter completely if the source
+         * tile is a completely empty one, because then the active
+         * count can't help but read '1'.
+         */
+        if (tile(state, ui->cx, ui->cy) & 0xF) {
+            n = state->width * state->height;
+            for (i = a = n2 = 0; i < n; i++) {
+                if (active[i])
+                    a++;
+                if (state->tiles[i] & 0xF)
+                    n2++;
+            }
+
+            /*
+             * Also, if we're displaying a completion indicator and
+             * the game is still in its completed state (i.e. every
+             * tile is active), we might as well omit this too.
+             */
+            if (!complete || a < n2)
+                p += sprintf(p, "Active: %d/%d", a, n2);
+        }
 
 	status_bar(dr, statusbuf);
     }
