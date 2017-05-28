@@ -278,6 +278,8 @@ static char check_completion(number *grid, int w, int h)
 			x = i%w;
 			y = i/w;
 		}
+		if(grid[i] < -1)
+			last--;
 	}
 	if(x == -1)
 		return FALSE;
@@ -409,7 +411,7 @@ static void update_positions(cell *positions, number *grid, int s)
 	for(i = 0; i < s; i++)
 	{
 		n = grid[i];
-		if(n == -1 || n >= s) continue;
+		if(n < 0 || n >= s) continue;
 		positions[n] = (positions[n] == -1 ? i : -2);
 	}
 }
@@ -965,6 +967,32 @@ static int solver_remove_path(struct solver_scratch *scratch)
 	return ret;
 }
 
+static int solver_remove_blocks(struct solver_scratch *scratch)
+{
+	int i1, i2, dir;
+	int w = scratch->w, s = w * scratch->h;
+	int ret = 0;
+	for (i1 = 0; i1 < s; i1++)
+	{
+		if(scratch->grid[i1] >= -1) continue;
+		for(dir = 0; dir < 8; dir++)
+		{
+			if(!(scratch->path[i1] & (1<<dir))) continue;
+			i2 = dir_y[dir] * w + dir_x[dir] + i1;
+			solver_printf("Disconnect block %d,%d from %d,%d\n", i1%w, i1/w, i2%w, i2/w);
+			scratch->path[i2] &= ~(1 << (7 - dir));
+			ret++;
+		}
+		scratch->path[i1] = 0;
+	}
+	
+	if(ret)
+	{
+		solver_debug_path(scratch);
+	}
+	return ret;
+}
+
 static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *scratch)
 {
 	int w = scratch->w, h = scratch->h, s=w*h;
@@ -990,6 +1018,7 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 	}
 	
 	solver_initialize_path(scratch);
+	solver_remove_blocks(scratch);
 
 	while(TRUE)
 	{
@@ -1108,6 +1137,8 @@ static char *validate_desc(const game_params *params, const char *desc)
 		}
 		else if(*p >= 'a' && *p <= 'z')
 			i += ((*p++) - 'a') + 1;
+		else if(*p >= 'A' && *p <= 'Z')
+			i += ((*p++) - 'A') + 1;
 		else
 			++p;
 	}
@@ -1127,7 +1158,7 @@ static game_state *new_game(midend *me, const game_params *params,
 {
 	int w = params->w;
 	int h = params->h;
-	int i;
+	int i, j, walls;
 	
 	game_state *state = snew(game_state);
 
@@ -1154,6 +1185,18 @@ static game_state *new_game(midend *me, const game_params *params,
 		}
 		else if(*p >= 'a' && *p <= 'z')
 			i += ((*p++) - 'a') + 1;
+		else if(*p >= 'A' && *p <= 'Z')
+		{
+			walls = ((*p++) - 'A') + 1;
+			for(j = i; j < walls + i; j++)
+			{
+				state->grid[j] = -2;
+				SET_BIT(state->immutable, j);
+			}
+			
+			state->last -= walls;
+			i += walls;
+		}
 		else
 			++p;
 	}
@@ -1235,6 +1278,8 @@ static char *game_text_format(const game_state *state)
 		n = state->grid[y*w+x];
 		if(n >= 0)
 			p += sprintf(p, "%*d", space, n+1);
+		else if(n == -2)
+			p += sprintf(p, "%*s", space, "#");
 		else
 			p += sprintf(p, "%*s", space, ".");
 		*p++ = x < w-1 ? ' ' : '\n';
@@ -1459,7 +1504,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		case LEFT_BUTTON:
 			update_positions(ui->positions, state->grid, w*h);
 			
-			if(n != -1)
+			if(n < -1)
+			{
+				ui_clear(ui);
+				return "";
+			}
+			if(n >= 0)
 			{
 				if(i == ui->held && ui->dir != 0)
 				{
@@ -1575,7 +1625,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 			}
 			else if(*p == '-')
 			{
-				ret->grid[i] = -1;
+				if(!GET_BIT(ret->immutable, i)) ret->grid[i] = -1;
 				p++;
 			}
 			if(!*p)
@@ -1752,7 +1802,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		n = state->grid[i];
 		error = FALSE;
 		
-		colour = flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
+		colour = n == -2 ? COL_BORDER :
+			flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
 			ui->held == i ? COL_LOWLIGHT : 
 			ui->target >= 0 && positions[ui->target] == i ? COL_HIGHLIGHT :
 			COL_MIDLIGHT;
