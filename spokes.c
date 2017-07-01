@@ -1405,7 +1405,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int w = state->w;
 	int h = state->h;
 	int tilesize = ds->tilesize;
-	int i, x, y, d, tx, ty, connected, color;
+	int i, x, y, d, tx, ty, tx2, ty2, connected, color;
 	int cx = (ui->cx + 1)/3;
 	int cy = (ui->cy + 1)/3;
 	int dx = (ui->cx + 1)%3 - 1;
@@ -1477,11 +1477,20 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			
 			for(d = 0; d < 8; d++)
 			{
-				if(GET_SPOKE(state->spokes[i], d) == SPOKE_LINE)
-					draw_thick_line(dr, thick, tx, ty, 
-						tx + (spoke_dirs[d].dx * tilesize),
-						ty + (spoke_dirs[d].dy * tilesize),
-						COL_LINE);
+				if(GET_SPOKE(state->spokes[i], d) != SPOKE_LINE)
+					continue;
+				
+				tx2 = tx + (spoke_dirs[d].dx * tilesize);
+				ty2 = ty + (spoke_dirs[d].dy * tilesize);
+				
+				/*
+				 * To avoid rounding errors, spokes must always be drawn 
+				 * from the exact same starting position.
+				 */
+				if (d < 4)
+					draw_thick_line(dr, thick, tx2, ty2, tx, ty, COL_LINE);
+				else
+					draw_thick_line(dr, thick, tx, ty, tx2, ty2, COL_LINE);
 			}
 			
 			spokes_draw_hub(dr, tx, ty, radius, thick, state->spokes[i], border, fill, COL_MARK);
@@ -1489,6 +1498,16 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			buf[0] = state->numbers[i] + '0';
 			draw_text(dr, tx, ty, FONT_FIXED, tilesize/2.5F, ALIGN_VCENTRE|ALIGN_HCENTRE, txt, buf);
 			
+			/* Invalidate connected corners */
+			if (x < w-1 && y < h-1 && ds->corners[i] == DIR_BOTRIGHT)
+				ds->corners[i] = -1;
+			if (x > 0 && y < h-1 && ds->corners[i-1] == DIR_BOTLEFT)
+				ds->corners[i-1] = -1;
+			if (x < w-1 && y > 0 && ds->corners[i-w] == DIR_BOTLEFT)
+				ds->corners[i-w] = -1;
+			if (x > 0 && y > 0 && ds->corners[i-(w+1)] == DIR_BOTRIGHT)
+				ds->corners[i-(w+1)] = -1;
+
 			ds->spokes[i] = state->spokes[i];
 			ds->colors[i] = color;
 			unclip(dr);
@@ -1525,15 +1544,18 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			draw_rect(dr, tx-8, ty-8, 16, 16, COL_BACKGROUND);
 			draw_update(dr, tx-8, ty-8, 16, 16);
 			
+			tx = TOCOORD(x);
+			ty = TOCOORD(y);
+			
 			if(diag == DIR_BOTRIGHT)
 			{
 				draw_thick_line(dr, thick,
-					tx-10, ty-10, tx+10, ty+10, COL_LINE);
+					tx, ty, tx + tilesize, ty + tilesize, COL_LINE);
 			}
 			if(diag == DIR_BOTLEFT)
 			{
 				draw_thick_line(dr, thick,
-					tx-10, ty+10, tx+10, ty-10, COL_LINE);
+					tx, ty + tilesize, tx + tilesize, ty, COL_LINE);
 			}
 			
 			unclip(dr);
