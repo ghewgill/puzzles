@@ -1,7 +1,7 @@
 puzzles-unreleased
 ==================
 
-This repo contains several unfinished contributions for [Simon Tatham's Portable Puzzle Collection](http://www.chiark.greenend.org.uk/~sgtatham/puzzles/) I've written over the years.
+This repo contains several unfinished contributions for [Simon Tatham's Portable Puzzle Collection](https://www.chiark.greenend.org.uk/~sgtatham/puzzles/) I've written over the years.
 
 ## Contents
 
@@ -30,7 +30,7 @@ Each puzzle source file contains a TODO list.
 
 ## Building
 
-Get the source code for the SGT Portable Puzzle Collection from [the official site](http://www.chiark.greenend.org.uk/~sgtatham/puzzles/). Copy these source files into the folder, run `mkfiles.pl`, then use one of the generated makefiles.
+Get the source code for the SGT Portable Puzzle Collection from [the official site](https://www.chiark.greenend.org.uk/~sgtatham/puzzles/). Copy these source files into the folder, run `mkfiles.pl`, then use one of the generated makefiles.
 
 More information can be found in the original collection's `README`.
 
