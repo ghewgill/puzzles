@@ -68,7 +68,9 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // Return the number of rows in the section.
-    return midend_num_presets(me) + 1;
+    struct preset_menu *menu;
+    menu = midend_get_presets(me, NULL);
+    return menu->n_entries;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -78,11 +80,12 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
-    if (indexPath.row < midend_num_presets(me)) {
-        char *name;
-        game_params *params;
-        midend_fetch_preset(me, indexPath.row, &name, &params);
-        cell.textLabel.text = [NSString stringWithUTF8String:name];
+    struct preset_menu *menu;
+    menu = midend_get_presets(me, NULL);
+    if (indexPath.row < menu->n_entries) {
+        struct preset_menu_entry entry = menu->entries[indexPath.row];
+        //game_params *params;
+        cell.textLabel.text = [NSString stringWithUTF8String:entry.title];
         if (indexPath.row == midend_which_preset(me)) {
             cell.accessoryType = UITableViewCellAccessoryCheckmark;
         }
@@ -153,11 +156,11 @@
      // Pass the selected object to the new view controller.
      [self.navigationController pushViewController:detailViewController animated:YES];
      */
-    if (indexPath.row < midend_num_presets(me)) {
-        char *name;
-        game_params *params;
-        midend_fetch_preset(me, indexPath.row, &name, &params);
-        midend_set_params(me, params);
+    struct preset_menu *menu;
+    menu = midend_get_presets(me, NULL);
+    if (indexPath.row < menu->n_entries) {
+        struct preset_menu_entry entry = menu->entries[indexPath.row];
+        midend_set_params(me, entry.params);
         [gameview startNewGame];
         // bit of a hack here, gameview.nextResponder is actually the view controller we want
         [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
