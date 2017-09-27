@@ -13,6 +13,6 @@
 
 @interface GameTypeController : UITableViewController <GameSettingsDelegate>
 
-- (id)initWithGame:(const game *)game midend:(midend *)me gameview:(GameView *)gv;
+- (id)initWithGame:(const game *)game midend:(midend *)me menu:(struct preset_menu *)pm gameview:(GameView *)gv;
 
 @end

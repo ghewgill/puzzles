@@ -17,16 +17,18 @@
 @implementation GameTypeController {
     const game *thegame;
     midend *me;
+    struct preset_menu *menu;
     GameView *gameview;
 }
 
-- (id)initWithGame:(const game *)game midend:(midend *)m gameview:(GameView *)gv
+- (id)initWithGame:(const game *)game midend:(midend *)m menu:(struct preset_menu *)pm gameview:(GameView *)gv
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
         thegame = game;
         me = m;
+        menu = pm;
         gameview = gv;
     }
     return self;
@@ -68,9 +70,7 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // Return the number of rows in the section.
-    struct preset_menu *menu;
-    menu = midend_get_presets(me, NULL);
-    return menu->n_entries;
+    return menu->n_entries + 1;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -80,8 +80,6 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
-    struct preset_menu *menu;
-    menu = midend_get_presets(me, NULL);
     if (indexPath.row < menu->n_entries) {
         struct preset_menu_entry entry = menu->entries[indexPath.row];
         //game_params *params;
@@ -156,14 +154,16 @@
      // Pass the selected object to the new view controller.
      [self.navigationController pushViewController:detailViewController animated:YES];
      */
-    struct preset_menu *menu;
-    menu = midend_get_presets(me, NULL);
     if (indexPath.row < menu->n_entries) {
         struct preset_menu_entry entry = menu->entries[indexPath.row];
-        midend_set_params(me, entry.params);
-        [gameview startNewGame];
-        // bit of a hack here, gameview.nextResponder is actually the view controller we want
-        [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
+        if (entry.params) {
+            midend_set_params(me, entry.params);
+            [gameview startNewGame];
+            // bit of a hack here, gameview.nextResponder is actually the view controller we want
+            [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
+        } else {
+            [self.navigationController pushViewController:[[GameTypeController alloc] initWithGame:thegame midend:me menu:entry.submenu gameview:gameview] animated:YES];
+        }
     } else {
         char *wintitle;
         config_item *config = midend_get_config(me, CFG_SETTINGS, &wintitle);
