@@ -3025,7 +3025,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             else if (env && !strcmp(env, "adaptive"))
                 autofollow = ADAPTIVE;
             else
-                autofollow = OFF;
+                autofollow = ADAPTIVE;
         }
 
         if (autofollow != OFF) {
