@@ -18,10 +18,11 @@
     const game *thegame;
     midend *me;
     struct preset_menu *menu;
+    BOOL top;
     GameView *gameview;
 }
 
-- (id)initWithGame:(const game *)game midend:(midend *)m menu:(struct preset_menu *)pm gameview:(GameView *)gv
+- (id)initWithGame:(const game *)game midend:(midend *)m menu:(struct preset_menu *)pm top:(BOOL)tp gameview:(GameView *)gv
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
@@ -29,6 +30,7 @@
         thegame = game;
         me = m;
         menu = pm;
+        top = tp;
         gameview = gv;
     }
     return self;
@@ -70,7 +72,7 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // Return the number of rows in the section.
-    return menu->n_entries + 1;
+    return menu->n_entries + (top ? 1 : 0);
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -80,16 +82,16 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
+    int currentPreset = midend_which_preset(me);
     if (indexPath.row < menu->n_entries) {
         struct preset_menu_entry entry = menu->entries[indexPath.row];
-        //game_params *params;
         cell.textLabel.text = [NSString stringWithUTF8String:entry.title];
-        if (indexPath.row == midend_which_preset(me)) {
+        if (entry.id == currentPreset) {
             cell.accessoryType = UITableViewCellAccessoryCheckmark;
         }
     } else {
         cell.textLabel.text = @"Custom";
-        if (midend_which_preset(me) < 0) {
+        if (currentPreset < 0) {
             cell.accessoryType = UITableViewCellAccessoryCheckmark;
         } else {
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -162,7 +164,7 @@
             // bit of a hack here, gameview.nextResponder is actually the view controller we want
             [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
         } else {
-            [self.navigationController pushViewController:[[GameTypeController alloc] initWithGame:thegame midend:me menu:entry.submenu gameview:gameview] animated:YES];
+            [self.navigationController pushViewController:[[GameTypeController alloc] initWithGame:thegame midend:me menu:entry.submenu top:false gameview:gameview] animated:YES];
         }
     } else {
         char *wintitle;

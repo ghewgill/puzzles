@@ -638,7 +638,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 {
     struct preset_menu *menu;
     menu = midend_get_presets(me, NULL);
-    [navigationController pushViewController:[[GameTypeController alloc] initWithGame:ourgame midend:me menu:menu gameview:self] animated:YES];
+    [navigationController pushViewController:[[GameTypeController alloc] initWithGame:ourgame midend:me menu:menu top:true gameview:self] animated:YES];
 }
 
 @end
