@@ -219,7 +219,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	/* A width or height under 2 could possibly break the solver */
 	if (params->w < 2) return "Width must be at least 2";
@@ -250,7 +250,7 @@ static char *validate_params(const game_params *params, int full)
 	return NULL;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int w = params->w;
 	int h = params->h;
@@ -976,7 +976,7 @@ if(solver_verbose)
 #undef MULTIPLE
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-			const char *aux, char **error)
+			const char *aux, const char **error)
 {
 	if(aux)
 		return dupstr(aux);
@@ -2110,7 +2110,8 @@ int main(int argc, char *argv[])
 	
 	game_params *params = NULL;
 	
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 	
 	quis = argv[0];
 	

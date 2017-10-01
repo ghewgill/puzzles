@@ -227,7 +227,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	if (params->w < 4 || params->h < 4)
 		return "Width and height must be at least 4";
@@ -1149,7 +1149,7 @@ static int seismic_read_desc(const game_params *params, const char *desc, game_s
 	return valid;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int i, s, valid;
 	s = params->w * params->h;
@@ -1191,7 +1191,7 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-			const char *aux, char **error)
+			const char *aux, const char **error)
 {
 	int i;
 	int s = state->w * state->h;
@@ -1929,7 +1929,8 @@ int main(int argc, char *argv[])
 
 	game_params *params = NULL;
 
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 
 	quis = argv[0];
 

@@ -246,7 +246,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	if(params->nums < 2)
 		return "Symbols must be at least 2.";
@@ -898,7 +898,7 @@ static game_state *load_game(const game_params *params, const char *desc, char *
 	return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	char *fail = NULL;
 	game_state *state = load_game(params, desc, &fail);
@@ -1134,7 +1134,7 @@ static char *salad_serialize(const digit *input, int s, char base)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-			const char *aux, char **error)
+			const char *aux, const char **error)
 {
 	game_state *solved = dup_game(state);
 	char *ret = NULL;
@@ -2491,7 +2491,8 @@ int main(int argc, char *argv[])
 	int i, attempts = 1;
 	game_params *params = NULL;
 	
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 	
 	quis = argv[0];
 	

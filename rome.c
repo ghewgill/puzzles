@@ -247,7 +247,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	if(params->w < 3)
 		return "Width must be at least 3";
@@ -569,7 +569,7 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 	return state;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int status = STATUS_INCOMPLETE, valid, i, s;
 	s = params->w * params->h;
@@ -1033,7 +1033,7 @@ static char rome_solve(game_state *state, int maxdiff)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-			const char *aux, char **error)
+			const char *aux, const char **error)
 {
 	int i;
 	int s = state->w * state->h;

@@ -230,7 +230,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	if(params->w < 2)
 		return "Width must be at least 2";
@@ -240,7 +240,7 @@ static char *validate_params(const game_params *params, int full)
     return NULL;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int i;
 	int s = params->w * params->h;
@@ -796,7 +796,7 @@ static int spokes_solve(game_state *state, int diff)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
 	int w = state->w;
 	int h = state->h;
@@ -1719,7 +1719,8 @@ int main(int argc, char *argv[])
 	
 	game_params *params = NULL;
 
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 	int n = 1;
 	
 	quis = argv[0];

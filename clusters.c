@@ -159,7 +159,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	if (params->w * params->h >= 10000)
 		return "Puzzle is too large";
@@ -235,7 +235,7 @@ static int clusters_validate(game_state *state)
 	return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int s = params->w * params->h;
 
@@ -455,7 +455,7 @@ static int clusters_solve_game(game_state *state, int maxdiff, char *temp)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-	const char *aux, char **error)
+	const char *aux, const char **error)
 {
 	game_state *solved = dup_game(state);
 	char *ret = NULL;

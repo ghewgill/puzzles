@@ -244,7 +244,7 @@ static game_params *custom_params(const config_item *cfg)
 }
 
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	int w = params->w;
 	int h = params->h;
@@ -1116,7 +1116,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int s = params->w*params->h;
 	const char *p = desc;
@@ -1229,7 +1229,7 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-						const char *aux, char **error)
+						const char *aux, const char **error)
 {
 	int i, w = state->w, h = state->h;
 	struct solver_scratch *scratch = new_scratch(w, h, state->last);
@@ -1988,7 +1988,8 @@ int main(int argc, char *argv[])
 
 	game_params *params = NULL;
 
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 
 	quis = argv[0];
 

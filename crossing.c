@@ -209,7 +209,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	if(params->w < 4 && params->h < 4)
 		return "The width or height must be at least 4";
@@ -394,7 +394,7 @@ static int crossing_read_desc(const game_params *params,
 	return valid;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	game_state *state = NULL;
 	
@@ -1166,7 +1166,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-						const char *aux, char **error)
+						const char *aux, const char **error)
 {
 	int s = state->puzzle->w*state->puzzle->h;
 	char *ret = snewn(s+2, char);
@@ -1878,7 +1878,8 @@ int main(int argc, char *argv[])
 
 	game_params *params = NULL;
 
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 
 	quis = argv[0];
 
@@ -1930,7 +1931,8 @@ int main(int argc, char *argv[])
 		printf("\nGame ID: %s\n", desc_gen);
 	} else {
 		game_state *input, *solved;
-		char *move, *error = NULL;
+		char *move;
+		const char *error = NULL;
 
 		err = validate_desc(params, desc);
 		if (err) {

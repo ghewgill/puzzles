@@ -485,7 +485,7 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 	return state;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
 	int w = params->w;
 	int h = params->h;
@@ -2666,7 +2666,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-			const char *aux, char **error)
+			const char *aux, const char **error)
 {
 	int w = state->w;
 	int h = state->h;
@@ -2808,7 +2808,7 @@ static char boats_generate_fleet(game_state *state, random_state *rs, struct boa
 	return TRUE;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
 	int w = params->w;
 	int h = params->h;
@@ -4111,7 +4111,8 @@ int main(int argc, char *argv[])
 
 	game_params *params = NULL;
 
-	char *id = NULL, *desc = NULL, *err;
+	char *id = NULL, *desc = NULL;
+	const char *err;
 
 	quis = argv[0];
 
