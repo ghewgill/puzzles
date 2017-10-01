@@ -719,7 +719,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(buf[0])
 				return dupstr(buf);
 		}
-		return "";
+		return UI_UPDATE;
 	}
 
 	if (IS_MOUSE_DOWN(button))
@@ -738,7 +738,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		if (ui->dragtype || old)
 			ui->drag[ui->ndrags++] = i;
 
-		return "";
+		return UI_UPDATE;
 	}
 
 	if (IS_MOUSE_DRAG(button))
@@ -759,7 +759,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 		ui->drag[ui->ndrags++] = i;
 
-		return "";
+		return UI_UPDATE;
 	}
 
 	if (IS_MOUSE_RELEASE(button) && ui->ndrags)
@@ -784,7 +784,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			return buf;
 		
 		sfree(buf);
-		return "";
+		return UI_UPDATE;
 	}
 
 	/* Place one */

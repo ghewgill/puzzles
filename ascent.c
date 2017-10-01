@@ -1474,7 +1474,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (IS_MOUSE_DOWN(button) && (ox < tilesize/2 || oy < tilesize/2 || gx >= w || gy >= h))
 	{
 		ui_clear(ui);
-		return "";
+		return UI_UPDATE;
 	}
 
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
@@ -1503,7 +1503,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(n < -1)
 			{
 				ui_clear(ui);
-				return "";
+				return UI_UPDATE;
 			}
 			if(n >= 0)
 			{
@@ -1520,7 +1520,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui->select = n + ui->dir;
 				
 				ui_seek(ui, state->last);
-				return "";
+				return UI_UPDATE;
 			}
 		/* Deliberate fallthrough */
 		case LEFT_DRAG:
@@ -1529,7 +1529,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui->held = i;
 				ui->select += ui->dir;
 				ui_seek(ui, state->last);
-				return "";
+				return UI_UPDATE;
 			}
 			if(n == -1 && ui->held != -1 && ui->positions[ui->select] == -1 && IS_NEAR(ui->held, i, w))
 			{
@@ -1544,7 +1544,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			else if(n == -1 && button == LEFT_BUTTON)
 			{
 				ui_clear(ui);
-				return "";
+				return UI_UPDATE;
 			}
 		break;
 		case MIDDLE_BUTTON:

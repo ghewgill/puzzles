@@ -1142,7 +1142,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			ui->drag_end = -1;
 		else
 			ui->drag_end = y*w+x;
-		return "";
+		return UI_UPDATE;
 	}
 	if(button == LEFT_RELEASE || button == RIGHT_RELEASE)
 	{
@@ -1169,7 +1169,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if(drag != DRAG_NONE)
 	{
 		if(from == -1 || to == -1)
-			return "";
+			return UI_UPDATE;
 		
 		char buf[80];
 		int old, new;
@@ -1204,14 +1204,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			
 			return dupstr(buf);
 		}
-		return "";
+		return UI_UPDATE;
 	}
 	
 	if(IS_CURSOR_MOVE(button))
 	{
 		move_cursor(button, &ui->cx, &ui->cy, w*3-2, h*3-2, 0);
 		ui->cshow = TRUE;
-		return "";
+		return UI_UPDATE;
 	}
 	
     return NULL;

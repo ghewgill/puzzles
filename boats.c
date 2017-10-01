@@ -3232,7 +3232,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			ui->dsy = ui->dey = gy;
 			ui->cursor = FALSE;
 			
-			return "";
+			return UI_UPDATE;
 		}
 	}
 	
@@ -3280,7 +3280,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				return dupstr(buf);
 			}
 		}
-		return "";
+		return UI_UPDATE;
 	}
 	
 	if (IS_CURSOR_MOVE(button & ~MOD_MASK))
@@ -3306,7 +3306,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			}
 		}
 		
-		return "";
+		return UI_UPDATE;
 	}
 	
 	if(ui->cursor && (button == CURSOR_SELECT ||
