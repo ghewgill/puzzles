@@ -332,44 +332,37 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 	
     ret[2].name = "Fleet size";
     ret[2].type = C_STRING;
     sprintf(buf, "%d", params->fleet);
-    ret[2].sval = dupstr(buf);
-    ret[2].ival = 0;
+    ret[2].u.string.sval = dupstr(buf);
 
 	ret[3].name = "Fleet configuration";
 	ret[3].type = C_STRING;
-	ret[3].ival = 0;
 	/* Only fill this field if the fleet is non-standard */
 	if(memcmp(params->fleetdata, fleet, params->fleet*sizeof(int)))
-		ret[3].sval = boats_encode_fleet(params->fleetdata, params->fleet);
+		ret[3].u.string.sval = boats_encode_fleet(params->fleetdata, params->fleet);
 	else
-		ret[3].sval = dupstr("");
+		ret[3].u.string.sval = dupstr("");
 	
     ret[4].name = "Difficulty";
     ret[4].type = C_CHOICES;
-    ret[4].sval = DIFFCONFIG;
-    ret[4].ival = params->diff;
+    ret[4].u.choices.choicenames = DIFFCONFIG;
+    ret[4].u.choices.selected = params->diff;
 	
 	ret[5].name = "Remove numbers";
 	ret[5].type = C_BOOLEAN;
-	ret[5].sval = NULL;
-	ret[5].ival = params->strip;
+	ret[5].u.boolean.bval = params->strip;
 
     ret[6].name = NULL;
     ret[6].type = C_END;
-    ret[6].sval = NULL;
-    ret[6].ival = 0;
 
 	sfree(fleet);
     return ret;
@@ -379,16 +372,16 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->fleet = atoi(cfg[2].sval);
-    ret->diff = cfg[4].ival;
-    ret->strip = cfg[5].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->fleet = atoi(cfg[2].u.string.sval);
+    ret->diff = cfg[4].u.choices.selected;
+    ret->strip = cfg[5].u.boolean.bval;
 
 	if(ret->fleet < 1 || ret->fleet > 9)
 		ret->fleetdata = NULL;
-	else if(strcmp(cfg[3].sval, ""))
-		ret->fleetdata = boats_decode_fleet(cfg[3].sval, ret->fleet);
+	else if(strcmp(cfg[3].u.string.sval, ""))
+		ret->fleetdata = boats_decode_fleet(cfg[3].u.string.sval, ret->fleet);
 	else
 		ret->fleetdata = boats_default_fleet(ret->fleet);
 	
