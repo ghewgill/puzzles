@@ -180,30 +180,24 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Expansion factor";
     ret[2].type = C_STRING;
     sprintf(buf, "%g", params->expandfactor);
-    ret[2].sval = dupstr(buf);
-    ret[2].ival = 0;
+    ret[2].u.string.sval = dupstr(buf);
 
     ret[3].name = "Ensure unique solution";
     ret[3].type = C_BOOLEAN;
-    ret[3].sval = NULL;
-    ret[3].ival = params->unique;
+    ret[3].u.boolean.bval = params->unique;
 
     ret[4].name = NULL;
     ret[4].type = C_END;
-    ret[4].sval = NULL;
-    ret[4].ival = 0;
 
     return ret;
 }
@@ -212,15 +206,15 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->expandfactor = (float)atof(cfg[2].sval);
-    ret->unique = cfg[3].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->expandfactor = (float)atof(cfg[2].u.string.sval);
+    ret->unique = cfg[3].u.boolean.bval;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
     if (params->w <= 0 || params->h <= 0)
 	return "Width and height must both be greater than zero";
@@ -1779,7 +1773,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
     return desc;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int area = params->w * params->h;
     int squares = 0;
@@ -1980,7 +1974,7 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *ai, char **error)
+                        const char *ai, const char **error)
 {
     unsigned char *vedge, *hedge;
     int x, y, len;
@@ -2407,7 +2401,7 @@ static char *interpret_move(const game_state *from, game_ui *ui,
         move_cursor(button, &ui->cur_x, &ui->cur_y, from->w, from->h, 0);
         ui->cur_visible = TRUE;
         active = TRUE;
-        if (!ui->cur_dragging) return "";
+        if (!ui->cur_dragging) return UI_UPDATE;
         coord_round((float)ui->cur_x + 0.5F, (float)ui->cur_y + 0.5F, &xc, &yc);
     } else if (IS_CURSOR_SELECT(button)) {
         if (ui->drag_start_x >= 0 && !ui->cur_dragging) {
@@ -2420,7 +2414,7 @@ static char *interpret_move(const game_state *from, game_ui *ui,
         if (!ui->cur_visible) {
             assert(!ui->cur_dragging);
             ui->cur_visible = TRUE;
-            return "";
+            return UI_UPDATE;
         }
         coord_round((float)ui->cur_x + 0.5F, (float)ui->cur_y + 0.5F, &xc, &yc);
         erasing = (button == CURSOR_SELECT2);
@@ -2441,7 +2435,7 @@ static char *interpret_move(const game_state *from, game_ui *ui,
             reset_ui(ui); /* cancel keyboard dragging */
             ui->cur_dragging = FALSE;
         }
-        return "";
+        return UI_UPDATE;
     } else if (button != LEFT_DRAG && button != RIGHT_DRAG) {
         return NULL;
     }
@@ -2525,7 +2519,7 @@ static char *interpret_move(const game_state *from, game_ui *ui,
     if (ret)
 	return ret;		       /* a move has been made */
     else if (active)
-        return "";		       /* UI activity has occurred */
+        return UI_UPDATE;
     else
 	return NULL;
 }

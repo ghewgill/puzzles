@@ -148,28 +148,24 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Difficulty";
     ret[2].type = C_CHOICES;
-    ret[2].sval = DIFFCONFIG;
-    ret[2].ival = params->diff;
+    ret[2].u.choices.choicenames = DIFFCONFIG;
+    ret[2].u.choices.selected = params->diff;
 
     ret[3].name = "Disallow consecutive 1 clues";
     ret[3].type = C_BOOLEAN;
-    ret[3].ival = params->single_ones;
+    ret[3].u.boolean.bval = params->single_ones;
 
     ret[4].name = NULL;
     ret[4].type = C_END;
-    ret[4].sval = NULL;
-    ret[4].ival = 0;
 
     return ret;
 }
@@ -178,15 +174,15 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->diff = cfg[2].ival;
-    ret->single_ones = cfg[3].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->diff = cfg[2].u.choices.selected;
+    ret->single_ones = cfg[3].u.boolean.bval;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
     /*
      * Generating anything under 4x4 runs into trouble of one kind
@@ -786,7 +782,7 @@ newpath:
     return desc;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int i = 0, w = params->w, h = params->h, in = 0, out = 0;
 
@@ -1368,7 +1364,7 @@ static char *move_string_diff(const game_state *before, const game_state *after,
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     game_state *solved;
     int ret;
@@ -1718,7 +1714,10 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 #define TILE_SIZE (ds->sz6*6)
 
 #define BORDER (TILE_SIZE/8)
-#define BORDER_WIDTH (max(TILE_SIZE / 32, 1))
+#define LINE_THICK (TILE_SIZE/16)
+#define GRID_LINE_TL (ds->grid_line_tl)
+#define GRID_LINE_BR (ds->grid_line_br)
+#define GRID_LINE_ALL (ds->grid_line_all)
 
 #define COORD(x) ( (x+1) * TILE_SIZE + BORDER )
 #define CENTERED_COORD(x) ( COORD(x) + TILE_SIZE/2 )
@@ -1738,7 +1737,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 #define DS_CSHIFT 20    /* R/U/L/D shift, for cursor-on-edge */
 
 struct game_drawstate {
-    int sz6;
+    int sz6, grid_line_all, grid_line_tl, grid_line_br;
     int started;
 
     int w, h, sz;
@@ -1919,13 +1918,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         ui->drag_sx = ui->drag_ex = gx;
         ui->drag_sy = ui->drag_ey = gy;
 
-        return "";
+        return UI_UPDATE;
     }
 
     if (IS_MOUSE_DRAG(button)) {
         ui->cursor_active = FALSE;
         update_ui_drag(state, ui, gx, gy);
-        return "";
+        return UI_UPDATE;
     }
 
     if (IS_MOUSE_RELEASE(button)) {
@@ -1962,12 +1961,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             cy = CENTERED_COORD(gy);
 
             if (!INGRID(state, gx, gy) || FROMCOORD(x) != gx || FROMCOORD(y) != gy)
-                return "";
+                return UI_UPDATE;
 
             if (max(abs(x-cx),abs(y-cy)) < TILE_SIZE/4) {
                 if (ui_can_flip_square(state, gx, gy, button == RIGHT_RELEASE))
                     return square_flip_str(state, gx, gy, button == RIGHT_RELEASE, tmpbuf);
-                return "";
+                return UI_UPDATE;
             } else {
                 if (abs(x-cx) < abs(y-cy)) {
                     /* Closest to top/bottom edge. */
@@ -1981,7 +1980,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                     return edge_flip_str(state, gx, gy, direction,
                             button == RIGHT_RELEASE, tmpbuf);
                 else
-                    return "";
+                    return UI_UPDATE;
             }
         }
     }
@@ -1994,7 +1993,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
         if (!ui->cursor_active) {
             ui->cursor_active = TRUE;
-            return "";
+            return UI_UPDATE;
         }
 
         ui->curx = ui->curx + dx;
@@ -2005,17 +2004,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         }
         ui->curx = min(max(ui->curx, 1), 2*w-1);
         ui->cury = min(max(ui->cury, 1), 2*h-1);
-        return "";
+        return UI_UPDATE;
     }
 
     if (IS_CURSOR_SELECT(button)) {
         if (!ui->cursor_active) {
             ui->cursor_active = TRUE;
-            return "";
+            return UI_UPDATE;
         }
         /* click on square corner does nothing (shouldn't get here) */
         if ((ui->curx % 2) == 0 && (ui->cury % 2 == 0))
-            return "";
+            return UI_UPDATE;
 
         gx = ui->curx / 2;
         gy = ui->cury / 2;
@@ -2027,7 +2026,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         else if (!direction &&
                  ui_can_flip_square(state, gx, gy, button == CURSOR_SELECT2))
             return square_flip_str(state, gx, gy, button == CURSOR_SELECT2, tmpbuf);
-        return "";
+        return UI_UPDATE;
     }
 
 #if 0
@@ -2118,7 +2117,6 @@ static void game_compute_size(const game_params *params, int tilesize,
         int sz6;
     } ads, *ds = &ads;
     ads.sz6 = tilesize/6;
-
     *x = (params->w+2) * TILE_SIZE + 2 * BORDER;
     *y = (params->h+2) * TILE_SIZE + 2 * BORDER;
 }
@@ -2127,6 +2125,9 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
     ds->sz6 = tilesize/6;
+    ds->grid_line_all = max(LINE_THICK, 1);
+    ds->grid_line_br = ds->grid_line_all / 2;
+    ds->grid_line_tl = ds->grid_line_all - ds->grid_line_br;
 }
 
 enum {
@@ -2135,7 +2136,7 @@ enum {
     COL_GRID, COL_CLUE, COL_CURSOR,
     COL_TRACK, COL_TRACK_CLUE, COL_SLEEPER,
     COL_DRAGON, COL_DRAGOFF,
-    COL_ERROR, COL_FLASH,
+    COL_ERROR, COL_FLASH, COL_ERROR_BACKGROUND,
     NCOLOURS
 };
 
@@ -2147,11 +2148,12 @@ static float *game_colours(frontend *fe, int *ncolours)
     game_mkhighlight(fe, ret, COL_BACKGROUND, COL_HIGHLIGHT, COL_LOWLIGHT);
 
     for (i = 0; i < 3; i++) {
-        ret[COL_TRACK_CLUE * 3 + i] = 0.0F;
-        ret[COL_TRACK * 3 + i] = 0.5F;
-        ret[COL_CLUE * 3 + i] = 0.0F;
-        ret[COL_GRID * 3 + i] = 0.75F;
-        ret[COL_CURSOR * 3 + i] = 0.6F;
+        ret[COL_TRACK_CLUE       * 3 + i] = 0.0F;
+        ret[COL_TRACK            * 3 + i] = 0.5F;
+        ret[COL_CLUE             * 3 + i] = 0.0F;
+        ret[COL_GRID             * 3 + i] = 0.75F;
+        ret[COL_CURSOR           * 3 + i] = 0.6F;
+        ret[COL_ERROR_BACKGROUND * 3 + i] = 1.0F;
     }
 
     ret[COL_SLEEPER * 3 + 0] = 0.5F;
@@ -2346,14 +2348,13 @@ static void draw_square(drawing *dr, game_drawstate *ds,
     /* Clip to the grid square. */
     clip(dr, ox, oy, TILE_SIZE, TILE_SIZE);
 
-    /* Clear the square. */
+    /* Clear the square so that it's got an appropriately-sized border
+     * in COL_GRID and a central area in the right background colour. */
     best_bits((flags & DS_TRACK) == DS_TRACK,
               (flags_drag & DS_TRACK) == DS_TRACK, &bg);
-    draw_rect(dr, ox, oy, TILE_SIZE, TILE_SIZE, bg);
-
-    /* Draw outline of grid square */
-    draw_line(dr, ox, oy, COORD(x+1), oy, COL_GRID);
-    draw_line(dr, ox, oy, ox, COORD(y+1), COL_GRID);
+    draw_rect(dr, ox, oy, TILE_SIZE, TILE_SIZE, COL_GRID);
+    draw_rect(dr, ox + GRID_LINE_TL, oy + GRID_LINE_TL,
+              TILE_SIZE - GRID_LINE_ALL, TILE_SIZE - GRID_LINE_ALL, bg);
 
     /* More outlines for clue squares. */
     if (flags & DS_CURSOR) {
@@ -2389,8 +2390,8 @@ static void draw_square(drawing *dr, game_drawstate *ds,
                            (flags_drag & DS_NOTRACK) == DS_NOTRACK, &c);
     if (flags_best) {
         off = HALFSZ/2;
-        draw_line(dr, cx - off, cy - off, cx + off, cy + off, c);
-        draw_line(dr, cx - off, cy + off, cx + off, cy - off, c);
+        draw_thick_line(dr, LINE_THICK, cx - off, cy - off, cx + off, cy + off, c);
+        draw_thick_line(dr, LINE_THICK, cx - off, cy + off, cx + off, cy - off, c);
     }
 
     c = COL_TRACK;
@@ -2404,8 +2405,8 @@ static void draw_square(drawing *dr, game_drawstate *ds,
             cx += (d == R) ? t2 : (d == L) ? -t2 : 0;
             cy += (d == D) ? t2 : (d == U) ? -t2 : 0;
 
-            draw_line(dr, cx - off, cy - off, cx + off, cy + off, c);
-            draw_line(dr, cx - off, cy + off, cx + off, cy - off, c);
+            draw_thick_line(dr, LINE_THICK, cx - off, cy - off, cx + off, cy + off, c);
+            draw_thick_line(dr, LINE_THICK, cx - off, cy + off, cx + off, cy - off, c);
         }
     }
 
@@ -2413,7 +2414,7 @@ static void draw_square(drawing *dr, game_drawstate *ds,
     draw_update(dr, ox, oy, TILE_SIZE, TILE_SIZE);
 }
 
-static void draw_clue(drawing *dr, game_drawstate *ds, int w, int clue, int i, int col)
+static void draw_clue(drawing *dr, game_drawstate *ds, int w, int clue, int i, int col, int bg)
 {
     int cx, cy, tsz = TILE_SIZE/2;
     char buf[20];
@@ -2426,12 +2427,14 @@ static void draw_clue(drawing *dr, game_drawstate *ds, int w, int clue, int i, i
         cy = CENTERED_COORD(i-w);
     }
 
-    draw_rect(dr, cx - tsz + BORDER, cy - tsz + BORDER,
-              TILE_SIZE - BORDER, TILE_SIZE - BORDER, COL_BACKGROUND);
+    draw_rect(dr, cx - tsz + GRID_LINE_TL, cy - tsz + GRID_LINE_TL,
+              TILE_SIZE - GRID_LINE_ALL, TILE_SIZE - GRID_LINE_ALL,
+              bg);
     sprintf(buf, "%d", clue);
     draw_text(dr, cx, cy, FONT_VARIABLE, tsz, ALIGN_VCENTRE|ALIGN_HCENTRE,
               col, buf);
-    draw_update(dr, cx - tsz, cy - tsz, TILE_SIZE, TILE_SIZE);
+    draw_update(dr, cx - tsz + GRID_LINE_TL, cy - tsz + GRID_LINE_TL,
+                TILE_SIZE - GRID_LINE_ALL, TILE_SIZE - GRID_LINE_ALL);
 }
 
 static void draw_loop_ends(drawing *dr, game_drawstate *ds,
@@ -2498,8 +2501,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 
         draw_loop_ends(dr, ds, state, COL_CLUE);
 
-        draw_line(dr, COORD(ds->w), COORD(0), COORD(ds->w), COORD(ds->h), COL_GRID);
-        draw_line(dr, COORD(0), COORD(ds->h), COORD(ds->w), COORD(ds->h), COL_GRID);
+        draw_rect(dr, COORD(0) - GRID_LINE_BR, COORD(0) - GRID_LINE_BR,
+                  ds->w * TILE_SIZE + GRID_LINE_ALL,
+                  ds->h * TILE_SIZE + GRID_LINE_ALL, COL_GRID);
 
         draw_update(dr, 0, 0, (w+2)*TILE_SIZE + 2*BORDER, (h+2)*TILE_SIZE + 2*BORDER);
 
@@ -2511,7 +2515,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
         if (force || (state->num_errors[i] != ds->num_errors[i])) {
             ds->num_errors[i] = state->num_errors[i];
             draw_clue(dr, ds, w, state->numbers->numbers[i], i,
-                      ds->num_errors[i] ? COL_ERROR : COL_CLUE);
+                      ds->num_errors[i] ? COL_ERROR : COL_CLUE,
+		      ds->num_errors[i] ? COL_ERROR_BACKGROUND : COL_BACKGROUND);
         }
     }
 
@@ -2601,7 +2606,8 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 
     /* clue numbers, and loop ends */
     for (i = 0; i < w+h; i++)
-        draw_clue(dr, ds, w, state->numbers->numbers[i], i, black);
+        draw_clue(dr, ds, w, state->numbers->numbers[i], i,
+		  black, COL_BACKGROUND);
     draw_loop_ends(dr, ds, state, black);
 
     /* clue tracks / solution */

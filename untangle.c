@@ -185,13 +185,10 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Number of points";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->n);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = NULL;
     ret[1].type = C_END;
-    ret[1].sval = NULL;
-    ret[1].ival = 0;
 
     return ret;
 }
@@ -200,12 +197,12 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->n = atoi(cfg[0].sval);
+    ret->n = atoi(cfg[0].u.string.sval);
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, int full)
 {
     if (params->n < 4)
         return "Number of points must be at least four";
@@ -659,7 +656,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
      */
     ret = NULL;
     {
-	char *sep;
+	const char *sep;
 	char buf[80];
 	int retlen;
 	edge *ea;
@@ -734,7 +731,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int a, b;
 
@@ -881,7 +878,7 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     int n = state->params.n;
     int matrix[4];
@@ -1117,14 +1114,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	    ui->newpoint.x = x;
 	    ui->newpoint.y = y;
 	    ui->newpoint.d = ds->tilesize;
-	    return "";
+	    return UI_UPDATE;
 	}
 
     } else if (IS_MOUSE_DRAG(button) && ui->dragpoint >= 0) {
 	ui->newpoint.x = x;
 	ui->newpoint.y = y;
 	ui->newpoint.d = ds->tilesize;
-	return "";
+	return UI_UPDATE;
     } else if (IS_MOUSE_RELEASE(button) && ui->dragpoint >= 0) {
 	int p = ui->dragpoint;
 	char buf[80];
@@ -1139,7 +1136,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             ui->newpoint.x >= (long)state->w*ui->newpoint.d ||
 	    ui->newpoint.y < 0 ||
             ui->newpoint.y >= (long)state->h*ui->newpoint.d)
-	    return "";
+	    return UI_UPDATE;
 
 	/*
 	 * We aren't cancelling the drag. Construct a move string

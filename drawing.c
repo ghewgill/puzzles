@@ -71,7 +71,7 @@ void drawing_free(drawing *dr)
 }
 
 void draw_text(drawing *dr, int x, int y, int fonttype, int fontsize,
-               int align, int colour, char *text)
+               int align, int colour, const char *text)
 {
     dr->api->draw_text(dr->handle, x, y, fonttype, fontsize, align,
 		       colour, text);
@@ -90,6 +90,8 @@ void draw_line(drawing *dr, int x1, int y1, int x2, int y2, int colour)
 void draw_thick_line(drawing *dr, float thickness,
 		     float x1, float y1, float x2, float y2, int colour)
 {
+    if (thickness < 1.0)
+        thickness = 1.0;
     if (dr->api->draw_thick_line) {
 	dr->api->draw_thick_line(dr->handle, thickness,
 				 x1, y1, x2, y2, colour);
@@ -188,7 +190,7 @@ char *text_fallback(drawing *dr, const char *const *strings, int nstrings)
     return NULL;		       /* placate optimiser */
 }
 
-void status_bar(drawing *dr, char *text)
+void status_bar(drawing *dr, const char *text)
 {
     char *rewritten;
 
