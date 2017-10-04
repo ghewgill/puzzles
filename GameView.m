@@ -602,7 +602,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)didApply:(config_item *)config
 {
-    const char *msg = midend_game_id(me, config[0].sval);
+    const char *msg = midend_game_id(me, config[0].u.string.sval);
     if (msg) {
         [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
         return;
@@ -870,7 +870,7 @@ const struct drawing_api ios_drawing = {
     ios_text_fallback,
 };      
 
-void fatal(char *fmt, ...)
+void fatal(const char *fmt, ...)
 {
 }
 

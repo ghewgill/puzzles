@@ -2334,8 +2334,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         }
         return UI_UPDATE;
     } else if (action == SET_SOURCE) {
-	x -= WINDOW_OFFSET + TILE_BORDER;
-	y -= WINDOW_OFFSET + TILE_BORDER;
+	x -= WINDOW_OFFSET + LINE_THICK;
+	y -= WINDOW_OFFSET + LINE_THICK;
 	if (x < 0 || y < 0)
 	    return nullret;
 	tx = x / TILE_SIZE;
@@ -2345,8 +2345,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         /* Transform from physical to game coords */
         tx = (tx + ui->org_x) % state->width;
         ty = (ty + ui->org_y) % state->height;
-	if (x % TILE_SIZE >= TILE_SIZE - TILE_BORDER ||
-	    y % TILE_SIZE >= TILE_SIZE - TILE_BORDER)
+	if (x % TILE_SIZE >= TILE_SIZE - LINE_THICK ||
+	    y % TILE_SIZE >= TILE_SIZE - LINE_THICK)
 	    return nullret;
         ui->cx = tx;
         ui->cy = ty;
