@@ -68,12 +68,12 @@ const int NBUTTONS = 10;
 
 - (BOOL)net_centre_mode
 {
-    return ourgame == &net && ((UIBarButtonItem *)buttons[@"Centre"]).style == UIBarButtonItemStyleDone;
+    return ourgame == &net && ((UIButton *)buttons[@"Centre"]).selected;
 }
 
 - (BOOL)net_shift_mode
 {
-    return ourgame == &net && ((UIBarButtonItem *)buttons[@"Shift"]).style == UIBarButtonItemStyleDone;
+    return ourgame == &net && ((UIButton *)buttons[@"Shift"]).selected;
 }
 
 struct StringReadContext {
@@ -220,12 +220,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     } else {
         toolbar = [[UIToolbar alloc] initWithFrame:r];
         NSArray *items = @[
-            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStyleBordered target:self action:@selector(doGameMenu)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStylePlain target:self action:@selector(doGameMenu)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemUndo target:self action:@selector(doUndo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRedo target:self action:@selector(doRedo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil],
-            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStyleBordered target:self action:@selector(doType)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStylePlain target:self action:@selector(doType)],
         ];
         [toolbar setItems:items];
         if (!IOS7()) {
@@ -311,7 +311,6 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         } else {
             game_toolbar.frame = r;
         }
-        UIBarButtonItemStyle style = ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone && (main_button_count + extra_button_count) > 9) ? UIBarButtonItemStylePlain : UIBarButtonItemStyleBordered;
         NSMutableArray *items = [[NSMutableArray alloc] init];
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
@@ -330,8 +329,11 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             } else {
                 title = [NSString stringWithUTF8String:extra_labels[i - main_button_count]];
             }
-            UIBarButtonItem *button = [[UIBarButtonItem alloc] initWithTitle:title style:style target:self action:@selector(keyButton:)];
-            [items addObject:button];
+            UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+            [button addTarget:self action:@selector(keyButton:) forControlEvents:UIControlEventTouchDown];
+            [button setTitle:title forState:UIControlStateNormal];
+            UIBarButtonItem *barButton = [[UIBarButtonItem alloc] initWithCustomView:button];
+            [items addObject:barButton];
             buttons[title] = button;
             [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         }
@@ -494,29 +496,29 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     }
 }
 
-- (void)keyButton:(UIBarButtonItem *)sender
+- (void)keyButton:(UIButton *)sender
 {
     if (ourgame == &net) {
         if (sender == buttons[@"Centre"]) {
             if (self.net_centre_mode) {
-                sender.style = UIBarButtonItemStyleBordered;
+                sender.selected = false;
             } else {
-                sender.style = UIBarButtonItemStyleDone;
-                ((UIBarButtonItem *)buttons[@"Shift"]).style = UIBarButtonItemStyleBordered;
+                sender.selected = true;
+                ((UIButton *)buttons[@"Shift"]).selected = false;
             }
             return;
         }
         if (sender == buttons[@"Shift"]) {
             if (self.net_shift_mode) {
-                sender.style = UIBarButtonItemStyleBordered;
+                sender.selected = false;
             } else {
-                sender.style = UIBarButtonItemStyleDone;
-                ((UIBarButtonItem *)buttons[@"Centre"]).style = UIBarButtonItemStyleBordered;
+                sender.selected = true;
+                ((UIButton *)buttons[@"Centre"]).selected = false;
             }
             return;
         }
     }
-    midend_process_key(me, -1, -1, [sender.title characterAtIndex:0]);
+    midend_process_key(me, -1, -1, [sender.currentTitle characterAtIndex:0]);
 }
 
 - (void)activateTimer
