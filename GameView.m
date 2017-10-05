@@ -332,6 +332,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
             [button addTarget:self action:@selector(keyButton:) forControlEvents:UIControlEventTouchDown];
             [button setTitle:title forState:UIControlStateNormal];
+            button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
             UIBarButtonItem *barButton = [[UIBarButtonItem alloc] initWithCustomView:button];
             [items addObject:barButton];
             buttons[title] = button;
