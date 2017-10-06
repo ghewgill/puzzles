@@ -60,7 +60,7 @@ const int NBUTTONS = 10;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
-    NSMutableDictionary *buttons;
+    NSMutableDictionary *toggles;
 }
 
 @synthesize bitmap;
@@ -68,12 +68,12 @@ const int NBUTTONS = 10;
 
 - (BOOL)net_centre_mode
 {
-    return ourgame == &net && ((UIButton *)buttons[@"Centre"]).selected;
+    return ourgame == &net && ((UIButton *)toggles[@"Centre"]).selected;
 }
 
 - (BOOL)net_shift_mode
 {
-    return ourgame == &net && ((UIButton *)buttons[@"Shift"]).selected;
+    return ourgame == &net && ((UIButton *)toggles[@"Shift"]).selected;
 }
 
 struct StringReadContext {
@@ -114,7 +114,7 @@ static int saveGameRead(void *ctx, void *buf, int len)
         me = midend_new(&fe, ourgame, &ios_drawing, &fe);
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
         self.backgroundColor = [UIColor colorWithRed:fe.colours[0][0] green:fe.colours[0][1] blue:fe.colours[0][2] alpha:1];
-        buttons = [[NSMutableDictionary alloc] init];
+        toggles = [[NSMutableDictionary alloc] init];
         if (saved) {
             struct StringReadContext srctx;
             srctx.save = (__bridge void *)(saved);
@@ -248,7 +248,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             statusbar = nil;
         }
     }
-    [buttons removeAllObjects];
+    [toggles removeAllObjects];
     if (ourgame == &filling
      || ourgame == &keen
      || ourgame == &map
@@ -262,6 +262,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         int extra_button_count = 0;
         const char **labels = NULL;
         const char **extra_labels = NULL;
+        const BOOL *toggle_extra = NULL;
         if (ourgame == &filling) {
             static const char *FillingLabels[] = {"0"};
             extra_labels = FillingLabels;
@@ -277,6 +278,8 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             labels = MapLabels;
         } else if (ourgame == &net) {
             static const char *NetLabels[] = {"Jumble", "Centre", "Shift"};
+            static const BOOL NetToggles[] = {false, true, true};
+            toggle_extra = NetToggles;
             main_button_count = 0;
             extra_labels = NetLabels;
             extra_button_count = 2;
@@ -329,13 +332,18 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             } else {
                 title = [NSString stringWithUTF8String:extra_labels[i - main_button_count]];
             }
-            UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-            [button addTarget:self action:@selector(keyButton:) forControlEvents:UIControlEventTouchDown];
-            [button setTitle:title forState:UIControlStateNormal];
-            button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-            UIBarButtonItem *barButton = [[UIBarButtonItem alloc] initWithCustomView:button];
-            [items addObject:barButton];
-            buttons[title] = button;
+            UIBarButtonItem *button = NULL;
+            if (toggle_extra != NULL && i >= main_button_count && toggle_extra[i - main_button_count]) {
+                UIButton *toggle = [UIButton buttonWithType:UIButtonTypeSystem];
+                [toggle addTarget:self action:@selector(toggleButton:) forControlEvents:UIControlEventTouchDown];
+                [toggle setTitle:title forState:UIControlStateNormal];
+                toggle.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+                toggles[title] = toggle;
+                button = [[UIBarButtonItem alloc] initWithCustomView:toggle];
+            } else {
+                button = [[UIBarButtonItem alloc] initWithTitle:title style:UIBarButtonItemStylePlain target:self action:@selector(keyButton:)];
+            }
+            [items addObject:button];
             [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         }
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
@@ -497,29 +505,33 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     }
 }
 
-- (void)keyButton:(UIButton *)sender
+- (void)toggleButton:(UIButton *)sender
 {
     if (ourgame == &net) {
-        if (sender == buttons[@"Centre"]) {
+        if (sender == toggles[@"Centre"]) {
             if (self.net_centre_mode) {
                 sender.selected = false;
             } else {
                 sender.selected = true;
-                ((UIButton *)buttons[@"Shift"]).selected = false;
+                ((UIButton *)toggles[@"Shift"]).selected = false;
             }
             return;
         }
-        if (sender == buttons[@"Shift"]) {
+        if (sender == toggles[@"Shift"]) {
             if (self.net_shift_mode) {
                 sender.selected = false;
             } else {
                 sender.selected = true;
-                ((UIButton *)buttons[@"Centre"]).selected = false;
+                ((UIButton *)toggles[@"Centre"]).selected = false;
             }
             return;
         }
     }
-    midend_process_key(me, -1, -1, [sender.currentTitle characterAtIndex:0]);
+}
+
+- (void)keyButton:(UIBarButtonItem *)sender
+{
+    midend_process_key(me, -1, -1, [sender.title characterAtIndex:0]);
 }
 
 - (void)activateTimer
