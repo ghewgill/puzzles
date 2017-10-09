@@ -1,5 +1,7 @@
 NSString *GameDescriptions[][2] = {
+    {@"Ascent", @"Create a path of numbers, using each number exactly once."},
     {@"Black Box", @"Find the hidden balls in the box by bouncing laser beams off them."},
+    {@"Boats", @"Place the entire fleet into the grid according to the numbers on the side."},
     {@"Bridges", @"Connect all the islands with a network of bridges."},
     {@"Cube", @"Pick up all the blue squares by rolling the cube over them."},
     {@"Dominosa", @"Tile the rectangle with a full set of dominoes."},
@@ -18,6 +20,7 @@ NSString *GameDescriptions[][2] = {
     {@"Mines", @"Find all the mines without treading on any of them."},
     {@"Net", @"Rotate each tile to reassemble the network."},
     {@"Netslide", @"Slide a row at a time to reassemble the network."},
+    {@"Palisade", @"Divide the grid into equal-sized areas in accordance with the clues."},
     {@"Pattern", @"Fill in the pattern in the grid, given only the lengths of runs of black squares."},
     {@"Pearl", @"Draw a single closed loop, given clues about corner and straight squares."},
     {@"Pegs", @"Jump pegs over each other to remove all but one."},
@@ -29,6 +32,7 @@ NSString *GameDescriptions[][2] = {
     {@"Sixteen", @"Slide a row at a time to arrange the tiles into order."},
     {@"Slant", @"Draw a maze of slanting lines that matches the clues."},
     {@"Solo", @"Fill in the grid so that each row, column and square block contains one of every digit."},
+    {@"Spokes", @"Connect all hubs using horizontal, vertical and diagonal lines."},
     {@"Tents", @"Place a tent next to each tree."},
     {@"Towers", @"Complete the latin square of towers in accordance with the clues."},
     {@"Tracks", @"Fill in the railway track according to the clues."},
