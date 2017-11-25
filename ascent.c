@@ -49,7 +49,6 @@ typedef int number;
 typedef int cell;
 typedef unsigned char bitmap;
 
-#define IS_NEAR(a,b,w) ( ( abs(((a)/(w)) - ((b)/(w))) | abs(((a)%(w)) - ((b)%(w)))) == 1 )
 static const int dir_x[] = {-1,  0,  1, -1, 1, -1, 0, 1};
 static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 
@@ -68,7 +67,7 @@ struct game_params {
 	int h, w;
 #endif
 
-	int diff;
+	int diff, mode;
 	char removeends;
 };
 
@@ -78,36 +77,61 @@ struct game_params {
 	A(TRICKY,Tricky, t)                         \
 	A(HARD,Hard, h)                             \
 
-#define ENUM(upper,title,lower) DIFF_ ## upper,
+#define MODELIST(A)                             \
+	A(RECT,Rectangle, R)                        \
+	A(HEXAGON,Hexagon, H)                       \
+
 #define TITLE(upper,title,lower) #title,
 #define ENCODE(upper,title,lower) #lower
 #define CONFIG(upper,title,lower) ":" #title
-enum { DIFFLIST(ENUM) DIFFCOUNT };
-static char const *const ascent_diffnames[] = { DIFFLIST(TITLE) };
 
+#define DIFFENUM(upper,title,lower) DIFF_ ## upper,
+enum { DIFFLIST(DIFFENUM) DIFFCOUNT };
+static char const *const ascent_diffnames[] = { DIFFLIST(TITLE) };
 static char const ascent_diffchars[] = DIFFLIST(ENCODE);
 
+#define MODEENUM(upper,title,lower) MODE_ ## upper,
+enum { MODELIST(MODEENUM) MODECOUNT };
+static char const ascent_modechars[] = MODELIST(ENCODE);
+
+/*
+* Hexagonal grids are implemented as normal square grids, but disallowing
+* movement in the top-left and bottom-right directions (dir 0 and dir 7).
+*/
+#define IS_HEXAGONAL(mode) ((mode) == MODE_HEXAGON)
+
 const static struct game_params ascent_presets[] = {
-	{ 7,  6, DIFF_EASY, FALSE },
-	{ 7,  6, DIFF_NORMAL, FALSE },
-	{ 7,  6, DIFF_TRICKY, FALSE },
-	{ 7,  6, DIFF_HARD, FALSE },
-	{ 10, 8, DIFF_EASY, FALSE },
-	{ 10, 8, DIFF_NORMAL, FALSE },
-	{ 10, 8, DIFF_TRICKY, FALSE },
-	{ 10, 8, DIFF_HARD, FALSE },
+	{ 7,  6, DIFF_EASY, MODE_RECT, FALSE },
+	{ 7,  6, DIFF_NORMAL, MODE_RECT, FALSE },
+	{ 7,  6, DIFF_TRICKY, MODE_RECT, FALSE },
+	{ 7,  6, DIFF_HARD, MODE_RECT, FALSE },
+	{ 10, 8, DIFF_EASY, MODE_RECT, FALSE },
+	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE },
+	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE },
+	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE },
 #ifndef SMALL_SCREEN
-	{ 14, 11, DIFF_EASY, FALSE },
-	{ 14, 11, DIFF_NORMAL, FALSE },
-	{ 14, 11, DIFF_TRICKY, FALSE },
-	{ 14, 11, DIFF_HARD, FALSE },
+	{ 14, 11, DIFF_EASY, MODE_RECT, FALSE },
+	{ 14, 11, DIFF_NORMAL, MODE_RECT, FALSE },
+	{ 14, 11, DIFF_TRICKY, MODE_RECT, FALSE },
+	{ 14, 11, DIFF_HARD, MODE_RECT, FALSE },
 #endif
+};
+
+const static struct game_params ascent_hexagonal_presets[] = {
+	{ 7, 7, DIFF_EASY, MODE_HEXAGON, FALSE },
+	{ 7, 7, DIFF_NORMAL, MODE_HEXAGON, FALSE },
+	{ 7, 7, DIFF_TRICKY, MODE_HEXAGON, FALSE },
+	{ 7, 7, DIFF_HARD, MODE_HEXAGON, FALSE },
+	{ 9, 9, DIFF_EASY, MODE_HEXAGON, FALSE },
+	{ 9, 9, DIFF_NORMAL, MODE_HEXAGON, FALSE },
+	{ 9, 9, DIFF_TRICKY, MODE_HEXAGON, FALSE },
+	{ 9, 9, DIFF_HARD, MODE_HEXAGON, FALSE },
 };
 
 #define DEFAULT_PRESET 0
 
 struct game_state {
-	int w, h;
+	int w, h, mode;
 	
 	number *grid;
 	bitmap *immutable;
@@ -126,34 +150,43 @@ static game_params *default_params(void)
 	return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
-{
-	game_params *ret;
-	char buf[80];
-
-	if (i < 0 || i >= lenof(ascent_presets))
-		return FALSE;
-
-	ret = snew(game_params);
-	*ret = ascent_presets[i];     /* structure copy */
-
-	sprintf(buf, "%dx%d %s", ret->w, ret->h, ascent_diffnames[ret->diff]);
-
-	*name = dupstr(buf);
-	*params = ret;
-	return TRUE;
-}
-
-static void free_params(game_params *params)
-{
-	sfree(params);
-}
-
 static game_params *dup_params(const game_params *params)
 {
 	game_params *ret = snew(game_params);
 	*ret = *params;               /* structure copy */
 	return ret;
+}
+
+static struct preset_menu *game_preset_menu(void)
+{
+	int i;
+	game_params *params;
+	char buf[80];
+	struct preset_menu *menu, *hex;
+	menu = preset_menu_new();
+
+	for (i = 0; i < lenof(ascent_presets); i++)
+	{
+		params = dup_params(&ascent_presets[i]);
+		sprintf(buf, "%dx%d %s", params->w, params->h, ascent_diffnames[params->diff]);
+		preset_menu_add_preset(menu, dupstr(buf), params);
+	}
+
+	hex = preset_menu_add_submenu(menu, dupstr("Hexagonal"));
+
+	for (i = 0; i < lenof(ascent_hexagonal_presets); i++)
+	{
+		params = dup_params(&ascent_hexagonal_presets[i]);
+		sprintf(buf, "Size %d Hexagon %s", params->w, ascent_diffnames[params->diff]);
+		preset_menu_add_preset(hex, dupstr(buf), params);
+	}
+
+	return menu;
+}
+
+static void free_params(game_params *params)
+{
+	sfree(params);
 }
 
 static void decode_params(game_params *params, char const *string)
@@ -164,6 +197,18 @@ static void decode_params(game_params *params, char const *string)
 		string++;
 		params->h = atoi(string);
 		while (*string && isdigit((unsigned char)*string)) string++;
+	}
+	if (*string == 'm') {
+		int i;
+		string++;
+		params->mode = MODECOUNT + 1;   /* ...which is invalid */
+		if (*string) {
+			for (i = 0; i < MODECOUNT; i++) {
+				if (*string == ascent_modechars[i])
+					params->mode = i;
+			}
+			string++;
+		}
 	}
 	if(*string == 'E')
 	{
@@ -188,7 +233,7 @@ static char *encode_params(const game_params *params, int full)
 {
 	char buf[256];
 	char *p = buf;
-	p += sprintf(p, "%dx%d", params->w, params->h);
+	p += sprintf(p, "%dx%dm%c", params->w, params->h, ascent_modechars[params->mode]);
 	if(full && params->removeends)
 		*p++ = 'E';
 	if (full)
@@ -204,7 +249,7 @@ static config_item *game_configure(const game_params *params)
 	config_item *ret;
 	char buf[80];
 	
-	ret = snewn(5, config_item);
+	ret = snewn(6, config_item);
 	
 	ret[0].name = "Width";
 	ret[0].type = C_STRING;
@@ -220,13 +265,18 @@ static config_item *game_configure(const game_params *params)
 	ret[2].type = C_BOOLEAN;
 	ret[2].u.boolean.bval = !params->removeends;
 	
-	ret[3].name = "Difficulty";
+	ret[3].name = "Grid type";
 	ret[3].type = C_CHOICES;
-	ret[3].u.choices.choicenames = DIFFLIST(CONFIG);
-	ret[3].u.choices.selected = params->diff;
+	ret[3].u.choices.choicenames = MODELIST(CONFIG);
+	ret[3].u.choices.selected = params->mode;
+
+	ret[4].name = "Difficulty";
+	ret[4].type = C_CHOICES;
+	ret[4].u.choices.choicenames = DIFFLIST(CONFIG);
+	ret[4].u.choices.selected = params->diff;
 	
-	ret[4].name = NULL;
-	ret[4].type = C_END;
+	ret[5].name = NULL;
+	ret[5].type = C_END;
 	
 	return ret;
 }
@@ -238,7 +288,8 @@ static game_params *custom_params(const config_item *cfg)
 	ret->w = atoi(cfg[0].u.string.sval);
 	ret->h = atoi(cfg[1].u.string.sval);
 	ret->removeends = !cfg[2].u.boolean.bval;
-	ret->diff = cfg[3].u.choices.selected;
+	ret->mode = cfg[3].u.choices.selected;
+	ret->diff = cfg[4].u.choices.selected;
 	
 	return ret;
 }
@@ -256,13 +307,30 @@ static const char *validate_params(const game_params *params, int full)
 	
 	if(w > 50) return "Width must be no more than 50";
 	if(h > 50) return "Height must be no more than 50";
+
+	if (params->mode == MODE_HEXAGON && (h & 1) == 0)
+		return "Height must be an odd number";
+	if (params->mode == MODE_HEXAGON && w <= h / 2)
+		return "Width is too low for hexagon grid";
 	
 	return NULL;
 }
 
-static char check_completion(number *grid, int w, int h)
+static int is_near(int a, int b, const game_state *state)
 {
-	int x = -1, y = -1, x2, y2, i;
+	int w = state->w;
+	int dx = (a % w) - (b % w);
+	int dy = (a / w) - (b / w);
+
+	if (IS_HEXAGONAL(state->mode) && dx == dy)
+		return FALSE;
+
+	return (abs(dx) | abs(dy)) == 1;
+}
+
+static char check_completion(number *grid, int w, int h, int mode)
+{
+	int x = -1, y = -1, x2 = -1, y2 = -1, i;
 	number last = (w*h)-1;
 	
 	/* Check for empty squares, and locate path start */
@@ -283,7 +351,7 @@ static char check_completion(number *grid, int w, int h)
 	/* Keep selecting the next number in line */
 	while(grid[y*w+x] != last)
 	{
-		for(i = 0; i < 8; i++)
+		for(i = IS_HEXAGONAL(mode) ? 1 : 0; i < (IS_HEXAGONAL(mode) ? 7 : 8); i++)
 		{
 			x2 = x + dir_x[i];
 			y2 = y + dir_y[i];
@@ -310,90 +378,131 @@ static char check_completion(number *grid, int w, int h)
  * http://clisby.net/projects/hamiltonian_path/
  */
 
-static void reverse_path(int i1, int i2, int *pathx, int *pathy) {
+static void reverse_path(int i1, int i2, cell *path)
+{
 	int i;
 	int ilim = (i2-i1+1)/2;
 	int temp;
 	for (i=0; i<ilim; i++)
 	{
-		temp = pathx[i1+i];
-		pathx[i1+i] = pathx[i2-i];
-		pathx[i2-i] = temp;
-
-		temp = pathy[i1+i];
-		pathy[i1+i] = pathy[i2-i];
-		pathy[i2-i] = temp;
+		temp = path[i1+i];
+		path[i1+i] = path[i2-i];
+		path[i2-i] = temp;
 	}
 }
 
-static int backbite_left(int step, int n, int *pathx, int *pathy, int w, int h) {
-	int neighx, neighy;
-	int i, inPath = FALSE;
-	neighx = pathx[0]+dir_x[step];
-	neighy = pathy[0]+dir_y[step];
-	
+static int backbite_left(int step, int n, cell *path, int w, int h, const bitmap *walls)
+{
+	int neighx, neighy, neigh, i;
+	neighx = (path[0] % w) + dir_x[step];
+	neighy = (path[0] / w) + dir_y[step];
+
 	if (neighx < 0 || neighx >= w || neighy < 0 || neighy >= h) return n;
-	
-	for (i=1;i<n;i++) {
-		if (neighx == pathx[i] && neighy == pathy[i]) { inPath = TRUE; break; }
+
+	neigh = neighy*w + neighx;
+	if (walls && GET_BIT(walls, neigh)) return n;
+
+	for (i = 1; i < n; i++)
+	{
+		if (neigh == path[i])
+		{
+			reverse_path(0, i - 1, path);
+			return n;
+		}
 	}
-	if (inPath) {
-		reverse_path(0, i-1, pathx, pathy);
-	}
-	else {
-		reverse_path(0, n-1, pathx, pathy);
-		pathx[n] = neighx;
-		pathy[n] = neighy;
-		n++;
-	}
-	
-	return n;
+
+	reverse_path(0, n-1, path);
+	path[n] = neigh;
+	return n + 1;
 }
 
-static int backbite_right(int step, int n, int *pathx, int *pathy, int w, int h) {
-	int neighx, neighy;
-	int i, inPath = FALSE;
-	neighx = pathx[n-1]+dir_x[step];
-	neighy = pathy[n-1]+dir_y[step];
+static int backbite_right(int step, int n, cell *path, int w, int h, const bitmap *walls)
+{
+	int neighx, neighy, neigh, i;
+	neighx = (path[n-1] % w) + dir_x[step];
+	neighy = (path[n-1] / w) + dir_y[step];
+
 	if (neighx < 0 || neighx >= w || neighy < 0 || neighy >= h) return n;
-	for (i=n-2;i>=0;i--) {
-		if (neighx == pathx[i] && neighy == pathy[i]) { inPath = TRUE; break; }
+
+	neigh = neighy*w + neighx;
+	if (walls && GET_BIT(walls, neigh)) return n;
+
+	for (i = n - 2; i >= 0; i--)
+	{
+		if (neigh == path[i])
+		{
+			reverse_path(i+1, n-1, path);
+			return n;
+		}
 	}
-	if (inPath) {
-		reverse_path(i+1, n-1, pathx, pathy);
-	}
-	else {
-		pathx[n] = neighx;
-		pathy[n] = neighy;
-		n++;
-	}
-	
-	return n;
+
+	path[n] = neigh;
+	return n + 1;
 }
 
-static int backbite(int n, int *pathx, int *pathy, int w, int h, random_state *rs) {
-	return (random_upto(rs, 2) ? backbite_left : backbite_right)(random_upto(rs, 8), n, pathx, pathy, w, h);
+static int backbite(int step, int n, cell *path, int w, int h, random_state *rs, const bitmap *walls)
+{
+	return (random_upto(rs, 2) ? backbite_left : backbite_right)(step, n, path, w, h, walls);
 }
 
-static number *generate_hamiltonian_path(int w, int h, random_state *rs) {
-	int *pathx = snewn(w*h, int);
-	int *pathy = snewn(w*h, int);
-	int i, n = 1;
-	number *ret;
-	
-	pathx[0] = random_upto(rs, w);
-	pathy[0] = random_upto(rs, h);
-	
-	while (n < w*h) {
-		n = backbite(n, pathx, pathy, w, h, rs);
+#define MAX_ATTEMPTS 1000
+static number *generate_hamiltonian_path(int w, int h, random_state *rs, const game_params *params)
+{
+	cell *path = snewn(w*h, cell);
+	bitmap *walls = NULL;
+	int i, n = 1, nn, attempts = 0, wallcount = 0;
+	number *ret = NULL;
+
+	if (params->mode == MODE_HEXAGON)
+	{
+		int j1, j2, center = h/2;
+		walls = snewn(BITMAP_SIZE(w*h), bitmap);
+		memset(walls, 0, BITMAP_SIZE(w*h));
+
+		for (j1 = 1; j1 <= center; j1++)
+		for (j2 = 0; j2 < j1; j2++)
+		{
+			i = ((center - j1) * w) + j2;
+			SET_BIT(walls, i);
+			SET_BIT(walls, (w*h)-(i+1));
+			wallcount += 2;
+		}
 	}
 
-	ret = snewn(w*h, number);
-	for(i = 0; i < w*h; i++)
-		ret[pathy[i]*w+pathx[i]] = i;
-	
-	sfree(pathx);
-	sfree(pathy);
+	/* Find a starting position */
+	do
+	{
+		i = random_upto(rs, w*h);
+	} while (walls && GET_BIT(walls, i));
+	path[0] = i;
+
+	/*
+	* The backbite algorithm will randomly navigate the grid. If it fails to
+	* make any progress for MAX_ATTEMPTS cycles in a row, abort.
+	*/
+	while (n + wallcount < w*h && attempts < MAX_ATTEMPTS)
+	{
+		int step = IS_HEXAGONAL(params->mode) ? random_upto(rs, 6) + 1 : random_upto(rs, 8);
+		nn = backbite(step, n, path, w, h, rs, walls);
+		if (n == nn)
+			attempts++;
+		else
+			attempts = 0;
+		n = nn;
+	}
+
+	/* Build the grid of numbers if the algorithm succeeds. */
+	if (n + wallcount == w*h)
+	{
+		ret = snewn(w*h, number);
+		for (i = 0; i < w*h; i++)
+			ret[i] = -2;
+		for (i = 0; i < n; i++)
+			ret[path[i]] = i;
+	}
+
+	sfree(path);
+	sfree(walls);
 
 	return ret;
 }
@@ -413,7 +522,7 @@ static void update_positions(cell *positions, number *grid, int s)
 }
 
 struct solver_scratch {
-	int w, h;
+	int w, h, mode;
 	
 	/* The position of each number. */
 	cell *positions;
@@ -431,12 +540,13 @@ struct solver_scratch {
 	char found_endpoints;
 };
 
-static struct solver_scratch *new_scratch(int w, int h, number last)
+static struct solver_scratch *new_scratch(int w, int h, int mode, number last)
 {
 	int i, n = w*h;
 	struct solver_scratch *ret = snew(struct solver_scratch);
 	ret->w = w;
 	ret->h = h;
+	ret->mode = mode;
 	ret->end = last;
 	ret->positions = snewn(n, cell);
 	ret->grid = snewn(n, number);
@@ -577,9 +687,16 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num, in
 	for(i = 0; i < s; i++)
 	{
 		if(!GET_BIT(scratch->marks, i*s+num)) continue;
-		hdist = abs((i%w) - (near%w));
-		vdist = abs((i/w) - (near/w));
-		if(max(hdist, vdist) <= distance) continue;
+		hdist = (i%w) - (near%w);
+		vdist = (i/w) - (near/w);
+		if (IS_HEXAGONAL(scratch->mode) && ((hdist < 0 && vdist < 0) || (hdist > 0 && vdist > 0)))
+		{
+			if (abs(hdist + vdist) <= distance) continue;
+		}
+		else
+		{
+			if (max(abs(hdist), abs(vdist)) <= distance) continue;
+		}
 		CLR_BIT(scratch->marks, i*s+num);
 		ret++;
 	}
@@ -645,12 +762,12 @@ static int solver_proximity_full(struct solver_scratch *scratch)
 	return ret;
 }
 
-static int ascent_find_direction(cell i1, cell i2, int w)
+static int ascent_find_direction(cell i1, cell i2, const struct solver_scratch *scratch)
 {
 	int dir;
-	for (dir = 0; dir < 8; dir++)
+	for (dir = IS_HEXAGONAL(scratch->mode) ? 1 : 0; dir < (IS_HEXAGONAL(scratch->mode) ? 7 : 8); dir++)
 	{
-		if (i2 - i1 == (dir_y[dir] * w + dir_x[dir]))
+		if (i2 - i1 == (dir_y[dir] * scratch->w + dir_x[dir]))
 			return dir;
 	}
 	return -1;
@@ -720,6 +837,15 @@ static void solver_initialize_path(struct solver_scratch *scratch)
 		scratch->path[y*w + x] = 0xFF; /* center */
 	}
 
+	if (IS_HEXAGONAL(scratch->mode))
+	{
+		for (y = 0; y < h; y++)
+		for (x = 0; x < w; x++)
+		{
+			scratch->path[y*w + x] &= 0x7E;
+		}
+	}
+
 	for (y = 0; y < h; y++)
 	for (x = 0; x < w; x++)
 	{
@@ -760,13 +886,13 @@ static int solver_update_path(struct solver_scratch *scratch)
 	i = scratch->positions[1];
 	if (i != -1 && ib != -1 && !(scratch->path[ib] & FLAG_COMPLETE))
 	{
-		scratch->path[ib] = (1 << ascent_find_direction(ib, i, w)) | FLAG_ENDPOINT;
+		scratch->path[ib] = (1 << ascent_find_direction(ib, i, scratch)) | FLAG_ENDPOINT;
 	}
 	/* Do the same for the last number pointing to the penultimate number. */
 	i = scratch->positions[end - 1];
 	if (i != -1 && ic != -1 && !(scratch->path[ic] & FLAG_COMPLETE))
 	{
-		scratch->path[ic] = (1 << ascent_find_direction(ic, i, w)) | FLAG_ENDPOINT;
+		scratch->path[ic] = (1 << ascent_find_direction(ic, i, scratch)) | FLAG_ENDPOINT;
 	}
 
 	/* 
@@ -782,8 +908,8 @@ static int solver_update_path(struct solver_scratch *scratch)
 		ic = scratch->positions[n+1];
 		if (ib == -1 || ic == -1) continue;
 
-		scratch->path[i] = 1 << ascent_find_direction(i, ib, w);
-		scratch->path[i] |= 1 << ascent_find_direction(i, ic, w);
+		scratch->path[i] = 1 << ascent_find_direction(i, ib, scratch);
+		scratch->path[i] |= 1 << ascent_find_direction(i, ic, scratch);
 	}
 
 	for (i = 0; i < s; i++)
@@ -1061,54 +1187,86 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	int w = params->w;
 	int h = params->h;
 	cell i, j;
-	struct solver_scratch *scratch = new_scratch(w, h, (w*h)-1);
+	struct solver_scratch *scratch = new_scratch(w, h, params->mode, (w*h)-1);
 	number temp;
 	cell *spaces = snewn(w*h, cell);
-	number *grid;
-	
+	number *grid = NULL;
+
+	while (!grid)
+	{
+		grid = generate_hamiltonian_path(w, h, rs, params);
+	}
+
 	for(i = 0; i < w*h; i++)
+	{
+		if (grid[i] == -2) scratch->end--;
 		spaces[i] = i;
-	
-	grid = generate_hamiltonian_path(w, h, rs);
-	
+	}
 	shuffle(spaces, w*h, sizeof(*spaces), rs);
 	for(j = 0; j < w*h; j++)
 	{
 		i = spaces[j];
 		temp = grid[i];
-		if(!params->removeends && (temp == 0 || temp == w*h-1)) continue;
+		if (temp < 0) continue;
+		if (!params->removeends && (temp == 0 || temp == scratch->end)) continue;
 		grid[i] = -1;
 		
 		ascent_solve(grid, params->diff, scratch);
 		
-		if(!check_completion(scratch->grid, w, h))
+		if (!check_completion(scratch->grid, w, h, params->mode))
 			grid[i] = temp;
 	}
 	
 	char *ret = snewn(w*h*4, char);
 	char *p = ret;
 	int run = 0;
-	for(i = 0; i < w*h; i++)
+	enum { RUN_NONE, RUN_BLANK, RUN_WALL, RUN_NUMBER } runtype = RUN_NONE;
+	for(i = 0; i <= w*h; i++)
 	{
-		if(grid[i] != -1)
+		if(runtype == RUN_BLANK && (i == w*h || grid[i] != -1))
 		{
-			if(i != 0)
-				*p++ = run ? 'a' + run-1 : '_';
-			p += sprintf(p, "%d", grid[i]+1);
+			while(run >= 26)
+			{
+				*p++ = 'z';
+				run -= 26;
+			}
+			if(run)
+				*p++ = 'a' + run-1;
 			run = 0;
 		}
-		else
+		if(runtype == RUN_WALL && (i == w*h || grid[i] > -2))
 		{
-			if (run == 26)
+			while(run >= 26)
 			{
-				*p++ = ('a'-1) + run;
-				run = 0;
+				*p++ = 'Z';
+				run -= 26;
 			}
+			if(run)
+				*p++ = 'A' + run-1;
+			run = 0;
+		}
+
+		if(i == w*h)
+			break;
+
+		if(grid[i] >= 0)
+		{
+			if(runtype == RUN_NUMBER)
+				*p++ = '_';
+			p += sprintf(p, "%d", grid[i] + 1);
+			runtype = RUN_NUMBER;
+		}
+		else if(grid[i] == -1)
+		{
+			runtype = RUN_BLANK;
+			run++;
+		}
+		else if(grid[i] <= -2)
+		{
+			runtype = RUN_WALL;
 			run++;
 		}
 	}
-	if(run)
-		*p++ = 'a' + run-1;
 	*p++ = '\0';
 	ret = sresize(ret, p - ret, char);
 	free_scratch(scratch);
@@ -1160,6 +1318,7 @@ static game_state *new_game(midend *me, const game_params *params,
 
 	state->w = w;
 	state->h = h;
+	state->mode = params->mode;
 	state->completed = state->cheated = FALSE;
 	state->grid = snewn(w*h, number);
 	state->immutable = snewn(BITMAP_SIZE(w*h), bitmap);
@@ -1197,6 +1356,43 @@ static game_state *new_game(midend *me, const game_params *params,
 			++p;
 	}
 	
+	for(i = 0; i < w; i++)
+	{
+		if(state->grid[i] == -2)
+			state->grid[i] = -3;
+		if(state->grid[(w*h)-(i+1)] == -2)
+			state->grid[(w*h)-(i+1)] = -3;
+	}
+	
+	for(i = 0; i < h; i++)
+	{
+		if(state->grid[i*w] == -2)
+			state->grid[i*w] = -3;
+		if(state->grid[(i*w)+(w-1)] == -2)
+			state->grid[(i*w)+(w-1)] = -3;
+	}
+	
+	do
+	{
+		walls = 0;
+		for(i = 0; i < w*h; i++)
+		{
+			if(state->grid[i] != -2) continue;
+			
+			int x = i%w;
+			int y = i/w;
+			
+			if((x < w-1 && state->grid[i+1] == -3) ||
+				(x > 0 && state->grid[i-1] == -3) ||
+				(y < w-1 && state->grid[i+w] == -3) ||
+				(y > 0 && state->grid[i-w] == -3))
+			{
+				state->grid[i] = -3;
+				walls++;
+			}
+		}
+	} while(walls);
+	
 	return state;
 }
 
@@ -1209,6 +1405,7 @@ static game_state *dup_game(const game_state *state)
 
 	ret->w = w;
 	ret->h = h;
+	ret->mode = state->mode;
 	ret->last = state->last;
 	ret->completed = state->completed;
 	ret->cheated = state->cheated;
@@ -1232,7 +1429,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 						const char *aux, const char **error)
 {
 	int i, w = state->w, h = state->h;
-	struct solver_scratch *scratch = new_scratch(w, h, state->last);
+	struct solver_scratch *scratch = new_scratch(w, h, state->mode, state->last);
 	
 	ascent_solve(state->grid, DIFFCOUNT, scratch);
 
@@ -1255,7 +1452,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 
 static int game_can_format_as_text_now(const game_params *params)
 {
-	return TRUE;
+	return !IS_HEXAGONAL(params->mode);
 }
 
 static char *game_text_format(const game_state *state)
@@ -1276,6 +1473,8 @@ static char *game_text_format(const game_state *state)
 			p += sprintf(p, "%*d", space, n+1);
 		else if(n == -2)
 			p += sprintf(p, "%*s", space, "#");
+		else if (n == -3)
+			p += sprintf(p, "%*s", space, " ");
 		else
 			p += sprintf(p, "%*s", space, ".");
 		*p++ = x < w-1 ? ' ' : '\n';
@@ -1463,14 +1662,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 							int ox, int oy, int button)
 {
 	int w = state->w, h = state->h;
+	int gx, gy;
 	int tilesize = ds->tilesize;
 	cell i;
 	number n;
 	char buf[80];
 	
-	int gx = FROMCOORD(ox);
-	int gy = FROMCOORD(oy);
-	
+	gy = FROMCOORD(oy);
+	if (IS_HEXAGONAL(state->mode))
+	{
+		ox -= (gy - (h / 2)) * tilesize / 2;
+	}
+	gx = FROMCOORD(ox);
+
 	if (IS_MOUSE_DOWN(button) && (ox < tilesize/2 || oy < tilesize/2 || gx >= w || gy >= h))
 	{
 		ui_clear(ui);
@@ -1531,7 +1735,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui_seek(ui, state->last);
 				return UI_UPDATE;
 			}
-			if(n == -1 && ui->held != -1 && ui->positions[ui->select] == -1 && IS_NEAR(ui->held, i, w))
+			if(n == -1 && ui->held != -1 && ui->positions[ui->select] == -1 && is_near(ui->held, i, state))
 			{
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
@@ -1588,7 +1792,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		
 		ret->grid[i] = n;
 		
-		if(check_completion(ret->grid, w, h))
+		if(check_completion(ret->grid, w, h, ret->mode))
 			ret->completed = TRUE;
 		
 		return ret;
@@ -1731,7 +1935,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	if(ds->redraw)
 	{
 		draw_rect(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize, COL_MIDLIGHT);
-		draw_rect(dr, (tilesize/2), (tilesize/2)-1, w*tilesize+1, h*tilesize+1, COL_BORDER);
 		draw_update(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize);
 	}
 	else
@@ -1743,7 +1946,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			dirty = FALSE;
 			n = state->grid[i];
-			if(n == -1 && ui->held != -1 && IS_NEAR(i, ui->held, w) && positions[ui->select] < 0)
+			if(n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] < 0)
 				n = ui->select;
 			
 			if(ds->oldgrid[i] != n)
@@ -1751,9 +1954,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			
 			if(ui->held != ds->oldheld || ui->target != ds->oldtarget)
 			{
-				if(IS_NEAR(i, ui->held, w))
+				if(is_near(i, ui->held, state))
 					dirty = TRUE;
-				else if(IS_NEAR(i, ds->oldheld, w))
+				else if(is_near(i, ds->oldheld, state))
 					dirty = TRUE;
 			}
 			
@@ -1794,10 +1997,17 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	for(i = 0; i < w*h; i++)
 	{
 		tx = TOCOORD(i%w), ty = TOCOORD(i/w);
+		if (IS_HEXAGONAL(state->mode))
+		{
+			tx += ((i / w) - (h / 2)) * tilesize / 2;
+		}
 		tx1 = tx + (tilesize/2), ty1 = ty + (tilesize/2);
 		n = state->grid[i];
 		error = FALSE;
 		
+		if (n == -3)
+			continue;
+
 		colour = n == -2 ? COL_BORDER :
 			flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
 			ui->held == i ? COL_LOWLIGHT : 
@@ -1807,8 +2017,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		if(ds->colours[i] == colour) continue;
 		
 		/* Draw tile background */
-		clip(dr, tx, ty, tilesize, tilesize);
-		draw_update(dr, tx, ty, tilesize, tilesize);
+		clip(dr, tx, ty, tilesize+1, tilesize+1);
+		draw_update(dr, tx, ty, tilesize+1, tilesize+1);
 		draw_rect(dr, tx, ty, tilesize, tilesize, colour);
 		ds->colours[i] = colour;
 		
@@ -1824,8 +2034,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			i2 = positions[n-1];
 			tx2 = (i2%w)*tilesize + (tilesize);
+			if (IS_HEXAGONAL(state->mode))
+				tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
 			ty2 = (i2/w)*tilesize + (tilesize);
-			if(IS_NEAR(i, i2, w))
+			if(is_near(i, i2, state))
 				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
 			else
 				error = TRUE;
@@ -1834,8 +2046,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			i2 = positions[n+1];
 			tx2 = (i2%w)*tilesize + (tilesize);
+			if (IS_HEXAGONAL(state->mode))
+				tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
 			ty2 = (i2/w)*tilesize + (tilesize);
-			if(IS_NEAR(i, i2, w))
+			if(is_near(i, i2, state))
 				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
 			else
 				error = TRUE;
@@ -1844,16 +2058,16 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		/* Draw square border */
 		int sqc[8];
 		sqc[0] = tx;
-		sqc[1] = ty - 1;
+		sqc[1] = ty;
 		sqc[2] = tx + tilesize;
-		sqc[3] = ty - 1;
+		sqc[3] = ty;
 		sqc[4] = tx + tilesize;
-		sqc[5] = ty + tilesize - 1;
+		sqc[5] = ty + tilesize;
 		sqc[6] = tx;
-		sqc[7] = ty + tilesize - 1;
+		sqc[7] = ty + tilesize;
 		draw_polygon(dr, sqc, 4, -1, COL_BORDER);
 
-		if(n == -1 && ui->held != -1 && IS_NEAR(i, ui->held, w) && positions[ui->select] < 0)
+		if(n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] < 0)
 			n = ui->select;
 		
 		/* Draw a light circle on possible endpoints */
@@ -1925,7 +2139,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
 	"Ascent", NULL, NULL,
 	default_params,
-	game_fetch_preset, NULL,
+	NULL, game_preset_menu,
 	decode_params,
 	encode_params,
 	free_params,
@@ -2052,7 +2266,7 @@ int main(int argc, char *argv[])
 		}
 		
 		input = new_game(NULL, params, desc);
-		scratch = new_scratch(w, h, input->last);
+		scratch = new_scratch(w, h, params->mode, input->last);
 		
 		ascent_solve(input->grid, DIFFCOUNT, scratch);
 		
