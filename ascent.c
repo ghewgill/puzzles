@@ -331,6 +331,7 @@ static int is_near(int a, int b, const game_state *state)
 static char check_completion(number *grid, int w, int h, int mode)
 {
 	int x = -1, y = -1, x2 = -1, y2 = -1, i;
+	int maxdirs = IS_HEXAGONAL(mode) ? 7 : 8;
 	number last = (w*h)-1;
 	
 	/* Check for empty squares, and locate path start */
@@ -351,7 +352,7 @@ static char check_completion(number *grid, int w, int h, int mode)
 	/* Keep selecting the next number in line */
 	while(grid[y*w+x] != last)
 	{
-		for(i = IS_HEXAGONAL(mode) ? 1 : 0; i < (IS_HEXAGONAL(mode) ? 7 : 8); i++)
+		for(i = IS_HEXAGONAL(mode) ? 1 : 0; i < maxdirs; i++)
 		{
 			x2 = x + dir_x[i];
 			y2 = y + dir_y[i];
@@ -363,7 +364,7 @@ static char check_completion(number *grid, int w, int h, int mode)
 		}
 		
 		/* No neighbour found */
-		if(i == 8) return FALSE;
+		if(i == maxdirs) return FALSE;
 		x = x2;
 		y = y2;
 	}
@@ -1271,6 +1272,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	ret = sresize(ret, p - ret, char);
 	free_scratch(scratch);
 	sfree(grid);
+	sfree(spaces);
 	return ret;
 }
 
