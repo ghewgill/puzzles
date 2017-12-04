@@ -12,6 +12,7 @@
     A(blackbox) \
     A(boats) \
     A(bridges) \
+    A(clusters) \
     A(cube) \
     A(dominosa) \
     A(fifteen) \
@@ -35,6 +36,8 @@
     A(pegs) \
     A(range) \
     A(rect) \
+    A(rome) \
+    A(salad) \
     A(samegame) \
     A(signpost) \
     A(singles) \
