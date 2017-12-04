@@ -33,6 +33,7 @@ extern const game keen;
 extern const game map;
 extern const game net;
 extern const game pattern;
+extern const game salad;
 extern const game solo;
 extern const game towers;
 extern const game undead;
@@ -253,6 +254,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
      || ourgame == &keen
      || ourgame == &map
      || ourgame == &net
+     || ourgame == &salad
      || ourgame == &solo
      || ourgame == &towers
      || ourgame == &undead
@@ -260,6 +262,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         usable_height -= toolbar_height;
         int main_button_count = 9;
         int extra_button_count = 0;
+        BOOL letters_not_numbers = false;
         const char **labels = NULL;
         const char **extra_labels = NULL;
         const BOOL *toggle_extra = NULL;
@@ -287,6 +290,28 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             if (strstr(midend_get_game_id(me), "w:")) {
                 extra_button_count = 3;
             }
+        } else if (ourgame == &salad) {
+            static const char *SaladLabels[] = {"X", "Marks"};
+            char *p = midend_get_game_id(me);
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p != 'n') {
+                return;
+            }
+            ++p;
+            if (!*p) {
+                return;
+            }
+            main_button_count = atoi(p);
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p == 'L') {
+                letters_not_numbers = true;
+            }
+            extra_labels = SaladLabels;
+            extra_button_count = 2;
         } else if (ourgame == &solo) {
             const char *game_id = midend_get_game_id(me);
             int x, y;
@@ -324,7 +349,11 @@ static void saveGameWrite(void *ctx, void *buf, int len)
                     title = [NSString stringWithUTF8String:labels[i]];
                 } else {
                     if (i < 9) {
-                        title = [NSString stringWithFormat:@"%d", 1+i];
+                        if (letters_not_numbers) {
+                            title = [NSString stringWithFormat:@"%c", 'A'+i];
+                        } else {
+                            title = [NSString stringWithFormat:@"%d", 1+i];
+                        }
                     } else {
                         title = [NSString stringWithFormat:@"%c", 'a'+(i-9)];
                     }
