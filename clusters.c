@@ -541,6 +541,23 @@ static int clusters_generate(game_state *state, char *temp, random_state *rs, in
 			state->grid[i] = 0;
 	}
 	
+	for (i = 0; i < w*h; i++)
+	{
+		x = i%w;
+		y = i/w;
+		
+		if (x > 0 && state->grid[i] & F_SINGLE && state->grid[i] == state->grid[i-1])
+		{
+			state->grid[i] = 0;
+			state->grid[i-1] = 0;
+		}
+		else if (y > 0 && state->grid[i] & F_SINGLE && state->grid[i] == state->grid[i-w])
+		{
+			state->grid[i] = 0;
+			state->grid[i-w] = 0;
+		}
+	}
+	
 	return clusters_solve_game(state, 1, temp);
 }
 
