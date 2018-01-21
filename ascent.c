@@ -42,6 +42,7 @@ enum {
 	COL_BORDER,
 	COL_IMMUTABLE,
 	COL_ERROR,
+	COL_CURSOR,
 	NCOLOURS
 };
 
@@ -1494,17 +1495,34 @@ struct game_ui
 	
 	cell *positions;
 	int s;
+
+	enum { CSHOW_NONE, CSHOW_KEYBOARD, CSHOW_MOUSE } cshow;
+	cell typing_cell;
+	number typing_number;
+	int cx, cy;
+	char move_with_numpad;
 };
 
 static game_ui *new_ui(const game_state *state)
 {
-	int s = state->w*state->h;
+	int i, w = state->w, s = w*state->h;
 	game_ui *ret = snew(game_ui);
 	
 	ret->held = ret->select = ret->target = -1;
 	ret->dir = 0;
 	ret->positions = snewn(s, cell);
 	ret->s = s;
+	ret->cshow = CSHOW_NONE;
+	ret->move_with_numpad = FALSE;
+
+	for (i = 0; i < s; i++)
+	{
+		if (state->grid[i] != -3) break;
+	}
+	ret->cx = i%w;
+	ret->cy = i/w;
+	ret->typing_cell = -1;
+	ret->typing_number = 0;
 	
 	update_positions(ret->positions, state->grid, s);
 	return ret;
@@ -1531,11 +1549,14 @@ static char *encode_ui(const game_ui *ui)
 	*p++ = 'P';
 	for(i = 0; i < ui->s; i++)
 	{
-		if(ui->positions[i] >= 0)
+		if(ui->positions[i] != -1)
 		{
 			if(i != 0)
 				*p++ = run ? 'a' + run-1 : '_';
-			p += sprintf(p, "%d", ui->positions[i]);
+			if(ui->positions[i] == -2)
+				*p++ = '-';
+			else
+				p += sprintf(p, "%d", ui->positions[i]);
 			run = 0;
 		}
 		else
@@ -1572,6 +1593,12 @@ static void decode_ui(game_ui *ui, const char *encoding)
 			if(ui->positions[i] >= ui->s) ui->positions[i] = -1;
 			while (*p && isdigit((unsigned char) *p)) ++p;
 			++i;
+		}
+		else if(*p == '-')
+		{
+			ui->positions[i] = -2;
+			++i;
+			++p;
 		}
 		else if(*p >= 'a' && *p <= 'z')
 			i += ((*p++) - 'a') + 1;
@@ -1655,6 +1682,14 @@ struct game_drawstate {
 	number *oldgrid;
 	cell oldheld;
 	number oldtarget;
+
+	/* Blitter for the background of the keyboard cursor */
+	blitter *bl;
+	char bl_on;
+	/* Position of the center of the blitter */
+	int blx, bly;
+	/* Radius of the keyboard cursor */
+	int blr;
 };
 
 #define FROMCOORD(x) ( ((x)-(tilesize/2)) / tilesize )
@@ -1669,17 +1704,102 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	cell i;
 	number n;
 	char buf[80];
+	int dir = -1;
+	char finish_typing = FALSE;
 	
-	gy = FROMCOORD(oy);
+	gy = oy < tilesize/2 ? -1 : FROMCOORD(oy);
 	if (IS_HEXAGONAL(state->mode))
 	{
 		ox -= (gy - (h / 2)) * tilesize / 2;
 	}
-	gx = FROMCOORD(ox);
+	gx = ox < tilesize/2 ? -1 : FROMCOORD(ox);
 
-	if (IS_MOUSE_DOWN(button) && (ox < tilesize/2 || oy < tilesize/2 || gx >= w || gy >= h))
+	if (IS_MOUSE_DOWN(button))
 	{
+		ui->cshow = CSHOW_NONE;
+		finish_typing = TRUE;
+	}
+
+	if(!ui->move_with_numpad)
+		button &= ~MOD_NUM_KEYPAD;
+
+	/* Keyboard cursor movement */
+	if (button == CURSOR_UP || button == (MOD_NUM_KEYPAD | '8'))
+		dir = (IS_HEXAGONAL(state->mode) && ui->cy > 0 && (ui->cy & 1) == 0) ? 2 : 1;
+	else if (button == CURSOR_DOWN || button == (MOD_NUM_KEYPAD | '2'))
+		dir = IS_HEXAGONAL(state->mode) && ui->cy & 1 ? 5 : 6;
+	else if (button == CURSOR_LEFT || button == (MOD_NUM_KEYPAD | '4'))
+		dir = 3;
+	else if (button == CURSOR_RIGHT || button == (MOD_NUM_KEYPAD | '6'))
+		dir = 4;
+	else if (button == (MOD_NUM_KEYPAD | '7'))
+		dir = IS_HEXAGONAL(state->mode) ? 1 : 0;
+	else if (button == (MOD_NUM_KEYPAD | '1'))
+		dir = 5;
+	else if (button == (MOD_NUM_KEYPAD | '9'))
+		dir = 2;
+	else if (button == (MOD_NUM_KEYPAD | '3'))
+		dir = IS_HEXAGONAL(state->mode) ? 6 : 7;
+
+	if (dir != -1)
+	{
+		ui->cshow = CSHOW_KEYBOARD;
+		ui->cx += dir_x[dir];
+		ui->cy += dir_y[dir];
+
+		ui->cx = max(0, min(ui->cx, w-1));
+		ui->cy = max(0, min(ui->cy, h-1));
+		
+		if (state->mode == MODE_HEXAGON)
+		{
+			int center = h / 2;
+			if (ui->cy < center)
+				ui->cx = max(ui->cx, center - ui->cy);
+			else
+				ui->cx = min(ui->cx, (w-1) + center - ui->cy);
+		}
+
+		finish_typing = TRUE;
+	}
+
+	/* Clicking outside the grid clears the selection. */
+	if (IS_MOUSE_DOWN(button) && (gx < 0 || gy < 0 || gx >= w || gy >= h))
 		ui_clear(ui);
+
+	/* Pressing Enter, Spacebar or Backspace when not typing will emulate a mouse click */
+	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == -1)
+	{
+		gy = ui->cy;
+		gx = ui->cx;
+		button = (button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
+	}
+	/* Press Enter to confirm typing */
+	if (button == CURSOR_SELECT && ui->typing_cell != -1)
+		finish_typing = TRUE;
+
+	/* Typing a number */
+	if (button >= '0' && button <= '9' && ui->cshow)
+	{
+		i = ui->cy*w + ui->cx;
+		if (GET_BIT(state->immutable, i)) return NULL;
+		if (ui->typing_cell == -1 && state->grid[i] != -1) return NULL;
+		n = ui->typing_number;
+		n *= 10;
+		n += button - '0';
+
+		ui_clear(ui);
+		ui->typing_cell = i;
+		if (n < 1000)
+			ui->typing_number = n;
+		return UI_UPDATE;
+	}
+
+	/* Remove the last digit when typing */
+	if (button == '\b' && ui->typing_cell != -1)
+	{
+		ui->typing_number /= 10;
+		if (ui->typing_number == 0)
+			ui->typing_cell = -1;
 		return UI_UPDATE;
 	}
 
@@ -1706,19 +1826,23 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		case LEFT_BUTTON:
 			update_positions(ui->positions, state->grid, w*h);
 			
+			/* Click on wall */
 			if(n < -1)
 			{
 				ui_clear(ui);
-				return UI_UPDATE;
+				finish_typing = TRUE;
+				break;
 			}
 			if(n >= 0)
 			{
+				/* Click a placed number again to change direction */
 				if(i == ui->held && ui->dir != 0)
 				{
 					ui->dir *= -1;
 				}
 				else
 				{
+					/* Highlight a placed number */
 					ui->held = i;
 					ui->dir = n < state->last && ui->positions[n+1] == -1 ? +1
 						: n > 0 && ui->positions[n-1] == -1 ? -1 : +1;
@@ -1726,17 +1850,21 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui->select = n + ui->dir;
 				
 				ui_seek(ui, state->last);
-				return UI_UPDATE;
+				finish_typing = TRUE;
+				break;
 			}
 		/* Deliberate fallthrough */
 		case LEFT_DRAG:
+			/* Dragging over the next highlighted number moves the highlight forward */
 			if(n >= 0 && ui->select == n && ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
 			{
 				ui->held = i;
 				ui->select += ui->dir;
 				ui_seek(ui, state->last);
+				ui->cshow = CSHOW_NONE;
 				return UI_UPDATE;
 			}
+			/* Place the next number */
 			if(n == -1 && ui->held != -1 && ui->positions[ui->select] == -1 && is_near(ui->held, i, state))
 			{
 				sprintf(buf, "P%d,%d", i, ui->select);
@@ -1745,35 +1873,73 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				if(ui->select + ui->dir <= state->last)
 					ui->select += ui->dir;
 				
+				ui->cshow = CSHOW_NONE;
+
 				return dupstr(buf);
 			}
+			/* Highlight an empty cell */
 			else if(n == -1 && button == LEFT_BUTTON)
 			{
 				ui_clear(ui);
-				return UI_UPDATE;
+				ui->cx = i % w;
+				ui->cy = i / w;
+				ui->cshow = CSHOW_MOUSE;
+				finish_typing = TRUE;
 			}
 		break;
 		case MIDDLE_BUTTON:
 		case RIGHT_BUTTON:
 			update_positions(ui->positions, state->grid, w*h);
+			if(n == -1 || GET_BIT(state->immutable, i))
+			{
+				ui_clear(ui);
+				finish_typing = TRUE;
+			}
+
 		/* Deliberate fallthrough */
 		case MIDDLE_DRAG:
 		case RIGHT_DRAG:
-			if(n == -1 || GET_BIT(state->immutable, i))
-				return NULL;
-			
-			sprintf(buf, "C%d", i);
-			return dupstr(buf);
+			/* Drag over numbers to clear them */
+			if(ui->typing_cell == -1 && n != -1 && !GET_BIT(state->immutable, i))
+			{
+				sprintf(buf, "C%d", i);
+				return dupstr(buf);
+			}
 		}
 	}
 	
-	if(button == '\b' && ui->held != -1 && !GET_BIT(state->immutable, ui->held))
+	/* Confirm typed number */
+	if (finish_typing && ui->typing_cell != -1)
+	{
+		n = ui->typing_number - 1;
+		i = ui->typing_cell;
+		ui->typing_cell = -1;
+		ui->typing_number = 0;
+
+		/* When clicking the cell being typed, initiate a drag */
+		if (ui->cshow == CSHOW_MOUSE && ui->cy*w+ui->cx == i)
+		{
+			ui->held = i;
+			ui->dir = n < state->last && ui->positions[n + 1] == -1 ? +1
+				: n > 0 && ui->positions[n - 1] == -1 ? -1 : +1;
+			ui->select = n + ui->dir;
+			ui_seek(ui, state->last);
+		}
+
+		if (state->grid[i] == n || n > state->last)
+			return UI_UPDATE;
+
+		sprintf(buf, "P%d,%d", i, n);
+		return dupstr(buf);
+	}
+
+	if(button == '\b' && !ui->cshow && ui->held >= 0 && !GET_BIT(state->immutable, ui->held))
 	{
 		sprintf(buf, "C%d", ui->held);
 		return dupstr(buf);
 	}
 	
-	return NULL;
+	return finish_typing ? UI_UPDATE : NULL;
 }
 
 static game_state *execute_move(const game_state *state, const char *move)
@@ -1858,6 +2024,9 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
+	ds->blr = tilesize*0.4;
+	assert(!ds->bl);
+	ds->bl = blitter_new(dr, tilesize, tilesize);
 }
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -1878,6 +2047,10 @@ static float *game_colours(frontend *fe, int *ncolours)
 	ret[COL_ERROR * 3 + 1] = 0.0F;
 	ret[COL_ERROR * 3 + 2] = 0.0F;
 	
+	ret[COL_CURSOR * 3 + 0] = 0.0F;
+	ret[COL_CURSOR * 3 + 1] = 0.7F;
+	ret[COL_CURSOR * 3 + 2] = 0.0F;
+
 	*ncolours = NCOLOURS;
 	return ret;
 }
@@ -1898,7 +2071,12 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	memset(ds->colours, ~0, s*sizeof(int));
 	memset(ds->oldgrid, ~0, s*sizeof(number));
 	memset(ds->oldpositions, ~0, s*sizeof(cell));
-	
+
+	ds->bl = NULL;
+	ds->bl_on = FALSE;
+	ds->blx = -1;
+	ds->bly = -1;
+	ds->blr = -1;
 	return ds;
 }
 
@@ -1907,6 +2085,8 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 	sfree(ds->colours);
 	sfree(ds->oldgrid);
 	sfree(ds->oldpositions);
+	if (ds->bl)
+		blitter_free(dr, ds->bl);
 	sfree(ds);
 }
 
@@ -1934,10 +2114,22 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	if(flashtime > 0)
 		flash = (int)(flashtime/FLASH_FRAME);
 	
+	if (ds->bl_on)
+	{
+		blitter_load(dr, ds->bl,
+			ds->blx - ds->blr, ds->bly - ds->blr);
+		draw_update(dr,
+			ds->blx - ds->blr, ds->bly - ds->blr,
+			tilesize, tilesize);
+		ds->bl_on = FALSE;
+	}
+
 	if(ds->redraw)
 	{
 		draw_rect(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize, COL_MIDLIGHT);
 		draw_update(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize);
+
+		memcpy(ds->oldgrid, state->grid, w*h * sizeof(number));
 	}
 	else
 	{
@@ -1948,11 +2140,16 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			dirty = FALSE;
 			n = state->grid[i];
-			if(n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] < 0)
+			if(n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] == -1)
 				n = ui->select;
+			if(i == ui->typing_cell)
+				n = ui->typing_number - 1;
 			
 			if(ds->oldgrid[i] != n)
+			{
 				dirty = TRUE;
+				ds->oldgrid[i] = n;
+			}
 			
 			if(ui->held != ds->oldheld || ui->target != ds->oldtarget)
 			{
@@ -1986,11 +2183,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 					ds->colours[positions[n]] = -1;
 			}
 		}
-		
-		memcpy(ds->oldgrid, state->grid, w*h*sizeof(number));
-		memcpy(ds->oldpositions, ui->positions, w*h*sizeof(cell));
 	}
-	
+
+	memcpy(ds->oldpositions, ui->positions, w*h * sizeof(cell));
+
 	ds->redraw = FALSE;
 	ds->oldheld = ui->held;
 	ds->oldtarget = ui->target;
@@ -2012,7 +2208,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
 		colour = n == -2 ? COL_BORDER :
 			flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
-			ui->held == i ? COL_LOWLIGHT : 
+			ui->held == i || ui->typing_cell == i ||
+				(ui->cshow == CSHOW_MOUSE && ui->cy*w+ui->cx == i) ? COL_LOWLIGHT :
 			ui->target >= 0 && positions[ui->target] == i ? COL_HIGHLIGHT :
 			COL_MIDLIGHT;
 		
@@ -2024,37 +2221,41 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		draw_rect(dr, tx, ty, tilesize, tilesize, colour);
 		ds->colours[i] = colour;
 		
-		/* Draw a circle on the beginning and the end of the path */
-		if(n == 0 || n == state->last)
+		if (ui->typing_cell != i)
 		{
-			draw_circle(dr, tx+(tilesize/2), ty+(tilesize/2),
-				tilesize/3, COL_HIGHLIGHT, COL_HIGHLIGHT);
-		}
-		
-		/* Draw path lines */
-		if(n > 0 && positions[n-1] >= 0)
-		{
-			i2 = positions[n-1];
-			tx2 = (i2%w)*tilesize + (tilesize);
-			if (IS_HEXAGONAL(state->mode))
-				tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
-			ty2 = (i2/w)*tilesize + (tilesize);
-			if(is_near(i, i2, state))
-				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
-			else
-				error = TRUE;
-		}
-		if(n >= 0 && n < state->last && positions[n+1] >= 0)
-		{
-			i2 = positions[n+1];
-			tx2 = (i2%w)*tilesize + (tilesize);
-			if (IS_HEXAGONAL(state->mode))
-				tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
-			ty2 = (i2/w)*tilesize + (tilesize);
-			if(is_near(i, i2, state))
-				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
-			else
-				error = TRUE;
+			/* Draw a circle on the beginning and the end of the path */
+			if ((n == 0 || n == state->last) && 
+				(GET_BIT(state->immutable, i) || positions[n] != -2))
+			{
+				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+					tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
+			}
+
+			/* Draw path lines */
+			if (n > 0 && positions[n] != -2 && positions[n - 1] >= 0)
+			{
+				i2 = positions[n - 1];
+				tx2 = (i2%w)*tilesize + (tilesize);
+				if (IS_HEXAGONAL(state->mode))
+					tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
+				ty2 = (i2 / w)*tilesize + (tilesize);
+				if (is_near(i, i2, state))
+					draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
+				else
+					error = TRUE;
+			}
+			if (n >= 0 && n < state->last && positions[n] != -2 && positions[n + 1] >= 0)
+			{
+				i2 = positions[n + 1];
+				tx2 = (i2%w)*tilesize + (tilesize);
+				if (IS_HEXAGONAL(state->mode))
+					tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
+				ty2 = (i2 / w)*tilesize + (tilesize);
+				if (is_near(i, i2, state))
+					draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
+				else
+					error = TRUE;
+			}
 		}
 		
 		/* Draw square border */
@@ -2069,8 +2270,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		sqc[7] = ty + tilesize;
 		draw_polygon(dr, sqc, 4, -1, COL_BORDER);
 
-		if(n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] < 0)
+		if (n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] == -1)
 			n = ui->select;
+		if (ui->typing_cell == i)
+			n = ui->typing_number - 1;
 		
 		/* Draw a light circle on possible endpoints */
 		if(state->grid[i] == -1 && (n == 0 || n == state->last))
@@ -2086,9 +2289,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			
 			draw_text(dr, tx1, ty1,
 					FONT_VARIABLE, tilesize/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
-					positions[n] == -2 ? COL_ERROR :
 					GET_BIT(state->immutable, i) ? COL_IMMUTABLE : 
-					state->grid[i] == -1 ? COL_LOWLIGHT : COL_BORDER, buf);
+					state->grid[i] == -1 && ui->typing_cell != i ? COL_LOWLIGHT :
+					n <= state->last && positions[n] == -2 && ui->typing_cell != i ? COL_ERROR :
+					COL_BORDER, buf);
 			
 			if(error)
 			{
@@ -2098,6 +2302,21 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		}
 		
 		unclip(dr);
+	}
+
+	if (ui->cshow == CSHOW_KEYBOARD)
+	{
+		ds->blx = (ui->cx+1)*tilesize;
+		ds->bly = (ui->cy+1)*tilesize;
+
+		if (IS_HEXAGONAL(state->mode))
+			ds->blx += (ui->cy - (h / 2)) * tilesize / 2;
+
+		blitter_save(dr, ds->bl, ds->blx - ds->blr, ds->bly - ds->blr);
+		ds->bl_on = TRUE;
+
+		draw_rect_corners(dr, ds->blx, ds->bly, ds->blr - 1, COL_CURSOR);
+		draw_update(dr, ds->blx - ds->blr, ds->bly - ds->blr, tilesize, tilesize);
 	}
 }
 
