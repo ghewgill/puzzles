@@ -640,6 +640,7 @@ static game_ui *new_ui(const game_state *state)
 	ret->cx = ret->cy = 0;
 	ret->cursor = FALSE;
 	ret->ndrags = 0;
+	ret->dragtype = -1;
 	ret->drag = snewn(state->w*state->h, int);
 
 	return ret;
@@ -690,6 +691,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	button &= ~MOD_MASK;
 
 	/* Mouse click */
+	if (IS_MOUSE_DOWN(button))
+	{
+		ui->dragtype = -1;
+		ui->ndrags = 0;
+	}
+
 	if (IS_MOUSE_DOWN(button) || IS_MOUSE_DRAG(button))
 	{
 		if (ox >= (ds->tilesize / 2) && gx < w
@@ -758,7 +765,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		return UI_UPDATE;
 	}
 
-	if (IS_MOUSE_DRAG(button))
+	if (IS_MOUSE_DRAG(button) && ui->dragtype != -1)
 	{
 		int i = hy * w + hx;
 		int d;
