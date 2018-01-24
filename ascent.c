@@ -50,6 +50,14 @@ typedef int number;
 typedef int cell;
 typedef unsigned char bitmap;
 
+#define NUMBER_EMPTY  ((number) -1 )
+#define NUMBER_WALL   ((number) -2 )
+#define NUMBER_BOUND  ((number) -3 )
+#define IS_OBSTACLE(i) (i <= -2)
+
+#define CELL_NONE     ((cell)   -1 )
+#define CELL_MULTIPLE ((cell)   -2 )
+
 static const int dir_x[] = {-1,  0,  1, -1, 1, -1, 0, 1};
 static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 
@@ -338,13 +346,13 @@ static char check_completion(number *grid, int w, int h, int mode)
 	/* Check for empty squares, and locate path start */
 	for(i = 0; i < w*h; i++)
 	{
-		if(grid[i] == -1) return FALSE;
+		if(grid[i] == NUMBER_EMPTY) return FALSE;
 		if(grid[i] == 0)
 		{
 			x = i%w;
 			y = i/w;
 		}
-		if(grid[i] < -1)
+		if(IS_OBSTACLE(grid[i]))
 			last--;
 	}
 	if(x == -1)
@@ -514,12 +522,12 @@ static void update_positions(cell *positions, number *grid, int s)
 	cell i;
 	number n;
 
-	for(n = 0; n < s; n++) positions[n] = -1;
+	for(n = 0; n < s; n++) positions[n] = CELL_NONE;
 	for(i = 0; i < s; i++)
 	{
 		n = grid[i];
 		if(n < 0 || n >= s) continue;
-		positions[n] = (positions[n] == -1 ? i : -2);
+		positions[n] = (positions[n] == CELL_NONE ? i : CELL_MULTIPLE);
 	}
 }
 
@@ -556,8 +564,8 @@ static struct solver_scratch *new_scratch(int w, int h, int mode, number last)
 	ret->found_endpoints = FALSE;
 	for(i = 0; i < n; i++)
 	{
-		ret->positions[i] = -1;
-		ret->grid[i] = -1;
+		ret->positions[i] = CELL_NONE;
+		ret->grid[i] = NUMBER_EMPTY;
 	}
 	
 	ret->marks = snewn(BITMAP_SIZE(w*h*n), bitmap);
@@ -583,7 +591,7 @@ static int solver_place(struct solver_scratch *scratch, cell pos, number num)
 	
 	/* Place the number and update the positions array */
 	scratch->grid[pos] = num;
-	scratch->positions[num] = (scratch->positions[num] == -1 ? pos : -2);
+	scratch->positions[num] = (scratch->positions[num] == CELL_NONE ? pos : CELL_MULTIPLE);
 	
 	/* Rule out this number in all other cells */
 	for(i = 0; i < s; i++)
@@ -614,18 +622,18 @@ static int solver_single_position(struct solver_scratch *scratch)
 	
 	for(n = 0; n <= scratch->end; n++)
 	{
-		if(scratch->positions[n] != -1) continue;
-		found = -1;
+		if(scratch->positions[n] != CELL_NONE) continue;
+		found = CELL_NONE;
 		for(i = 0; i < s; i++)
 		{
-			if(scratch->grid[i] != -1) continue;
+			if(scratch->grid[i] != NUMBER_EMPTY) continue;
 			if(!GET_BIT(scratch->marks, i*s+n)) continue;
-			if(found == -1)
+			if(found == CELL_NONE)
 				found = i;
 			else
-				found = -2;
+				found = CELL_MULTIPLE;
 		}
-		assert(found != -1);
+		assert(found != CELL_NONE);
 		if(found >= 0)
 		{
 			solver_printf("Single possibility for number %d\n", n+1);
@@ -646,17 +654,17 @@ static int solver_single_number(struct solver_scratch *scratch, char simple)
 	
 	for(i = 0; i < s; i++)
 	{
-		if(scratch->grid[i] != -1) continue;
-		found = -1;
+		if(scratch->grid[i] != NUMBER_EMPTY) continue;
+		found = NUMBER_EMPTY;
 		for(n = 0; n <= scratch->end; n++)
 		{
 			if(!GET_BIT(scratch->marks, i*s+n)) continue;
-			if(found == -1)
+			if(found == NUMBER_EMPTY)
 				found = n;
 			else
-				found = -2;
+				found = NUMBER_WALL;
 		}
-		assert(found != -1);
+		assert(found != NUMBER_EMPTY);
 		if(found >= 0)
 		{
 			if(simple && 
@@ -725,9 +733,9 @@ static int solver_proximity_simple(struct solver_scratch *scratch)
 		i = scratch->positions[n];
 		if(i < 0) continue;
 		
-		if(n > 0 && scratch->positions[n-1] == -1)
+		if(n > 0 && scratch->positions[n-1] == CELL_NONE)
 			ret += solver_near(scratch, i, n-1, 1);
-		if(n < end-1 && scratch->positions[n+1] == -1)
+		if(n < end-1 && scratch->positions[n+1] == CELL_NONE)
 			ret += solver_near(scratch, i, n+1, 1);
 	}
 	
@@ -748,13 +756,13 @@ static int solver_proximity_full(struct solver_scratch *scratch)
 		if(i < 0) continue;
 		
 		n2 = n-1;
-		while(n2 >= 0 && scratch->positions[n2] == -1)
+		while(n2 >= 0 && scratch->positions[n2] == CELL_NONE)
 		{
 			ret += solver_near(scratch, i, n2, abs(n-n2));
 			n2--;
 		}
 		n2 = n+1;
-		while(n2 <= end-1 && scratch->positions[n2] == -1)
+		while(n2 <= end-1 && scratch->positions[n2] == CELL_NONE)
 		{
 			ret += solver_near(scratch, i, n2, abs(n-n2));
 			n2++;
@@ -870,7 +878,7 @@ static int solver_update_path(struct solver_scratch *scratch)
 	 */
 	ib = scratch->positions[0];
 	ic = scratch->positions[end];
-	if (!scratch->found_endpoints && ib != -1 && ic != -1)
+	if (!scratch->found_endpoints && ib != CELL_NONE && ic != CELL_NONE)
 	{
 		scratch->found_endpoints = TRUE;
 		ret++;
@@ -886,13 +894,13 @@ static int solver_update_path(struct solver_scratch *scratch)
 	 * set the path of the first number to point to the second number. 
 	 */
 	i = scratch->positions[1];
-	if (i != -1 && ib != -1 && !(scratch->path[ib] & FLAG_COMPLETE))
+	if (i != CELL_NONE && ib != CELL_NONE && !(scratch->path[ib] & FLAG_COMPLETE))
 	{
 		scratch->path[ib] = (1 << ascent_find_direction(ib, i, scratch)) | FLAG_ENDPOINT;
 	}
 	/* Do the same for the last number pointing to the penultimate number. */
 	i = scratch->positions[end - 1];
-	if (i != -1 && ic != -1 && !(scratch->path[ic] & FLAG_COMPLETE))
+	if (i != CELL_NONE && ic != CELL_NONE && !(scratch->path[ic] & FLAG_COMPLETE))
 	{
 		scratch->path[ic] = (1 << ascent_find_direction(ic, i, scratch)) | FLAG_ENDPOINT;
 	}
@@ -904,11 +912,11 @@ static int solver_update_path(struct solver_scratch *scratch)
 	for (n = 1; n <= end-1; n++)
 	{
 		i = scratch->positions[n];
-		if (i == -1 || scratch->path[i] & FLAG_COMPLETE) continue;
+		if (i == CELL_NONE || scratch->path[i] & FLAG_COMPLETE) continue;
 
 		ib = scratch->positions[n-1];
 		ic = scratch->positions[n+1];
-		if (ib == -1 || ic == -1) continue;
+		if (ib == CELL_NONE || ic == CELL_NONE) continue;
 
 		scratch->path[i] = 1 << ascent_find_direction(i, ib, scratch);
 		scratch->path[i] |= 1 << ascent_find_direction(i, ic, scratch);
@@ -1005,7 +1013,7 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 	for (i = 0; i < s; i++)
 	{
 		/* Find empty cells with a confirmed path */
-		if (scratch->path[i] & FLAG_COMPLETE && scratch->grid[i] == -1)
+		if (scratch->path[i] & FLAG_COMPLETE && scratch->grid[i] == NUMBER_EMPTY)
 		{
 			solver_printf("Found an unfilled %s at %d,%d", 
 				scratch->path[i] & FLAG_ENDPOINT ? "endpoint" : "path segment", i%w, i/w);
@@ -1098,7 +1106,7 @@ static int solver_remove_blocks(struct solver_scratch *scratch)
 	int ret = 0;
 	for (i1 = 0; i1 < s; i1++)
 	{
-		if(scratch->grid[i1] >= -1) continue;
+		if(scratch->grid[i1] >= NUMBER_EMPTY) continue;
 		for(dir = 0; dir < 8; dir++)
 		{
 			if(!(scratch->path[i1] & (1<<dir))) continue;
@@ -1136,7 +1144,7 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		}
 		for(i = 0; i < s; i++)
 		{
-			if(scratch->grid[i] == -1)
+			if(scratch->grid[i] == NUMBER_EMPTY)
 				SET_BIT(scratch->marks, i*s+n);
 		}
 	}
@@ -1201,7 +1209,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 	for(i = 0; i < w*h; i++)
 	{
-		if (grid[i] == -2) scratch->end--;
+		if (IS_OBSTACLE(grid[i])) scratch->end--;
 		spaces[i] = i;
 	}
 	shuffle(spaces, w*h, sizeof(*spaces), rs);
@@ -1211,7 +1219,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		temp = grid[i];
 		if (temp < 0) continue;
 		if (!params->removeends && (temp == 0 || temp == scratch->end)) continue;
-		grid[i] = -1;
+		grid[i] = NUMBER_EMPTY;
 		
 		ascent_solve(grid, params->diff, scratch);
 		
@@ -1225,7 +1233,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	enum { RUN_NONE, RUN_BLANK, RUN_WALL, RUN_NUMBER } runtype = RUN_NONE;
 	for(i = 0; i <= w*h; i++)
 	{
-		if(runtype == RUN_BLANK && (i == w*h || grid[i] != -1))
+		if(runtype == RUN_BLANK && (i == w*h || grid[i] != NUMBER_EMPTY))
 		{
 			while(run >= 26)
 			{
@@ -1236,7 +1244,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 				*p++ = 'a' + run-1;
 			run = 0;
 		}
-		if(runtype == RUN_WALL && (i == w*h || grid[i] > -2))
+		if(runtype == RUN_WALL && (i == w*h || !IS_OBSTACLE(grid[i])))
 		{
 			while(run >= 26)
 			{
@@ -1258,12 +1266,12 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 			p += sprintf(p, "%d", grid[i] + 1);
 			runtype = RUN_NUMBER;
 		}
-		else if(grid[i] == -1)
+		else if(grid[i] == NUMBER_EMPTY)
 		{
 			runtype = RUN_BLANK;
 			run++;
 		}
-		else if(grid[i] <= -2)
+		else if(IS_OBSTACLE(grid[i]))
 		{
 			runtype = RUN_WALL;
 			run++;
@@ -1328,7 +1336,7 @@ static game_state *new_game(midend *me, const game_params *params,
 	state->last = (w*h)-1;
 	memset(state->immutable, 0, BITMAP_SIZE(w*h));
 	
-	for(i = 0; i < w*h; i++) state->grid[i] = -1;
+	for(i = 0; i < w*h; i++) state->grid[i] = NUMBER_EMPTY;
 	
 	const char *p = desc;
 	i = 0;
@@ -1348,7 +1356,7 @@ static game_state *new_game(midend *me, const game_params *params,
 			walls = ((*p++) - 'A') + 1;
 			for(j = i; j < walls + i; j++)
 			{
-				state->grid[j] = -2;
+				state->grid[j] = NUMBER_WALL;
 				SET_BIT(state->immutable, j);
 			}
 			
@@ -1361,18 +1369,18 @@ static game_state *new_game(midend *me, const game_params *params,
 	
 	for(i = 0; i < w; i++)
 	{
-		if(state->grid[i] == -2)
-			state->grid[i] = -3;
-		if(state->grid[(w*h)-(i+1)] == -2)
-			state->grid[(w*h)-(i+1)] = -3;
+		if(state->grid[i] == NUMBER_WALL)
+			state->grid[i] = NUMBER_BOUND;
+		if(state->grid[(w*h)-(i+1)] == NUMBER_WALL)
+			state->grid[(w*h)-(i+1)] = NUMBER_BOUND;
 	}
 	
 	for(i = 0; i < h; i++)
 	{
-		if(state->grid[i*w] == -2)
-			state->grid[i*w] = -3;
-		if(state->grid[(i*w)+(w-1)] == -2)
-			state->grid[(i*w)+(w-1)] = -3;
+		if(state->grid[i*w] == NUMBER_WALL)
+			state->grid[i*w] = NUMBER_BOUND;
+		if(state->grid[(i*w)+(w-1)] == NUMBER_WALL)
+			state->grid[(i*w)+(w-1)] = NUMBER_BOUND;
 	}
 	
 	do
@@ -1380,17 +1388,17 @@ static game_state *new_game(midend *me, const game_params *params,
 		walls = 0;
 		for(i = 0; i < w*h; i++)
 		{
-			if(state->grid[i] != -2) continue;
+			if(state->grid[i] != NUMBER_WALL) continue;
 			
 			int x = i%w;
 			int y = i/w;
 			
-			if((x < w-1 && state->grid[i+1] == -3) ||
-				(x > 0 && state->grid[i-1] == -3) ||
-				(y < w-1 && state->grid[i+w] == -3) ||
-				(y > 0 && state->grid[i-w] == -3))
+			if((x < w-1 && state->grid[i+1] == NUMBER_BOUND) ||
+				(x > 0 && state->grid[i-1] == NUMBER_BOUND) ||
+				(y < w-1 && state->grid[i+w] == NUMBER_BOUND) ||
+				(y > 0 && state->grid[i-w] == NUMBER_BOUND))
 			{
-				state->grid[i] = -3;
+				state->grid[i] = NUMBER_BOUND;
 				walls++;
 			}
 		}
@@ -1508,7 +1516,8 @@ static game_ui *new_ui(const game_state *state)
 	int i, w = state->w, s = w*state->h;
 	game_ui *ret = snew(game_ui);
 	
-	ret->held = ret->select = ret->target = -1;
+	ret->held = NUMBER_EMPTY;
+	ret->select = ret->target = CELL_NONE;
 	ret->dir = 0;
 	ret->positions = snewn(s, cell);
 	ret->s = s;
@@ -1517,11 +1526,11 @@ static game_ui *new_ui(const game_state *state)
 
 	for (i = 0; i < s; i++)
 	{
-		if (state->grid[i] != -3) break;
+		if (state->grid[i] != NUMBER_BOUND) break;
 	}
 	ret->cx = i%w;
 	ret->cy = i/w;
-	ret->typing_cell = -1;
+	ret->typing_cell = CELL_NONE;
 	ret->typing_number = 0;
 	
 	update_positions(ret->positions, state->grid, s);
@@ -1553,7 +1562,7 @@ static char *encode_ui(const game_ui *ui)
 		{
 			if(i != 0)
 				*p++ = run ? 'a' + run-1 : '_';
-			if(ui->positions[i] == -2)
+			if(ui->positions[i] == CELL_MULTIPLE)
 				*p++ = '-';
 			else
 				p += sprintf(p, "%d", ui->positions[i]);
@@ -1583,20 +1592,20 @@ static void decode_ui(game_ui *ui, const char *encoding)
 	int i;
 	const char *p = encoding+1;
 	
-	for(i = 0; i < ui->s; i++) ui->positions[i] = -1;
+	for(i = 0; i < ui->s; i++) ui->positions[i] = CELL_NONE;
 	i = 0;
 	while(*p && i < ui->s)
 	{
 		if(isdigit((unsigned char) *p))
 		{
 			ui->positions[i] = atoi(p);
-			if(ui->positions[i] >= ui->s) ui->positions[i] = -1;
+			if(ui->positions[i] >= ui->s) ui->positions[i] = CELL_NONE;
 			while (*p && isdigit((unsigned char) *p)) ++p;
 			++i;
 		}
 		else if(*p == '-')
 		{
-			ui->positions[i] = -2;
+			ui->positions[i] = CELL_MULTIPLE;
 			++i;
 			++p;
 		}
@@ -1610,22 +1619,23 @@ static void decode_ui(game_ui *ui, const char *encoding)
 static void ui_clear(game_ui *ui)
 {
 	/* Deselect the current number */
-	ui->held = ui->select = ui->target = -1;
+	ui->held = NUMBER_EMPTY;
+	ui->select = ui->target = CELL_NONE;
 	ui->dir = 0;
 }
 
 static void ui_seek(game_ui *ui, number last)
 {
 	/* Move the selection forward until an unplaced number is found */
-	if(ui->held == -1 || ui->select < 0 || ui->select > last)
+	if(ui->held == CELL_NONE || ui->select < 0 || ui->select > last)
 	{
-		ui->select = -1;
-		ui->target = -1;
+		ui->select = NUMBER_EMPTY;
+		ui->target = NUMBER_EMPTY;
 	}
 	else
 	{
 		number n = ui->select;
-		while(n + ui->dir >= 0 && n + ui->dir <= last && ui->positions[n] == -1)
+		while(n + ui->dir >= 0 && n + ui->dir <= last && ui->positions[n] == CELL_NONE)
 			n += ui->dir;
 		ui->target = n;
 	}
@@ -1649,7 +1659,7 @@ static void ui_backtrack(game_ui *ui, number last)
 		n -= ui->dir;
 		ui->held = ui->positions[n];
 	}
-	while(n > 0 && n < last && ui->held == -1);
+	while(n > 0 && n < last && ui->held == CELL_NONE);
 	
 	ui->select = n + ui->dir;
 	ui_seek(ui, last);
@@ -1660,7 +1670,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 {
 	update_positions(ui->positions, newstate->grid, newstate->w*newstate->h);
 	
-	if(ui->held != -1 && newstate->grid[ui->held] == -1)
+	if(ui->held != CELL_NONE && newstate->grid[ui->held] == NUMBER_EMPTY)
 	{
 		ui_backtrack(ui, oldstate->last);
 	}
@@ -1767,14 +1777,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ui_clear(ui);
 
 	/* Pressing Enter, Spacebar or Backspace when not typing will emulate a mouse click */
-	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == -1)
+	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
 	{
 		gy = ui->cy;
 		gx = ui->cx;
 		button = (button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
 	}
 	/* Press Enter to confirm typing */
-	if (button == CURSOR_SELECT && ui->typing_cell != -1)
+	if (button == CURSOR_SELECT && ui->typing_cell != CELL_NONE)
 		finish_typing = TRUE;
 
 	/* Typing a number */
@@ -1782,7 +1792,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	{
 		i = ui->cy*w + ui->cx;
 		if (GET_BIT(state->immutable, i)) return NULL;
-		if (ui->typing_cell == -1 && state->grid[i] != -1) return NULL;
+		if (ui->typing_cell == CELL_NONE && state->grid[i] != NUMBER_EMPTY) return NULL;
 		n = ui->typing_number;
 		n *= 10;
 		n += button - '0';
@@ -1795,11 +1805,11 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	}
 
 	/* Remove the last digit when typing */
-	if (button == '\b' && ui->typing_cell != -1)
+	if (button == '\b' && ui->typing_cell != CELL_NONE)
 	{
 		ui->typing_number /= 10;
 		if (ui->typing_number == 0)
-			ui->typing_cell = -1;
+			ui->typing_cell = CELL_NONE;
 		return UI_UPDATE;
 	}
 
@@ -1827,7 +1837,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			update_positions(ui->positions, state->grid, w*h);
 			
 			/* Click on wall */
-			if(n < -1)
+			if(IS_OBSTACLE(n))
 			{
 				ui_clear(ui);
 				finish_typing = TRUE;
@@ -1844,8 +1854,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				{
 					/* Highlight a placed number */
 					ui->held = i;
-					ui->dir = n < state->last && ui->positions[n+1] == -1 ? +1
-						: n > 0 && ui->positions[n-1] == -1 ? -1 : +1;
+					ui->dir = n < state->last && ui->positions[n+1] == CELL_NONE ? +1
+						: n > 0 && ui->positions[n-1] == CELL_NONE ? -1 : +1;
 				}
 				ui->select = n + ui->dir;
 				
@@ -1865,7 +1875,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				return UI_UPDATE;
 			}
 			/* Place the next number */
-			if(n == -1 && ui->held != -1 && ui->positions[ui->select] == -1 && is_near(ui->held, i, state))
+			if(n == NUMBER_EMPTY && ui->held != CELL_NONE && ui->positions[ui->select] == CELL_NONE && is_near(ui->held, i, state))
 			{
 				sprintf(buf, "P%d,%d", i, ui->select);
 				
@@ -1878,7 +1888,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				return dupstr(buf);
 			}
 			/* Highlight an empty cell */
-			else if(n == -1 && button == LEFT_BUTTON)
+			else if(n == NUMBER_EMPTY && button == LEFT_BUTTON)
 			{
 				ui_clear(ui);
 				ui->cx = i % w;
@@ -1890,7 +1900,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		case MIDDLE_BUTTON:
 		case RIGHT_BUTTON:
 			update_positions(ui->positions, state->grid, w*h);
-			if(n == -1 || GET_BIT(state->immutable, i))
+			if(n == NUMBER_EMPTY || GET_BIT(state->immutable, i))
 			{
 				ui_clear(ui);
 				finish_typing = TRUE;
@@ -1900,7 +1910,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		case MIDDLE_DRAG:
 		case RIGHT_DRAG:
 			/* Drag over numbers to clear them */
-			if(ui->typing_cell == -1 && n != -1 && !GET_BIT(state->immutable, i))
+			if(ui->typing_cell == CELL_NONE && n != NUMBER_EMPTY && !GET_BIT(state->immutable, i))
 			{
 				sprintf(buf, "C%d", i);
 				return dupstr(buf);
@@ -1909,19 +1919,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	}
 	
 	/* Confirm typed number */
-	if (finish_typing && ui->typing_cell != -1)
+	if (finish_typing && ui->typing_cell != CELL_NONE)
 	{
 		n = ui->typing_number - 1;
 		i = ui->typing_cell;
-		ui->typing_cell = -1;
+		ui->typing_cell = CELL_NONE;
 		ui->typing_number = 0;
 
 		/* When clicking the cell being typed, initiate a drag */
 		if (ui->cshow == CSHOW_MOUSE && ui->cy*w+ui->cx == i)
 		{
 			ui->held = i;
-			ui->dir = n < state->last && ui->positions[n + 1] == -1 ? +1
-				: n > 0 && ui->positions[n - 1] == -1 ? -1 : +1;
+			ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
+				: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
 			ui->select = n + ui->dir;
 			ui_seek(ui, state->last);
 		}
@@ -1975,7 +1985,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		
 		game_state *ret = dup_game(state);
 		
-		ret->grid[i] = -1;
+		ret->grid[i] = NUMBER_EMPTY;
 		
 		return ret;
 	}
@@ -1993,7 +2003,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 			}
 			else if(*p == '-')
 			{
-				if(!GET_BIT(ret->immutable, i)) ret->grid[i] = -1;
+				if(!GET_BIT(ret->immutable, i)) ret->grid[i] = NUMBER_EMPTY;
 				p++;
 			}
 			if(!*p)
@@ -2140,7 +2150,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			dirty = FALSE;
 			n = state->grid[i];
-			if(n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] == -1)
+			if(n == NUMBER_EMPTY && ui->held != CELL_NONE && is_near(i, ui->held, state) && positions[ui->select] == CELL_NONE)
 				n = ui->select;
 			if(i == ui->typing_cell)
 				n = ui->typing_number - 1;
@@ -2203,10 +2213,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		n = state->grid[i];
 		error = FALSE;
 		
-		if (n == -3)
+		if (n == NUMBER_BOUND)
 			continue;
 
-		colour = n == -2 ? COL_BORDER :
+		colour = n == NUMBER_WALL ? COL_BORDER :
 			flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
 			ui->held == i || ui->typing_cell == i ||
 				(ui->cshow == CSHOW_MOUSE && ui->cy*w+ui->cx == i) ? COL_LOWLIGHT :
@@ -2225,14 +2235,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			/* Draw a circle on the beginning and the end of the path */
 			if ((n == 0 || n == state->last) && 
-				(GET_BIT(state->immutable, i) || positions[n] != -2))
+				(GET_BIT(state->immutable, i) || positions[n] != CELL_MULTIPLE))
 			{
 				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
 					tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
 			}
 
 			/* Draw path lines */
-			if (n > 0 && positions[n] != -2 && positions[n - 1] >= 0)
+			if (n > 0 && positions[n] != CELL_MULTIPLE && positions[n - 1] >= 0)
 			{
 				i2 = positions[n - 1];
 				tx2 = (i2%w)*tilesize + (tilesize);
@@ -2244,7 +2254,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				else
 					error = TRUE;
 			}
-			if (n >= 0 && n < state->last && positions[n] != -2 && positions[n + 1] >= 0)
+			if (n >= 0 && n < state->last && positions[n] != CELL_MULTIPLE && positions[n + 1] >= 0)
 			{
 				i2 = positions[n + 1];
 				tx2 = (i2%w)*tilesize + (tilesize);
@@ -2270,13 +2280,13 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		sqc[7] = ty + tilesize;
 		draw_polygon(dr, sqc, 4, -1, COL_BORDER);
 
-		if (n == -1 && ui->held != -1 && is_near(i, ui->held, state) && positions[ui->select] == -1)
+		if (n == NUMBER_EMPTY && ui->held != CELL_NONE && is_near(i, ui->held, state) && positions[ui->select] == CELL_NONE)
 			n = ui->select;
 		if (ui->typing_cell == i)
 			n = ui->typing_number - 1;
 		
 		/* Draw a light circle on possible endpoints */
-		if(state->grid[i] == -1 && (n == 0 || n == state->last))
+		if(state->grid[i] == NUMBER_EMPTY && (n == 0 || n == state->last))
 		{
 			draw_circle(dr, tx+(tilesize/2), ty+(tilesize/2),
 				tilesize/3, colour, COL_LOWLIGHT);
@@ -2290,8 +2300,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			draw_text(dr, tx1, ty1,
 					FONT_VARIABLE, tilesize/2, ALIGN_HCENTRE|ALIGN_VCENTRE,
 					GET_BIT(state->immutable, i) ? COL_IMMUTABLE : 
-					state->grid[i] == -1 && ui->typing_cell != i ? COL_LOWLIGHT :
-					n <= state->last && positions[n] == -2 && ui->typing_cell != i ? COL_ERROR :
+					state->grid[i] == NUMBER_EMPTY && ui->typing_cell != i ? COL_LOWLIGHT :
+					n <= state->last && positions[n] == CELL_MULTIPLE && ui->typing_cell != i ? COL_ERROR :
 					COL_BORDER, buf);
 			
 			if(error)
