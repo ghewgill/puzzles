@@ -13,6 +13,8 @@ IBASE = $(patsubst %,%-ibase.png,$(PUZZLES))
 IBASE4 = $(patsubst %,%-ibase4.png,$(PUZZLES))
 P192D24 = $(patsubst %,%-96d24@2x.png,$(PUZZLES))
 P96D24 = $(patsubst %,%-96d24.png,$(PUZZLES))
+P96D8 = $(patsubst %,%-96d8.png,$(PUZZLES))
+P96D4 = $(patsubst %,%-96d4.png,$(PUZZLES))
 P48D24 = $(patsubst %,%-48d24.png,$(PUZZLES))
 P48D8 = $(patsubst %,%-48d8.png,$(PUZZLES))
 P48D4 = $(patsubst %,%-48d4.png,$(PUZZLES))
@@ -102,7 +104,7 @@ $(IBASE): %-ibase.png: %-base.png
 $(IBASE4): %-ibase4.png: %-ibase.png
 	convert -colors 16 +dither $(CSP) -map $(PIC)win16pal.xpm $^ $@
 
-# Build the 24-bit PNGs for the icons, at three sizes.
+# Build the 24-bit PNGs for the icons, at four sizes.
 $(P192D24): %-96d24@2x.png: %-ibase.png
 	$(PIC)square.pl 192 4 $^ $@
 $(P96D24): %-96d24.png: %-ibase.png
@@ -116,7 +118,7 @@ $(P16D24): %-16d24.png: %-ibase.png
 
 # The 8-bit icon PNGs are just custom-paletted quantisations of the
 # 24-bit ones.
-$(P48D8) $(P32D8) $(P16D8): %d8.png: %d24.png
+$(P96D8) $(P48D8) $(P32D8) $(P16D8): %d8.png: %d24.png
 	convert -colors 256 $^ $@
 
 # But the depth-4 images work better if we re-shrink from the
@@ -124,6 +126,10 @@ $(P48D8) $(P32D8) $(P16D8): %d8.png: %d24.png
 # again afterwards. (They're still not very good, but my hope is
 # that on most modern Windows machines this won't matter too
 # much...)
+$(P96D4): %-96d4.png: %-ibase4.png
+	$(PIC)square.pl 96 1 $^ $@-tmp2.png
+	convert -colors 16 $(CSP) -map $(PIC)win16pal.xpm $@-tmp2.png $@
+	rm -f $@-tmp2.png
 $(P48D4): %-48d4.png: %-ibase4.png
 	$(PIC)square.pl 48 1 $^ $@-tmp2.png
 	convert -colors 16 $(CSP) -map $(PIC)win16pal.xpm $@-tmp2.png $@
@@ -152,7 +158,7 @@ $(RC): %.rc:
 	echo '200 ICON "$*.ico"' >> $@
 
 # Build the GTK icon source files.
-$(CICONS): %-icon.c: %-16d24.png %-32d24.png %-48d24.png
+$(CICONS): %-icon.c: %-16d24.png %-32d24.png %-48d24.png %-96d24.png
 	$(PIC)cicon.pl $^ > $@	
 
 clean:
