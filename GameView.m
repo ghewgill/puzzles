@@ -291,7 +291,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
                 extra_button_count = 3;
             }
         } else if (ourgame == &salad) {
-            static const char *SaladLabels[] = {"X", "Marks"};
+            static const char *SaladLabels[] = {"X", "0", "Marks"};
             char *p = midend_get_game_id(me);
             while (*p && isdigit((unsigned char)*p)) {
                 ++p;
@@ -311,7 +311,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
                 letters_not_numbers = true;
             }
             extra_labels = SaladLabels;
-            extra_button_count = 2;
+            extra_button_count = 3;
         } else if (ourgame == &solo) {
             const char *game_id = midend_get_game_id(me);
             int x, y;
