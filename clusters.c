@@ -541,6 +541,23 @@ static int clusters_generate(game_state *state, char *temp, random_state *rs, in
 			state->grid[i] = 0;
 	}
 	
+	for (i = 0; i < w*h; i++)
+	{
+		x = i%w;
+		y = i/w;
+		
+		if (x > 0 && state->grid[i] & F_SINGLE && state->grid[i] == state->grid[i-1])
+		{
+			state->grid[i] = 0;
+			state->grid[i-1] = 0;
+		}
+		else if (y > 0 && state->grid[i] & F_SINGLE && state->grid[i] == state->grid[i-w])
+		{
+			state->grid[i] = 0;
+			state->grid[i-w] = 0;
+		}
+	}
+	
 	return clusters_solve_game(state, 1, temp);
 }
 
@@ -623,6 +640,7 @@ static game_ui *new_ui(const game_state *state)
 	ret->cx = ret->cy = 0;
 	ret->cursor = FALSE;
 	ret->ndrags = 0;
+	ret->dragtype = -1;
 	ret->drag = snewn(state->w*state->h, int);
 
 	return ret;
@@ -673,6 +691,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	button &= ~MOD_MASK;
 
 	/* Mouse click */
+	if (IS_MOUSE_DOWN(button))
+	{
+		ui->dragtype = -1;
+		ui->ndrags = 0;
+	}
+
 	if (IS_MOUSE_DOWN(button) || IS_MOUSE_DRAG(button))
 	{
 		if (ox >= (ds->tilesize / 2) && gx < w
@@ -741,7 +765,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		return UI_UPDATE;
 	}
 
-	if (IS_MOUSE_DRAG(button))
+	if (IS_MOUSE_DRAG(button) && ui->dragtype != -1)
 	{
 		int i = hy * w + hx;
 		int d;
