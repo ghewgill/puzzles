@@ -1685,7 +1685,9 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 }
 
 struct game_drawstate {
-	int tilesize;
+	int tilesize, w, h;
+	int offsetx, offsety;
+
 	int *colours;
 	char redraw;
 	cell *oldpositions;
@@ -1702,7 +1704,6 @@ struct game_drawstate {
 	int blr;
 };
 
-#define FROMCOORD(x) ( ((x)-(tilesize/2)) / tilesize )
 #define DRAG_RADIUS 0.6F
 static char *interpret_move(const game_state *state, game_ui *ui,
 							const game_drawstate *ds,
@@ -1717,12 +1718,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	int dir = -1;
 	char finish_typing = FALSE;
 	
-	gy = oy < tilesize/2 ? -1 : FROMCOORD(oy);
+	oy -= ds->offsety;
+	ox -= ds->offsetx;
+	gy = oy < 0 ? -1 : oy / tilesize;
 	if (IS_HEXAGONAL(state->mode))
 	{
-		ox -= (gy - (h / 2)) * tilesize / 2;
+		ox -= gy * tilesize / 2;
 	}
-	gx = ox < tilesize/2 ? -1 : FROMCOORD(ox);
+	gx = ox < 0 ? -1 : ox / tilesize;
 
 	if (IS_MOUSE_DOWN(button))
 	{
@@ -1818,8 +1821,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		i = gy*w+gx;
 		if(IS_MOUSE_DRAG(button) && ui->held >= 0)
 		{
-			int hx = (1+gx) * tilesize;
-			int hy = (1+gy) * tilesize;
+			int hx = (gx * tilesize) + (tilesize / 2);
+			int hy = (gy * tilesize) + (tilesize / 2);
 			
 			/* 
 			 * When dragging, the mouse must be close enough to the center of
@@ -2034,6 +2037,13 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
+	game_compute_size(params, tilesize, &ds->w, &ds->h);
+
+	ds->offsetx = tilesize / 2;
+	ds->offsety = tilesize / 2;
+	if (params->mode == MODE_HEXAGON)
+		ds->offsetx -= (params->h / 2) * (tilesize / 2);
+
 	ds->blr = tilesize*0.4;
 	assert(!ds->bl);
 	ds->bl = blitter_new(dr, tilesize, tilesize);
@@ -2102,7 +2112,6 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 
 #define FLASH_FRAME 0.03F
 #define FLASH_SIZE  4
-#define TOCOORD(x) ( (x)*tilesize + (tilesize/2) )
 #define ERROR_MARGIN 0.1F
 static void game_redraw(drawing *dr, game_drawstate *ds,
 						const game_state *oldstate, const game_state *state,
@@ -2136,8 +2145,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
 	if(ds->redraw)
 	{
-		draw_rect(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize, COL_MIDLIGHT);
-		draw_update(dr, 0, 0, (w+1)*tilesize, (h+1)*tilesize);
+		draw_rect(dr, 0, 0, ds->w, ds->h, COL_MIDLIGHT);
+		draw_update(dr, 0, 0, ds->w, ds->h);
 
 		memcpy(ds->oldgrid, state->grid, w*h * sizeof(number));
 	}
@@ -2204,10 +2213,12 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	/* Draw squares */
 	for(i = 0; i < w*h; i++)
 	{
-		tx = TOCOORD(i%w), ty = TOCOORD(i/w);
+		tx = (i%w) * tilesize + ds->offsetx;
+		ty = (i/w) * tilesize + ds->offsety;
+
 		if (IS_HEXAGONAL(state->mode))
 		{
-			tx += ((i / w) - (h / 2)) * tilesize / 2;
+			tx += (i/w) * tilesize / 2;
 		}
 		tx1 = tx + (tilesize/2), ty1 = ty + (tilesize/2);
 		n = state->grid[i];
@@ -2245,10 +2256,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			if (n > 0 && positions[n] != CELL_MULTIPLE && positions[n - 1] >= 0)
 			{
 				i2 = positions[n - 1];
-				tx2 = (i2%w)*tilesize + (tilesize);
+				tx2 = (i2%w)*tilesize + ds->offsetx + (tilesize / 2);
 				if (IS_HEXAGONAL(state->mode))
-					tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
-				ty2 = (i2 / w)*tilesize + (tilesize);
+					tx2 += (i2/w) * tilesize / 2;
+				ty2 = (i2 / w)*tilesize + ds->offsety + (tilesize / 2);
 				if (is_near(i, i2, state))
 					draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
 				else
@@ -2257,10 +2268,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			if (n >= 0 && n < state->last && positions[n] != CELL_MULTIPLE && positions[n + 1] >= 0)
 			{
 				i2 = positions[n + 1];
-				tx2 = (i2%w)*tilesize + (tilesize);
+				tx2 = (i2%w)*tilesize + ds->offsetx + (tilesize / 2);
 				if (IS_HEXAGONAL(state->mode))
-					tx2 += ((i2 / w) - (h / 2)) * tilesize / 2;
-				ty2 = (i2 / w)*tilesize + (tilesize);
+					tx2 += (i2/w) * tilesize / 2;
+				ty2 = (i2 / w)*tilesize + ds->offsety + (tilesize / 2);
 				if (is_near(i, i2, state))
 					draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
 				else
@@ -2316,11 +2327,11 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
 	if (ui->cshow == CSHOW_KEYBOARD)
 	{
-		ds->blx = (ui->cx+1)*tilesize;
-		ds->bly = (ui->cy+1)*tilesize;
+		ds->blx = ui->cx*tilesize + ds->offsetx + (tilesize / 2);
+		ds->bly = ui->cy*tilesize + ds->offsety + (tilesize / 2);
 
 		if (IS_HEXAGONAL(state->mode))
-			ds->blx += (ui->cy - (h / 2)) * tilesize / 2;
+			ds->blx += ui->cy * tilesize / 2;
 
 		blitter_save(dr, ds->bl, ds->blx - ds->blr, ds->bly - ds->blr);
 		ds->bl_on = TRUE;
