@@ -89,6 +89,7 @@ struct game_params {
 #define MODELIST(A)                             \
 	A(RECT,Rectangle, R)                        \
 	A(HEXAGON,Hexagon, H)                       \
+	A(HONEYCOMB,Honeycomb, C)                   \
 
 #define TITLE(upper,title,lower) #title,
 #define ENCODE(upper,title,lower) #lower
@@ -107,7 +108,7 @@ static char const ascent_modechars[] = MODELIST(ENCODE);
 * Hexagonal grids are implemented as normal square grids, but disallowing
 * movement in the top-left and bottom-right directions (dir 0 and dir 7).
 */
-#define IS_HEXAGONAL(mode) ((mode) == MODE_HEXAGON)
+#define IS_HEXAGONAL(mode) ((mode) == MODE_HEXAGON || (mode) == MODE_HONEYCOMB)
 
 const static struct game_params ascent_presets[] = {
 	{ 7,  6, DIFF_EASY, MODE_RECT, FALSE },
@@ -118,20 +119,21 @@ const static struct game_params ascent_presets[] = {
 	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE },
 	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE },
 	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE },
-#ifndef SMALL_SCREEN
-	{ 14, 11, DIFF_EASY, MODE_RECT, FALSE },
-	{ 14, 11, DIFF_NORMAL, MODE_RECT, FALSE },
-	{ 14, 11, DIFF_TRICKY, MODE_RECT, FALSE },
-	{ 14, 11, DIFF_HARD, MODE_RECT, FALSE },
-#endif
+};
+
+const static struct game_params ascent_honeycomb_presets[] = {
+	{ 7,  6, DIFF_NORMAL, MODE_HONEYCOMB, FALSE },
+	{ 7,  6, DIFF_TRICKY, MODE_HONEYCOMB, FALSE },
+	{ 7,  6, DIFF_HARD, MODE_HONEYCOMB, FALSE },
+	{ 10, 8, DIFF_NORMAL, MODE_HONEYCOMB, FALSE },
+	{ 10, 8, DIFF_TRICKY, MODE_HONEYCOMB, FALSE },
+	{ 10, 8, DIFF_HARD, MODE_HONEYCOMB, FALSE },
 };
 
 const static struct game_params ascent_hexagonal_presets[] = {
-	{ 7, 7, DIFF_EASY, MODE_HEXAGON, FALSE },
 	{ 7, 7, DIFF_NORMAL, MODE_HEXAGON, FALSE },
 	{ 7, 7, DIFF_TRICKY, MODE_HEXAGON, FALSE },
 	{ 7, 7, DIFF_HARD, MODE_HEXAGON, FALSE },
-	{ 9, 9, DIFF_EASY, MODE_HEXAGON, FALSE },
 	{ 9, 9, DIFF_NORMAL, MODE_HEXAGON, FALSE },
 	{ 9, 9, DIFF_TRICKY, MODE_HEXAGON, FALSE },
 	{ 9, 9, DIFF_HARD, MODE_HEXAGON, FALSE },
@@ -171,7 +173,7 @@ static struct preset_menu *game_preset_menu(void)
 	int i;
 	game_params *params;
 	char buf[80];
-	struct preset_menu *menu, *hex;
+	struct preset_menu *menu, *honey, *hex;
 	menu = preset_menu_new();
 
 	for (i = 0; i < lenof(ascent_presets); i++)
@@ -181,7 +183,16 @@ static struct preset_menu *game_preset_menu(void)
 		preset_menu_add_preset(menu, dupstr(buf), params);
 	}
 
-	hex = preset_menu_add_submenu(menu, dupstr("Hexagonal"));
+	honey = preset_menu_add_submenu(menu, dupstr("Honeycomb"));
+
+	for (i = 0; i < lenof(ascent_honeycomb_presets); i++)
+	{
+		params = dup_params(&ascent_honeycomb_presets[i]);
+		sprintf(buf, "%dx%d Honeycomb %s", params->w, params->h, ascent_diffnames[params->diff]);
+		preset_menu_add_preset(honey, dupstr(buf), params);
+	}
+
+	hex = preset_menu_add_submenu(menu, dupstr("Hexagon"));
 
 	for (i = 0; i < lenof(ascent_hexagonal_presets); i++)
 	{
@@ -476,6 +487,26 @@ static number *generate_hamiltonian_path(int w, int h, random_state *rs, const g
 			SET_BIT(walls, i);
 			SET_BIT(walls, (w*h)-(i+1));
 			wallcount += 2;
+		}
+	}
+	if (params->mode == MODE_HONEYCOMB)
+	{
+		int x, y, extra;
+		walls = snewn(BITMAP_SIZE(w*h), bitmap);
+		memset(walls, 0, BITMAP_SIZE(w*h));
+		for (y = 0; y < h; y++)
+		{
+			for (x = 0; x < y / 2; x++)
+			{
+				SET_BIT(walls, (y*w)+(w-x-1));
+				wallcount++;
+			}
+			extra = (h | y) & 1 ? 0 : 1;
+			for (x = 0; x + extra < (h-y) / 2; x++)
+			{
+				SET_BIT(walls, y*w + x);
+				wallcount++;
+			}
 		}
 	}
 
@@ -1191,11 +1222,21 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 	}
 }
 
+static void ascent_grid_size(const game_params *params, int *w, int *h)
+{
+	*w = params->w;
+	*h = params->h;
+
+	if (params->mode == MODE_HONEYCOMB)
+		*w += ((*h + 1) / 2) - 1;
+}
+
 static char *new_game_desc(const game_params *params, random_state *rs,
                            char **aux, int interactive)
 {
-	int w = params->w;
-	int h = params->h;
+	int w, h;
+	ascent_grid_size(params, &w, &h);
+
 	cell i, j;
 	struct solver_scratch *scratch = new_scratch(w, h, params->mode, (w*h)-1);
 	number temp;
@@ -1287,7 +1328,10 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 static const char *validate_desc(const game_params *params, const char *desc)
 {
-	int s = params->w*params->h;
+	int w, h;
+	ascent_grid_size(params, &w, &h);
+
+	int s = w*h;
 	const char *p = desc;
 	number n, last = 0;
 	int i = 0;
@@ -1321,8 +1365,9 @@ static const char *validate_desc(const game_params *params, const char *desc)
 static game_state *new_game(midend *me, const game_params *params,
 							const char *desc)
 {
-	int w = params->w;
-	int h = params->h;
+	int w, h;
+	ascent_grid_size(params, &w, &h);
+
 	int i, j, walls;
 	
 	game_state *state = snew(game_state);
@@ -1740,7 +1785,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (button == CURSOR_UP || button == (MOD_NUM_KEYPAD | '8'))
 		dir = (IS_HEXAGONAL(state->mode) && ui->cy > 0 && (ui->cy & 1) == 0) ? 2 : 1;
 	else if (button == CURSOR_DOWN || button == (MOD_NUM_KEYPAD | '2'))
-		dir = IS_HEXAGONAL(state->mode) && ui->cy & 1 ? 5 : 6;
+		dir = IS_HEXAGONAL(state->mode) && ui->cy < h-1 && ui->cy & 1 ? 5 : 6;
 	else if (button == CURSOR_LEFT || button == (MOD_NUM_KEYPAD | '4'))
 		dir = 3;
 	else if (button == CURSOR_RIGHT || button == (MOD_NUM_KEYPAD | '6'))
@@ -1770,6 +1815,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui->cx = max(ui->cx, center - ui->cy);
 			else
 				ui->cx = min(ui->cx, (w-1) + center - ui->cy);
+		}
+		if (state->mode == MODE_HONEYCOMB)
+		{
+			int extra = (h | ui->cy) & 1 ? 0 : 1;
+			ui->cx = min(ui->cx, w - (ui->cy / 2) - 1);
+			ui->cx = max(ui->cx, ((h - ui->cy) / 2) - extra);
 		}
 
 		finish_typing = TRUE;
@@ -2031,6 +2082,9 @@ static void game_compute_size(const game_params *params, int tilesize,
 {
 	*x = (params->w+1) * tilesize;
 	*y = (params->h+1) * tilesize;
+
+	if (params->mode == MODE_HONEYCOMB)
+		*x += (tilesize / 2);
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
@@ -2043,6 +2097,12 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 	ds->offsety = tilesize / 2;
 	if (params->mode == MODE_HEXAGON)
 		ds->offsetx -= (params->h / 2) * (tilesize / 2);
+	else if (params->mode == MODE_HONEYCOMB)
+	{
+		ds->offsetx -= ((params->h / 2) - 1) * tilesize;
+		if (params->h & 1)
+			ds->offsetx -= tilesize;
+	}
 
 	ds->blr = tilesize*0.4;
 	assert(!ds->bl);
@@ -2498,7 +2558,6 @@ int main(int argc, char *argv[])
 	} else {
 		game_state *input;
 		struct solver_scratch *scratch;
-		int w = params->w, h = params->h;
 		
 		err = validate_desc(params, desc);
 		if (err) {
@@ -2508,7 +2567,7 @@ int main(int argc, char *argv[])
 		}
 		
 		input = new_game(NULL, params, desc);
-		scratch = new_scratch(w, h, params->mode, input->last);
+		scratch = new_scratch(input->w, input->h, input->mode, input->last);
 		
 		ascent_solve(input->grid, DIFFCOUNT, scratch);
 		
