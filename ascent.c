@@ -127,6 +127,7 @@ const static struct game_params ascent_presets[] = {
 	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE },
 	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE },
 	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE },
+	{ 5, 5, DIFF_NORMAL, MODE_EDGES, TRUE },
 	{ 5, 5, DIFF_TRICKY, MODE_EDGES, TRUE },
 	{ 5, 5, DIFF_HARD, MODE_EDGES, TRUE },
 };
@@ -258,6 +259,8 @@ static void decode_params(game_params *params, char const *string)
 			string++;
 		}
 	}
+	else if (params->mode == MODE_EDGES)
+		params->diff = max(params->diff, DIFF_NORMAL);
 }
 
 static char *encode_params(const game_params *params, int full)
@@ -345,6 +348,8 @@ static const char *validate_params(const game_params *params, int full)
 		return "Width is too low for hexagon grid";
 	if (params->mode == MODE_EDGES && w == 2 && h == 2)
 		return "Grid for Edges mode must be bigger than 2x2";
+	if (full && params->mode == MODE_EDGES && params->diff < DIFF_NORMAL)
+		return "Difficulty level for Edges mode must be at least Normal";
 	
 	return NULL;
 }
@@ -1365,13 +1370,13 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		
 		if(solver_proximity_full(scratch))
 			continue;
+
+		if((diff >= DIFF_HARD || scratch->mode == MODE_EDGES) && solver_overlap(scratch))
+			continue;
 		
 		if(diff < DIFF_TRICKY) break;
 		
-		if(solver_single_number(scratch, TRUE))
-			continue;
-
-		if((diff >= DIFF_HARD || scratch->mode == MODE_EDGES) && solver_overlap(scratch))
+		if(diff < DIFF_HARD && solver_single_number(scratch, TRUE))
 			continue;
 		
 		if(diff < DIFF_HARD) break;
@@ -1399,7 +1404,7 @@ static void ascent_grid_size(const game_params *params, int *w, int *h)
 
 #define SOURCE (w*h)
 #define SINK (w*h+1)
-static void ascent_add_edges(struct solver_scratch *scratch, number *grid,
+static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
                              const game_params *params, random_state *rs)
 {
 	/*
@@ -1407,6 +1412,7 @@ static void ascent_add_edges(struct solver_scratch *scratch, number *grid,
 	 * flow network of the grid, connecting inner grid spaces to edge spaces.
 	 */
 
+	int attempts = 0;
 	int w = scratch->w, h = scratch->h;
 	int i, j, x, y, x2, y2, nedges;
 	int aw = w-2, ah = h-2;
@@ -1428,7 +1434,7 @@ static void ascent_add_edges(struct solver_scratch *scratch, number *grid,
 	for(i = 0; i < w*h; i++)
 		spaces[i] = i;
 
-	while(TRUE)
+	while(attempts < MAX_ATTEMPTS)
 	{
 		/*
 		 * The maxflow implementation requires all pairs to be sorted.
@@ -1505,9 +1511,11 @@ static void ascent_add_edges(struct solver_scratch *scratch, number *grid,
 			scratch->grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
 		}
 
-		ascent_solve(scratch->grid, max(DIFF_TRICKY, params->diff), scratch);
+		ascent_solve(scratch->grid, params->diff, scratch);
 		if (check_completion(scratch->grid, w, h, params->mode))
 			break;
+		
+		attempts++;
 	}
 
 	memcpy(grid, scratch->grid, w*h*sizeof(number));
@@ -1524,9 +1532,11 @@ static void ascent_add_edges(struct solver_scratch *scratch, number *grid,
 	sfree(capacity);
 	sfree(flow);
 	sfree(spaces);
+
+	return attempts < MAX_ATTEMPTS;
 }
 
-static void ascent_remove_numbers(struct solver_scratch *scratch, number *grid,
+static char ascent_remove_numbers(struct solver_scratch *scratch, number *grid,
 	const game_params *params, random_state *rs)
 {
 	int w = scratch->w, h = scratch->h;
@@ -1553,6 +1563,8 @@ static void ascent_remove_numbers(struct solver_scratch *scratch, number *grid,
 	}
 
 	sfree(spaces);
+
+	return TRUE;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
@@ -1561,23 +1573,31 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	int w, h;
 	ascent_grid_size(params, &w, &h);
 
+	char success;
 	cell i;
 	struct solver_scratch *scratch = new_scratch(w, h, params->mode, (w*h)-1);
 	number n;
 	number *grid = NULL;
 
-	while (!grid)
+	do
 	{
-		grid = generate_hamiltonian_path(w, h, rs, params);
-	}
+		scratch->end = (w*h)-1;
 
-	for(i = 0; i < w*h; i++)
-		if (IS_OBSTACLE(grid[i])) scratch->end--;
-	
-	if(params->mode == MODE_EDGES)
-		ascent_add_edges(scratch, grid, params, rs);
-	else
-		ascent_remove_numbers(scratch, grid, params, rs);
+		sfree(grid);
+		grid = NULL;
+		while (!grid)
+		{
+			grid = generate_hamiltonian_path(w, h, rs, params);
+		}
+
+		for (i = 0; i < w*h; i++)
+			if (IS_OBSTACLE(grid[i])) scratch->end--;
+
+		if (params->mode == MODE_EDGES)
+			success = ascent_add_edges(scratch, grid, params, rs);
+		else
+			success = ascent_remove_numbers(scratch, grid, params, rs);
+	} while (!success);
 
 	char *ret = snewn(w*h*4, char);
 	char *p = ret;
