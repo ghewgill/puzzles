@@ -77,13 +77,16 @@ static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 #define CLR_BIT(bmp, i) bmp[(i)/8] &= ~(1<<((i)%8))
 
 struct game_params {
+	/* User-friendly width and height */
 #ifndef PORTRAIT_SCREEN
 	int w, h;
 #else
 	int h, w;
 #endif
 
+	/* Difficulty and grid type */
 	int diff, mode;
+	/* Should the start and end point be removed? */
 	char removeends;
 };
 
@@ -153,6 +156,10 @@ const static struct game_params ascent_hexagonal_presets[] = {
 #define DEFAULT_PRESET 0
 
 struct game_state {
+	/*
+	 * Physical width and height. Grid types may increase the size to 
+	 * make room for extra padding.
+	 */
 	int w, h, mode;
 	
 	number *grid;
@@ -353,6 +360,10 @@ static const char *validate_params(const game_params *params, int full)
 	
 	return NULL;
 }
+
+/* ******************** *
+ * Validation and Tools *
+ * ******************** */
 
 static int is_near(cell a, cell b, int w, int mode)
 {
@@ -630,6 +641,10 @@ static void update_positions(cell *positions, number *grid, int s)
 		positions[n] = (positions[n] == CELL_NONE ? i : CELL_MULTIPLE);
 	}
 }
+
+/* ****** *
+ * Solver *
+ * ****** */
 
 struct solver_scratch {
 	int w, h, mode;
@@ -1388,6 +1403,10 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 	}
 }
 
+/* **************** *
+ * Puzzle Generator *
+ * **************** */
+
 static void ascent_grid_size(const game_params *params, int *w, int *h)
 {
 	*w = params->w;
@@ -1891,9 +1910,9 @@ static char *game_text_format(const game_state *state)
 
 		if(n >= 0)
 			p += sprintf(p, "%*d", space, n+1);
-		else if(n == -2)
+		else if(n == NUMBER_WALL)
 			p += sprintf(p, "%*s", space, "#");
-		else if (n == -3)
+		else if (n == NUMBER_BOUND)
 			p += sprintf(p, "%*s", space, " ");
 		else
 			p += sprintf(p, "%*s", space, ".");
@@ -1904,6 +1923,10 @@ static char *game_text_format(const game_state *state)
 	return ret;
 }
 
+/* ************** *
+ * User Interface *
+ * ************** */
+
 struct game_ui
 {
 	cell held;
@@ -1913,12 +1936,18 @@ struct game_ui
 	cell *positions;
 	int s;
 
+	/* Current state of keyboard cursor */
 	enum { CSHOW_NONE, CSHOW_KEYBOARD, CSHOW_MOUSE } cshow;
 	cell typing_cell;
 	number typing_number;
 	int cx, cy;
-	char move_with_numpad;
+
+	cell doubleclick_cell;
 	int dragx, dragy;
+
+	/* User interface tweaks. Can be enabled from code. */
+	char move_with_numpad;
+	char fast_turn;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1932,7 +1961,9 @@ static game_ui *new_ui(const game_state *state)
 	ret->positions = snewn(s, cell);
 	ret->s = s;
 	ret->cshow = CSHOW_NONE;
+
 	ret->move_with_numpad = FALSE;
+	ret->fast_turn = FALSE;
 
 	for (i = 0; i < s; i++)
 	{
@@ -1943,6 +1974,7 @@ static game_ui *new_ui(const game_state *state)
 	ret->typing_cell = CELL_NONE;
 	ret->typing_number = 0;
 	ret->dragx = ret->dragy = -1;
+	ret->doubleclick_cell = -1;
 	
 	update_positions(ret->positions, state->grid, s);
 	return ret;
@@ -2116,16 +2148,189 @@ struct game_drawstate {
 };
 
 #define DRAG_RADIUS 0.6F
+
+static char *ascent_mouse_click(const game_state *state, game_ui *ui,
+                                int gx, int gy, int button)
+{
+	/*
+	 * There are three ways to enter a number:
+	 *
+	 * 1. Click a number to highlight it, then click (or drag to) an adjacent
+	 * cell to place the next number in the sequence. The arrow keys and Enter
+	 * can be used to emulate mouse clicks.
+	 *
+	 * 2. Click an empty cell, then type a multi-digit number. To confirm a
+	 * number, either press Enter, an arrow key, or click any cell.
+	 *
+	 * 3. In Edges mode, click and drag from an edge number, then release in an
+	 * empty grid cell in the same row, column or diagonal.
+	 */
+	
+	char buf[80];
+	int w = state->w, h = state->h;
+	cell i = gy*w+gx;
+	number n = state->grid[i];
+		
+	switch(button)
+	{
+	case LEFT_BUTTON:
+		ui->doubleclick_cell = ui->held == i ? i : -1;
+
+		/* Click on edge number */
+		if (IS_NUMBER_EDGE(n) && ui->positions[NUMBER_EDGE(n)] == CELL_NONE)
+		{
+			ui->held = i;
+			ui->target = NUMBER_EDGE(n);
+			ui->select = n;
+			ui->dir = 0;
+			return NULL;
+		}
+		/* Click on wall */
+		if(IS_OBSTACLE(n))
+		{
+			ui_clear(ui);
+			return NULL;
+		}
+		if(n >= 0)
+		{
+			/* Click a placed number again to change direction */
+			if(i == ui->held && ui->dir != 0)
+			{
+				if(ui->fast_turn)
+					ui->dir *= -1;
+			}
+			else
+			{
+				/* Highlight a placed number */
+				ui->held = i;
+				ui->dir = n < state->last && ui->positions[n+1] == CELL_NONE ? +1
+					: n > 0 && ui->positions[n-1] == CELL_NONE ? -1 : +1;
+			}
+			ui->select = n + ui->dir;
+			
+			ui_seek(ui, state->last);
+			return NULL;
+		}
+		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+		{
+			n = ui->target;
+			sprintf(buf, "P%d,%d", i, n);
+			
+			ui->held = i;
+			ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
+				: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
+			ui->select = n + ui->dir;
+			ui_seek(ui, state->last);
+
+			return dupstr(buf);
+		}
+	/* Deliberate fallthrough */
+	case LEFT_DRAG:
+		if(ui->doubleclick_cell != i)
+			ui->doubleclick_cell = -1;
+
+		/* Update cursor position when dragging a number from the edge */
+		if (IS_NUMBER_EDGE(ui->select) && button == LEFT_DRAG)
+		{
+			ui->dragx = gx;
+			ui->dragy = gy;
+
+			if (ui->held % w > 0 && ui->held % w < w - 1)
+				ui->dragx = -1;
+			if (ui->held / w > 0 && ui->held / w < h - 1)
+				ui->dragy = -1;
+
+			return NULL;
+		}
+		/* Dragging over the next highlighted number moves the highlight forward */
+		if(n >= 0 && ui->select == n && ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
+		{
+			ui->held = i;
+			ui->select += ui->dir;
+			ui_seek(ui, state->last);
+			ui->cshow = CSHOW_NONE;
+			return NULL;
+		}
+		/* Place the next number */
+		if(n == NUMBER_EMPTY && ui->held >= CELL_NONE && ui->select >= 0 &&
+			ui->positions[ui->select] == CELL_NONE && is_near(ui->held, i, w, state->mode))
+		{
+			sprintf(buf, "P%d,%d", i, ui->select);
+			
+			ui->held = i;
+			if(ui->select + ui->dir <= state->last)
+				ui->select += ui->dir;
+			
+			ui->cshow = CSHOW_NONE;
+
+			return dupstr(buf);
+		}
+		/* Highlight an empty cell */
+		else if(n == NUMBER_EMPTY && button == LEFT_BUTTON)
+		{
+			ui_clear(ui);
+			ui->cx = i % w;
+			ui->cy = i / w;
+			ui->cshow = CSHOW_MOUSE;
+			return NULL;
+		}
+	break;
+	case LEFT_RELEASE:
+		ui->dragx = ui->dragy = -1;
+
+		if(ui->doubleclick_cell == i)
+		{
+			/* Deselect edge number */
+			if(IS_NUMBER_EDGE(ui->select))
+				ui_clear(ui);
+			/* Click a placed number again to change direction */
+			else if(!ui->fast_turn)
+			{
+				ui->dir *= -1;
+				ui->select = n + ui->dir;
+				
+				ui_seek(ui, state->last);
+			}
+		}
+		/* Drop number from edge into grid */
+		else if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+		{
+			sprintf(buf, "P%d,%d", i, ui->target);
+			ui_clear(ui);
+			return dupstr(buf);
+		}
+	break;
+	case MIDDLE_BUTTON:
+	case RIGHT_BUTTON:
+		if(n == NUMBER_EMPTY || GET_BIT(state->immutable, i))
+		{
+			ui_clear(ui);
+		}
+
+	/* Deliberate fallthrough */
+	case MIDDLE_DRAG:
+	case RIGHT_DRAG:
+		/* Drag over numbers to clear them */
+		if(ui->typing_cell == CELL_NONE && n != NUMBER_EMPTY && !GET_BIT(state->immutable, i))
+		{
+			sprintf(buf, "C%d", i);
+			return dupstr(buf);
+		}
+	}
+
+	return NULL;
+}
+
 static char *interpret_move(const game_state *state, game_ui *ui,
-							const game_drawstate *ds,
-							int ox, int oy, int button)
+                            const game_drawstate *ds,
+                            int ox, int oy, int button)
 {
 	int w = state->w, h = state->h;
 	int gx, gy;
 	int tilesize = ds->tilesize;
 	cell i;
 	number n;
-	char buf[80];
+	char *ret = NULL;
 	int dir = -1;
 	char finish_typing = FALSE;
 	
@@ -2231,12 +2436,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	/* Pressing Enter, Spacebar or Backspace when not typing will emulate a mouse click */
 	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
 	{
-		gy = ui->cy;
-		gx = ui->cx;
-		button = (button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
+		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
+		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
+		if(!ret)
+		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
+		      button == CURSOR_SELECT ? LEFT_RELEASE : RIGHT_RELEASE);
 	}
 	/* Press Enter to confirm typing */
-	if (button == CURSOR_SELECT && ui->typing_cell != CELL_NONE)
+	if (IS_CURSOR_SELECT(button))
 		finish_typing = TRUE;
 
 	/* Typing a number */
@@ -2267,7 +2474,6 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
 	{
-		i = gy*w+gx;
 		if(IS_MOUSE_DRAG(button) && ui->held >= 0 && !IS_NUMBER_EDGE(ui->select))
 		{
 			int hx = (gx * tilesize) + (tilesize / 2);
@@ -2281,154 +2487,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(abs(ox-hx) + abs(oy-hy) > DRAG_RADIUS*tilesize)
 				return NULL;
 		}
-		n = state->grid[i];
-		
-		switch(button)
-		{
-		case LEFT_BUTTON:
-			update_positions(ui->positions, state->grid, w*h);
-			
-			/* Click on edge number */
-			if (IS_NUMBER_EDGE(n) && ui->positions[NUMBER_EDGE(n)] == CELL_NONE)
-			{
-				ui->held = i;
-				ui->target = NUMBER_EDGE(n);
-				ui->select = n;
-				ui->dir = 0;
-				finish_typing = TRUE;
-				break;
-			}
-			/* Click on wall */
-			if(IS_OBSTACLE(n))
-			{
-				ui_clear(ui);
-				finish_typing = TRUE;
-				break;
-			}
-			if(n >= 0)
-			{
-				/* Click a placed number again to change direction */
-				if(i == ui->held && ui->dir != 0)
-				{
-					ui->dir *= -1;
-				}
-				else
-				{
-					/* Highlight a placed number */
-					ui->held = i;
-					ui->dir = n < state->last && ui->positions[n+1] == CELL_NONE ? +1
-						: n > 0 && ui->positions[n-1] == CELL_NONE ? -1 : +1;
-				}
-				ui->select = n + ui->dir;
-				
-				ui_seek(ui, state->last);
-				finish_typing = TRUE;
-				break;
-			}
-			if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
-			{
-				n = ui->target;
-				sprintf(buf, "P%d,%d", i, n);
-				
-				ui->held = i;
-				ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
-					: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
-				ui->select = n + ui->dir;
-				ui_seek(ui, state->last);
-
-				return dupstr(buf);
-			}
-		/* Deliberate fallthrough */
-		case LEFT_DRAG:
-			/* Update cursor position when dragging a number from the edge */
-			if (IS_NUMBER_EDGE(ui->select) && button == LEFT_DRAG)
-			{
-				int newdragx = gx;
-				int newdragy = gy;
-
-				if (ui->held % w > 0 && ui->held % w < w - 1)
-					newdragx = -1;
-				if (ui->held / w > 0 && ui->held / w < h - 1)
-					newdragy = -1;
-
-				if (ui->dragx != newdragx || ui->dragy != newdragy)
-				{
-					ui->dragx = newdragx;
-					ui->dragy = newdragy;
-					return UI_UPDATE;
-				}
-			}
-			/* Dragging over the next highlighted number moves the highlight forward */
-			if(n >= 0 && ui->select == n && ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
-			{
-				ui->held = i;
-				ui->select += ui->dir;
-				ui_seek(ui, state->last);
-				ui->cshow = CSHOW_NONE;
-				return UI_UPDATE;
-			}
-			/* Place the next number */
-			if(n == NUMBER_EMPTY && ui->held >= CELL_NONE && ui->select >= 0 &&
-				ui->positions[ui->select] == CELL_NONE && is_near(ui->held, i, w, state->mode))
-			{
-				sprintf(buf, "P%d,%d", i, ui->select);
-				
-				ui->held = i;
-				if(ui->select + ui->dir <= state->last)
-					ui->select += ui->dir;
-				
-				ui->cshow = CSHOW_NONE;
-
-				return dupstr(buf);
-			}
-			/* Highlight an empty cell */
-			else if(n == NUMBER_EMPTY && button == LEFT_BUTTON)
-			{
-				ui_clear(ui);
-				ui->cx = i % w;
-				ui->cy = i / w;
-				ui->cshow = CSHOW_MOUSE;
-				finish_typing = TRUE;
-			}
-		break;
-		case LEFT_RELEASE:
-			if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
-			{
-				sprintf(buf, "P%d,%d", i, ui->target);
-				ui_clear(ui);
-				ui->dragx = ui->dragy = -1;
-				return dupstr(buf);
-			}
-			else if (ui->dragx != -1 || ui->dragy != -1)
-			{
-				ui->dragx = ui->dragy = -1;
-				return UI_UPDATE;
-			}
-		break;
-		case MIDDLE_BUTTON:
-		case RIGHT_BUTTON:
-			update_positions(ui->positions, state->grid, w*h);
-			if(n == NUMBER_EMPTY || GET_BIT(state->immutable, i))
-			{
-				ui_clear(ui);
-				finish_typing = TRUE;
-			}
-
-		/* Deliberate fallthrough */
-		case MIDDLE_DRAG:
-		case RIGHT_DRAG:
-			/* Drag over numbers to clear them */
-			if(ui->typing_cell == CELL_NONE && n != NUMBER_EMPTY && !GET_BIT(state->immutable, i))
-			{
-				sprintf(buf, "C%d", i);
-				return dupstr(buf);
-			}
-		}
+		ret = ascent_mouse_click(state, ui, gx, gy, button);
+		finish_typing = TRUE;
 	}
 	
 	/* Confirm typed number */
-	if (finish_typing && ui->typing_cell != CELL_NONE)
+	if (finish_typing && !ret && ui->typing_cell != CELL_NONE)
 	{
+		char buf[20];
 		n = ui->typing_number - 1;
 		i = ui->typing_cell;
 		ui->typing_cell = CELL_NONE;
@@ -2448,16 +2514,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			return UI_UPDATE;
 
 		sprintf(buf, "P%d,%d", i, n);
-		return dupstr(buf);
+		ret = dupstr(buf);
 	}
 
-	if(button == '\b' && !ui->cshow && ui->held >= 0 && !GET_BIT(state->immutable, ui->held))
+	if(!ret && button == '\b' && !ui->cshow && ui->held >= 0 && !GET_BIT(state->immutable, ui->held))
 	{
+		char buf[20];
 		sprintf(buf, "C%d", ui->held);
-		return dupstr(buf);
+		ret = dupstr(buf);
 	}
 	
-	return finish_typing ? UI_UPDATE : NULL;
+	if(finish_typing && !ret)
+		return UI_UPDATE;
+	return ret;
 }
 
 static game_state *execute_move(const game_state *state, const char *move)
@@ -2527,9 +2596,9 @@ static game_state *execute_move(const game_state *state, const char *move)
 	return NULL;
 }
 
-/* ----------------------------------------------------------------------
- * Drawing routines.
- */
+/* **************** *
+ * Drawing routines *
+ * **************** */
 
 static void game_compute_size(const game_params *params, int tilesize,
                               int *x, int *y)

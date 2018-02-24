@@ -10,15 +10,15 @@ Each puzzle source file contains a TODO list.
 ### Playable and fully commented
 
 * ABCD (based on [ABC Combi](http://www.janko.at/Raetsel/AbcKombi/index.htm)): Place letters in the grid according to the numbers in the border. Identical letters cannot touch.
+* Ascent (based on [Hidoku](http://www.janko.at/Raetsel/Hidoku/index.htm)): Create a path of numbers, using each number exactly once. Contains several modes.
+   * Rectangular grid: Numbers must be orthogonally or diagonally adjacent.
+   * Honeycomb and Hexagonal grid: The path can't cross itself.
+   * [Edges](https://www.janko.at/Raetsel/Abc-Pfad/index.htm): Arrows outside the grid point to the row, column or diagonal where the number is located.
 * Boats (based on [Battleship](http://www.janko.at/Raetsel/Battleships/index.htm)): Place the entire fleet into the grid according to the numbers on the side.
 * [Rome](http://www.janko.at/Raetsel/Nikoli/Roma.htm): Place arrows in the grid, so all arrows lead to a goal.
 
 ### Playable
 
-* Ascent (based on [Hidoku](http://www.janko.at/Raetsel/Hidoku/index.htm)): Create a path of numbers, using each number exactly once. Contains several modes.
-   * Rectangular grid: Numbers must be orthogonally or diagonally adjacent.
-   * Honeycomb and Hexagonal grid: The path can't cross itself.
-   * [Edges](https://www.janko.at/Raetsel/Abc-Pfad/index.htm): Arrows outside the grid point to the row, column or diagonal where the number is located.
 * [Clusters](http://www.inabapuzzle.com/honkaku/kura.html): Fill in the grid with red and blue clusters. Tiles with a dot are adjacent to exactly 1 other tile of the same color. All other tiles are adjacent to at least 2 tiles of the same color.
 * Salad: Place each character once in every row and column. Some squares remain empty. Contains two modes.
    * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
