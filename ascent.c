@@ -6,6 +6,9 @@
  *
  * Objective: Place each number from 1 to n once.
  * Consecutive numbers must be orthogonally or diagonally adjacent.
+ *
+ * This puzzle type was invented by Gyora Benedek.
+ * Edges mode is an implementation of 1to25 invented by Jeff Widderich.
  */
 
 #include <stdio.h>
@@ -16,6 +19,7 @@
 #include <math.h>
 
 #include "puzzles.h"
+#include "maxflow.h"
 
 #ifdef STANDALONE_SOLVER
 #include <stdarg.h>
@@ -43,6 +47,7 @@ enum {
 	COL_IMMUTABLE,
 	COL_ERROR,
 	COL_CURSOR,
+	COL_ARROW,
 	NCOLOURS
 };
 
@@ -54,6 +59,8 @@ typedef unsigned char bitmap;
 #define NUMBER_WALL   ((number) -2 )
 #define NUMBER_BOUND  ((number) -3 )
 #define IS_OBSTACLE(i) (i <= -2)
+#define NUMBER_EDGE(n) (-10 - (n))
+#define IS_NUMBER_EDGE(i) (i <= -10)
 
 #define CELL_NONE     ((cell)   -1 )
 #define CELL_MULTIPLE ((cell)   -2 )
@@ -70,13 +77,16 @@ static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
 #define CLR_BIT(bmp, i) bmp[(i)/8] &= ~(1<<((i)%8))
 
 struct game_params {
+	/* User-friendly width and height */
 #ifndef PORTRAIT_SCREEN
 	int w, h;
 #else
 	int h, w;
 #endif
 
+	/* Difficulty and grid type */
 	int diff, mode;
+	/* Should the start and end point be removed? */
 	char removeends;
 };
 
@@ -90,6 +100,7 @@ struct game_params {
 	A(RECT,Rectangle, R)                        \
 	A(HEXAGON,Hexagon, H)                       \
 	A(HONEYCOMB,Honeycomb, C)                   \
+	A(EDGES,Edges, E)                           \
 
 #define TITLE(upper,title,lower) #title,
 #define ENCODE(upper,title,lower) #lower
@@ -119,6 +130,9 @@ const static struct game_params ascent_presets[] = {
 	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE },
 	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE },
 	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE },
+	{ 5, 5, DIFF_NORMAL, MODE_EDGES, TRUE },
+	{ 5, 5, DIFF_TRICKY, MODE_EDGES, TRUE },
+	{ 5, 5, DIFF_HARD, MODE_EDGES, TRUE },
 };
 
 const static struct game_params ascent_honeycomb_presets[] = {
@@ -142,6 +156,10 @@ const static struct game_params ascent_hexagonal_presets[] = {
 #define DEFAULT_PRESET 0
 
 struct game_state {
+	/*
+	 * Physical width and height. Grid types may increase the size to 
+	 * make room for extra padding.
+	 */
 	int w, h, mode;
 	
 	number *grid;
@@ -179,7 +197,8 @@ static struct preset_menu *game_preset_menu(void)
 	for (i = 0; i < lenof(ascent_presets); i++)
 	{
 		params = dup_params(&ascent_presets[i]);
-		sprintf(buf, "%dx%d %s", params->w, params->h, ascent_diffnames[params->diff]);
+		sprintf(buf, "%dx%d %s%s", params->w, params->h, 
+			params->mode == MODE_EDGES ? "Edges " : "", ascent_diffnames[params->diff]);
 		preset_menu_add_preset(menu, dupstr(buf), params);
 	}
 
@@ -247,6 +266,8 @@ static void decode_params(game_params *params, char const *string)
 			string++;
 		}
 	}
+	else if (params->mode == MODE_EDGES)
+		params->diff = max(params->diff, DIFF_NORMAL);
 }
 
 static char *encode_params(const game_params *params, int full)
@@ -332,28 +353,50 @@ static const char *validate_params(const game_params *params, int full)
 		return "Height must be an odd number";
 	if (params->mode == MODE_HEXAGON && w <= h / 2)
 		return "Width is too low for hexagon grid";
+	if (params->mode == MODE_EDGES && w == 2 && h == 2)
+		return "Grid for Edges mode must be bigger than 2x2";
+	if (full && params->mode == MODE_EDGES && params->diff < DIFF_NORMAL)
+		return "Difficulty level for Edges mode must be at least Normal";
 	
 	return NULL;
 }
 
-static int is_near(int a, int b, const game_state *state)
+/* ******************** *
+ * Validation and Tools *
+ * ******************** */
+
+static int is_near(cell a, cell b, int w, int mode)
 {
-	int w = state->w;
 	int dx = (a % w) - (b % w);
 	int dy = (a / w) - (b / w);
 
-	if (IS_HEXAGONAL(state->mode) && dx == dy)
+	if (IS_HEXAGONAL(mode) && dx == dy)
 		return FALSE;
 
 	return (abs(dx) | abs(dy)) == 1;
+}
+
+static char is_edge_valid(cell edge, cell i, int w, int h)
+{
+	/* Rows */
+	if ((edge / w) > 0 && (edge / w) < h - 1)
+		return i / w == (edge / w);
+
+	/* Columns */
+	if ((edge % w) > 0 && (edge % w) < w - 1)
+		return i % w == (edge % w);
+
+	/* Diagonals */
+	return abs((i % w) - edge % w) == abs((i / w) - edge / w);
 }
 
 static char check_completion(number *grid, int w, int h, int mode)
 {
 	int x = -1, y = -1, x2 = -1, y2 = -1, i;
 	int maxdirs = IS_HEXAGONAL(mode) ? 7 : 8;
-	number last = (w*h)-1;
-	
+	char found;
+	number n, last = (w*h) - 1;
+
 	/* Check for empty squares, and locate path start */
 	for(i = 0; i < w*h; i++)
 	{
@@ -387,6 +430,25 @@ static char check_completion(number *grid, int w, int h, int mode)
 		if(i == maxdirs) return FALSE;
 		x = x2;
 		y = y2;
+	}
+
+	for (y = 0; y < h; y++)
+	for (x = 0; x < w; x++)
+	{
+		i = y*w + x;
+		if (!IS_NUMBER_EDGE(grid[i]))
+			continue;
+		n = NUMBER_EDGE(grid[i]);
+
+		found = FALSE;
+		for (y2 = 0; y2 < h; y2++)
+		for (x2 = 0; x2 < w; x2++)
+		{
+			if (is_edge_valid(i, y2*w+x2, w, h) && grid[y2*w + x2] == n)
+				found = TRUE;
+		}
+
+		if (!found) return FALSE;
 	}
 	
 	return TRUE;
@@ -509,6 +571,24 @@ static number *generate_hamiltonian_path(int w, int h, random_state *rs, const g
 			}
 		}
 	}
+	if (params->mode == MODE_EDGES)
+	{
+		int i;
+		walls = snewn(BITMAP_SIZE(w*h), bitmap);
+		memset(walls, 0, BITMAP_SIZE(w*h));
+		for (i = 0; i < w; i++)
+		{
+			SET_BIT(walls, i);
+			SET_BIT(walls, i + (w*(h-1)));
+			wallcount += 2;
+		}
+		for (i = 1; i < h-1; i++)
+		{
+			SET_BIT(walls, w*i);
+			SET_BIT(walls, w*i + (w-1));
+			wallcount += 2;
+		}
+	}
 
 	/* Find a starting position */
 	do
@@ -562,6 +642,10 @@ static void update_positions(cell *positions, number *grid, int s)
 	}
 }
 
+/* ****** *
+ * Solver *
+ * ****** */
+
 struct solver_scratch {
 	int w, h, mode;
 	
@@ -579,6 +663,9 @@ struct solver_scratch {
 	/* The possible path segments for each cell */
 	int *path;
 	char found_endpoints;
+
+	/* Scratch space for solver_overlap */
+	bitmap *overlap;
 };
 
 static struct solver_scratch *new_scratch(int w, int h, int mode, number last)
@@ -602,7 +689,9 @@ static struct solver_scratch *new_scratch(int w, int h, int mode, number last)
 	ret->marks = snewn(BITMAP_SIZE(w*h*n), bitmap);
 	memset(ret->marks, 0, BITMAP_SIZE(w*h*n));
 	memset(ret->path, 0, n*sizeof(int));
-	
+
+	ret->overlap = snewn(BITMAP_SIZE(w*h*2), bitmap);
+
 	return ret;
 }
 
@@ -612,6 +701,7 @@ static void free_scratch(struct solver_scratch *scratch)
 	sfree(scratch->grid);
 	sfree(scratch->marks);
 	sfree(scratch->path);
+	sfree(scratch->overlap);
 	sfree(scratch);
 }
 
@@ -1137,7 +1227,7 @@ static int solver_remove_blocks(struct solver_scratch *scratch)
 	int ret = 0;
 	for (i1 = 0; i1 < s; i1++)
 	{
-		if(scratch->grid[i1] >= NUMBER_EMPTY) continue;
+		if(!IS_OBSTACLE(scratch->grid[i1])) continue;
 		for(dir = 0; dir < 8; dir++)
 		{
 			if(!(scratch->path[i1] & (1<<dir))) continue;
@@ -1156,11 +1246,97 @@ static int solver_remove_blocks(struct solver_scratch *scratch)
 	return ret;
 }
 
+static int solver_overlap(struct solver_scratch *scratch)
+{
+	/*
+	 * Rule out number marks which aren't adjacent to a mark of 
+	 * both the previous number and the next number.
+	 */
+	int ret = 0;
+	int w = scratch->w, h = scratch->h, s = w*h;
+	cell i1, i2; number n;
+
+	for(n = 0; n < scratch->end; n++)
+	{
+		if(scratch->positions[n] != CELL_NONE)
+			continue;
+
+		memset(scratch->overlap, 0, BITMAP_SIZE(s*2));
+
+		if(n > 0)
+		{
+			for(i1 = 0; i1 < s; i1++)
+			{
+				if(GET_BIT(scratch->marks, i1*s+(n-1)))
+				{
+					for(i2 = 0; i2 < s; i2++)
+					{
+						if(is_near(i1, i2, scratch->w, scratch->mode))
+							SET_BIT(scratch->overlap, i2);
+					}
+				}
+			}
+		}
+
+		if(n < scratch->end - 1)
+		{
+			for(i1 = 0; i1 < s; i1++)
+			{
+				if(GET_BIT(scratch->marks, i1*s+(n+1)))
+				{
+					for(i2 = 0; i2 < s; i2++)
+					{
+						if(is_near(i1, i2, w, scratch->mode))
+							SET_BIT(scratch->overlap, i2 + s);
+					}
+				}
+			}
+		}
+
+		for(i1 = 0; i1 < s; i1++)
+		{
+			if(!GET_BIT(scratch->marks, i1*s+n))
+				continue;
+
+			if((n == 0 || GET_BIT(scratch->overlap, i1)) &&
+				(n == scratch->end-1 || GET_BIT(scratch->overlap, i1+s)))
+				continue;
+
+			solver_printf("Rule out %d at %d,%d for not being near marks of adjacent numbers\n", 
+					n+1, i1%w, i1/w);
+			CLR_BIT(scratch->marks, i1*s+n);
+			ret++;
+		}
+	}
+
+	return ret;
+}
+
+static void solver_edges(struct solver_scratch *scratch)
+{
+	cell i1, i2; number n;
+	int w = scratch->w, h = scratch->h, s = w*h;
+
+	for (i1 = 0; i1 < s; i1++)
+	{
+		if (!IS_NUMBER_EDGE(scratch->grid[i1]))
+			continue;
+		n = NUMBER_EDGE(scratch->grid[i1]);
+
+		for (i2 = 0; i2 < s; i2++)
+		{
+			if (GET_BIT(scratch->marks, i2*s + n) && !is_edge_valid(i1, i2, w, h))
+				CLR_BIT(scratch->marks, i2*s + n);
+		}
+	}
+}
+
 static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *scratch)
 {
 	int w = scratch->w, h = scratch->h, s=w*h;
 	cell i; number n;
-	memcpy(scratch->grid, puzzle, s*sizeof(number));
+	if(puzzle != scratch->grid)
+		memcpy(scratch->grid, puzzle, s*sizeof(number));
 	update_positions(scratch->positions, scratch->grid, s);
 	memset(scratch->marks, 0, BITMAP_SIZE(s*s));
 	
@@ -1179,6 +1355,8 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 				SET_BIT(scratch->marks, i*s+n);
 		}
 	}
+
+	solver_edges(scratch);
 	
 	solver_initialize_path(scratch);
 	solver_remove_blocks(scratch);
@@ -1207,10 +1385,13 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		
 		if(solver_proximity_full(scratch))
 			continue;
+
+		if((diff >= DIFF_HARD || scratch->mode == MODE_EDGES) && solver_overlap(scratch))
+			continue;
 		
 		if(diff < DIFF_TRICKY) break;
 		
-		if(solver_single_number(scratch, TRUE))
+		if(diff < DIFF_HARD && solver_single_number(scratch, TRUE))
 			continue;
 		
 		if(diff < DIFF_HARD) break;
@@ -1222,6 +1403,10 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 	}
 }
 
+/* **************** *
+ * Puzzle Generator *
+ * **************** */
+
 static void ascent_grid_size(const game_params *params, int *w, int *h)
 {
 	*w = params->w;
@@ -1229,30 +1414,158 @@ static void ascent_grid_size(const game_params *params, int *w, int *h)
 
 	if (params->mode == MODE_HONEYCOMB)
 		*w += ((*h + 1) / 2) - 1;
+	else if (params->mode == MODE_EDGES)
+	{
+		*w += 2;
+		*h += 2;
+	}
 }
 
-static char *new_game_desc(const game_params *params, random_state *rs,
-                           char **aux, int interactive)
+#define SOURCE (w*h)
+#define SINK (w*h+1)
+static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
+                             const game_params *params, random_state *rs)
 {
-	int w, h;
-	ascent_grid_size(params, &w, &h);
+	/*
+	 * Randomly move grid numbers to the edges. This is done by creating a
+	 * flow network of the grid, connecting inner grid spaces to edge spaces.
+	 */
 
-	cell i, j;
-	struct solver_scratch *scratch = new_scratch(w, h, params->mode, (w*h)-1);
-	number temp;
-	cell *spaces = snewn(w*h, cell);
-	number *grid = NULL;
+	int attempts = 0;
+	int w = scratch->w, h = scratch->h;
+	int i, j, x, y, x2, y2, nedges;
+	int aw = w-2, ah = h-2;
 
-	while (!grid)
-	{
-		grid = generate_hamiltonian_path(w, h, rs, params);
-	}
+	/*
+	* (w*h) Entry for inside cells + exit for border cells
+	* (aw*ah*4) Horizontal and vertical connections
+	* (min(aw,ah)*4) Diagonal connections
+	*/
+	int maxedges = (w*h)+(aw*ah*4)+(min(aw,ah)*4);
 
+	int *edges = snewn(maxedges*2, int);
+	int *capacity = snewn(maxedges, int);
+	int *flow = snewn(maxedges, int);
+	int *spaces = snewn(w*h, int);
+
+	for(i = 0; i < maxedges; i++)
+		capacity[i] = 1;
 	for(i = 0; i < w*h; i++)
-	{
-		if (IS_OBSTACLE(grid[i])) scratch->end--;
 		spaces[i] = i;
+
+	while(attempts < MAX_ATTEMPTS)
+	{
+		/*
+		 * The maxflow implementation requires all pairs to be sorted.
+		 * To achieve random generation, we pass in only indices from
+		 * the spaces array, which contains the actual grid positions.
+		 */
+		shuffle(spaces, w*h, sizeof(int), rs);
+
+		nedges = 0;
+		for(i = 0; i < w*h; i++)
+		{
+			x = spaces[i]%w;
+			y = spaces[i]/w;
+
+			/* Connect edge space to the sink */
+			if(x == 0 || x == w-1 || y == 0 || y == h-1)
+			{
+				edges[nedges*2] = i;
+				edges[nedges*2+1] = SINK;
+				nedges++;
+			}
+			else
+			{
+				/*
+				 * Connect grid space to all edge spaces pointing at this space.
+				 * Loop through the spaces array again to find indices of interest.
+				 */
+				for(j = 0; j < w*h; j++)
+				{
+					x2 = spaces[j] % w;
+					y2 = spaces[j] / w;
+
+					if((x2 == 0 || x2 == w - 1 || y2 == 0 || y2 == h - 1)
+						&& is_edge_valid(spaces[j], spaces[i], w, h))
+					{
+						edges[nedges*2] = i;
+						edges[nedges*2+1] = j;
+						nedges++;
+					}
+				}
+			}
+		}
+
+		/*
+		 * The source index comes after all of the grid indices,
+		 * so all starting edges are added last.
+		 */
+		for(i = 0; i < w*h; i++)
+		{
+			x = spaces[i]%w;
+			y = spaces[i]/w;
+
+			if (!params->removeends && grid[spaces[i]] == 0)
+				continue;
+			if(x > 0 && x < w-1 && y > 0 && y < h-1)
+			{
+				edges[nedges*2] = SOURCE;
+				edges[nedges*2+1] = i;
+				nedges++;
+			}
+		}
+
+		int totalflow = maxflow(w*h+2, SOURCE, SINK, nedges, edges, capacity, flow, NULL);
+		assert(totalflow > 0);
+
+		memcpy(scratch->grid, grid, w*h*sizeof(number));
+		
+		for(i = 0; i < nedges; i++)
+		{
+			if(!flow[i] || edges[i*2] == SOURCE || edges[i*2+1] == SINK)
+				continue;
+			
+			scratch->grid[spaces[edges[i*2+1]]] = NUMBER_EDGE(grid[spaces[edges[i*2]]]);
+			scratch->grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
+		}
+
+		ascent_solve(scratch->grid, params->diff, scratch);
+		if (check_completion(scratch->grid, w, h, params->mode))
+			break;
+		
+		attempts++;
 	}
+
+	memcpy(grid, scratch->grid, w*h*sizeof(number));
+	
+	for (i = 0; i < nedges; i++)
+	{
+		if (!flow[i] || edges[i*2] == SOURCE || edges[i*2+1] == SINK)
+			continue;
+
+		grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
+	}
+
+	sfree(edges);
+	sfree(capacity);
+	sfree(flow);
+	sfree(spaces);
+
+	return attempts < MAX_ATTEMPTS;
+}
+
+static char ascent_remove_numbers(struct solver_scratch *scratch, number *grid,
+	const game_params *params, random_state *rs)
+{
+	int w = scratch->w, h = scratch->h;
+	cell *spaces = snewn(w*h, cell);
+	cell i, j;
+	number temp;
+
+	for (i = 0; i < w*h; i++)
+		spaces[i] = i;
+
 	shuffle(spaces, w*h, sizeof(*spaces), rs);
 	for(j = 0; j < w*h; j++)
 	{
@@ -1261,20 +1574,60 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		if (temp < 0) continue;
 		if (!params->removeends && (temp == 0 || temp == scratch->end)) continue;
 		grid[i] = NUMBER_EMPTY;
-		
+
 		ascent_solve(grid, params->diff, scratch);
-		
+
 		if (!check_completion(scratch->grid, w, h, params->mode))
 			grid[i] = temp;
 	}
-	
+
+	sfree(spaces);
+
+	return TRUE;
+}
+
+static char *new_game_desc(const game_params *params, random_state *rs,
+                           char **aux, int interactive)
+{
+	int w, h;
+	ascent_grid_size(params, &w, &h);
+
+	char success;
+	cell i;
+	struct solver_scratch *scratch = new_scratch(w, h, params->mode, (w*h)-1);
+	number n;
+	number *grid = NULL;
+
+	do
+	{
+		scratch->end = (w*h)-1;
+
+		sfree(grid);
+		grid = NULL;
+		while (!grid)
+		{
+			grid = generate_hamiltonian_path(w, h, rs, params);
+		}
+
+		for (i = 0; i < w*h; i++)
+			if (IS_OBSTACLE(grid[i])) scratch->end--;
+
+		if (params->mode == MODE_EDGES)
+			success = ascent_add_edges(scratch, grid, params, rs);
+		else
+			success = ascent_remove_numbers(scratch, grid, params, rs);
+	} while (!success);
+
 	char *ret = snewn(w*h*4, char);
 	char *p = ret;
 	int run = 0;
 	enum { RUN_NONE, RUN_BLANK, RUN_WALL, RUN_NUMBER } runtype = RUN_NONE;
 	for(i = 0; i <= w*h; i++)
 	{
-		if(runtype == RUN_BLANK && (i == w*h || grid[i] != NUMBER_EMPTY))
+		n = grid[i];
+		if(IS_NUMBER_EDGE(n)) n = NUMBER_EDGE(n);
+
+		if(runtype == RUN_BLANK && (i == w*h || n != NUMBER_EMPTY))
 		{
 			while(run >= 26)
 			{
@@ -1285,7 +1638,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 				*p++ = 'a' + run-1;
 			run = 0;
 		}
-		if(runtype == RUN_WALL && (i == w*h || !IS_OBSTACLE(grid[i])))
+		if(runtype == RUN_WALL && (i == w*h || !IS_OBSTACLE(n)))
 		{
 			while(run >= 26)
 			{
@@ -1300,19 +1653,19 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		if(i == w*h)
 			break;
 
-		if(grid[i] >= 0)
+		if(n >= 0)
 		{
 			if(runtype == RUN_NUMBER)
 				*p++ = '_';
-			p += sprintf(p, "%d", grid[i] + 1);
+			p += sprintf(p, "%d", n + 1);
 			runtype = RUN_NUMBER;
 		}
-		else if(grid[i] == NUMBER_EMPTY)
+		else if(n == NUMBER_EMPTY)
 		{
 			runtype = RUN_BLANK;
 			run++;
 		}
-		else if(IS_OBSTACLE(grid[i]))
+		else if(IS_OBSTACLE(n))
 		{
 			runtype = RUN_WALL;
 			run++;
@@ -1322,7 +1675,6 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	ret = sresize(ret, p - ret, char);
 	free_scratch(scratch);
 	sfree(grid);
-	sfree(spaces);
 	return ret;
 }
 
@@ -1410,6 +1762,34 @@ static game_state *new_game(midend *me, const game_params *params,
 		}
 		else
 			++p;
+	}
+
+	if (state->mode == MODE_EDGES)
+	{
+		for (i = 0; i < w; i++)
+		{
+			j = i;
+			if (state->grid[j] >= 0)
+				state->grid[j] = NUMBER_EDGE(state->grid[j]);
+			j = i + (w*(h - 1));
+			if (state->grid[j] >= 0)
+				state->grid[j] = NUMBER_EDGE(state->grid[j]);
+		}
+		for (i = 1; i < h - 1; i++)
+		{
+			j = w*i;
+			if (state->grid[j] >= 0)
+				state->grid[j] = NUMBER_EDGE(state->grid[j]);
+			j = w*i + (w - 1);
+			if (state->grid[j] >= 0)
+				state->grid[j] = NUMBER_EDGE(state->grid[j]);
+		}
+
+		for (i = 0; i < w*h; i++)
+		{
+			if (IS_NUMBER_EDGE(state->grid[i]))
+				state->last--;
+		}
 	}
 	
 	for(i = 0; i < w; i++)
@@ -1525,11 +1905,14 @@ static char *game_text_format(const game_state *state)
 	for(x = 0; x < w; x++)
 	{
 		n = state->grid[y*w+x];
+		if (IS_NUMBER_EDGE(n))
+			n = NUMBER_EDGE(n);
+
 		if(n >= 0)
 			p += sprintf(p, "%*d", space, n+1);
-		else if(n == -2)
+		else if(n == NUMBER_WALL)
 			p += sprintf(p, "%*s", space, "#");
-		else if (n == -3)
+		else if (n == NUMBER_BOUND)
 			p += sprintf(p, "%*s", space, " ");
 		else
 			p += sprintf(p, "%*s", space, ".");
@@ -1540,6 +1923,10 @@ static char *game_text_format(const game_state *state)
 	return ret;
 }
 
+/* ************** *
+ * User Interface *
+ * ************** */
+
 struct game_ui
 {
 	cell held;
@@ -1549,11 +1936,18 @@ struct game_ui
 	cell *positions;
 	int s;
 
+	/* Current state of keyboard cursor */
 	enum { CSHOW_NONE, CSHOW_KEYBOARD, CSHOW_MOUSE } cshow;
 	cell typing_cell;
 	number typing_number;
 	int cx, cy;
+
+	cell doubleclick_cell;
+	int dragx, dragy;
+
+	/* User interface tweaks. Can be enabled from code. */
 	char move_with_numpad;
+	char fast_turn;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1567,7 +1961,9 @@ static game_ui *new_ui(const game_state *state)
 	ret->positions = snewn(s, cell);
 	ret->s = s;
 	ret->cshow = CSHOW_NONE;
+
 	ret->move_with_numpad = FALSE;
+	ret->fast_turn = FALSE;
 
 	for (i = 0; i < s; i++)
 	{
@@ -1577,6 +1973,8 @@ static game_ui *new_ui(const game_state *state)
 	ret->cy = i/w;
 	ret->typing_cell = CELL_NONE;
 	ret->typing_number = 0;
+	ret->dragx = ret->dragy = -1;
+	ret->doubleclick_cell = -1;
 	
 	update_positions(ret->positions, state->grid, s);
 	return ret;
@@ -1672,7 +2070,7 @@ static void ui_clear(game_ui *ui)
 static void ui_seek(game_ui *ui, number last)
 {
 	/* Move the selection forward until an unplaced number is found */
-	if(ui->held == CELL_NONE || ui->select < 0 || ui->select > last)
+	if(ui->held == CELL_NONE || ui->select < 0 || ui->select > last || !ui->dir)
 	{
 		ui->select = NUMBER_EMPTY;
 		ui->target = NUMBER_EMPTY;
@@ -1693,7 +2091,7 @@ static void ui_backtrack(game_ui *ui, number last)
 	 * then point the selection forward again.
 	 */
 	number n = ui->select;
-	if(!ui->dir)
+	if(!ui->dir || n < 0)
 	{
 		ui_clear(ui);
 		return;
@@ -1715,7 +2113,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 {
 	update_positions(ui->positions, newstate->grid, newstate->w*newstate->h);
 	
-	if(ui->held != CELL_NONE && newstate->grid[ui->held] == NUMBER_EMPTY)
+	if(ui->held >= 0 && newstate->grid[ui->held] == NUMBER_EMPTY)
 	{
 		ui_backtrack(ui, oldstate->last);
 	}
@@ -1750,21 +2148,226 @@ struct game_drawstate {
 };
 
 #define DRAG_RADIUS 0.6F
+
+static char *ascent_mouse_click(const game_state *state, game_ui *ui,
+                                int gx, int gy, int button)
+{
+	/*
+	 * There are three ways to enter a number:
+	 *
+	 * 1. Click a number to highlight it, then click (or drag to) an adjacent
+	 * cell to place the next number in the sequence. The arrow keys and Enter
+	 * can be used to emulate mouse clicks.
+	 *
+	 * 2. Click an empty cell, then type a multi-digit number. To confirm a
+	 * number, either press Enter, an arrow key, or click any cell.
+	 *
+	 * 3. In Edges mode, click and drag from an edge number, then release in an
+	 * empty grid cell in the same row, column or diagonal.
+	 */
+	
+	char buf[80];
+	int w = state->w, h = state->h;
+	cell i = gy*w+gx;
+	number n = state->grid[i];
+		
+	switch(button)
+	{
+	case LEFT_BUTTON:
+		ui->doubleclick_cell = ui->held == i ? i : -1;
+
+		/* Click on edge number */
+		if (IS_NUMBER_EDGE(n) && ui->positions[NUMBER_EDGE(n)] == CELL_NONE)
+		{
+			ui->held = i;
+			ui->target = NUMBER_EDGE(n);
+			ui->select = n;
+			ui->dir = 0;
+			return NULL;
+		}
+		/* Click on wall */
+		if(IS_OBSTACLE(n))
+		{
+			ui_clear(ui);
+			return NULL;
+		}
+		if(n >= 0)
+		{
+			/* Click a placed number again to change direction */
+			if(i == ui->held && ui->dir != 0)
+			{
+				if(ui->fast_turn)
+					ui->dir *= -1;
+			}
+			else
+			{
+				/* Highlight a placed number */
+				ui->held = i;
+				ui->dir = n < state->last && ui->positions[n+1] == CELL_NONE ? +1
+					: n > 0 && ui->positions[n-1] == CELL_NONE ? -1 : +1;
+			}
+			ui->select = n + ui->dir;
+			
+			ui_seek(ui, state->last);
+			return NULL;
+		}
+		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+		{
+			n = ui->target;
+			sprintf(buf, "P%d,%d", i, n);
+			
+			ui->held = i;
+			ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
+				: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
+			ui->select = n + ui->dir;
+			ui_seek(ui, state->last);
+
+			return dupstr(buf);
+		}
+	/* Deliberate fallthrough */
+	case LEFT_DRAG:
+		if(ui->doubleclick_cell != i)
+			ui->doubleclick_cell = -1;
+
+		/* Update cursor position when dragging a number from the edge */
+		if (IS_NUMBER_EDGE(ui->select) && button == LEFT_DRAG)
+		{
+			ui->dragx = gx;
+			ui->dragy = gy;
+
+			if (ui->held % w > 0 && ui->held % w < w - 1)
+				ui->dragx = -1;
+			if (ui->held / w > 0 && ui->held / w < h - 1)
+				ui->dragy = -1;
+
+			return NULL;
+		}
+		/* Dragging over the next highlighted number moves the highlight forward */
+		if(n >= 0 && ui->select == n && ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
+		{
+			ui->held = i;
+			ui->select += ui->dir;
+			ui_seek(ui, state->last);
+			ui->cshow = CSHOW_NONE;
+			return NULL;
+		}
+		/* Place the next number */
+		if(n == NUMBER_EMPTY && ui->held >= CELL_NONE && ui->select >= 0 &&
+			ui->positions[ui->select] == CELL_NONE && is_near(ui->held, i, w, state->mode))
+		{
+			sprintf(buf, "P%d,%d", i, ui->select);
+			
+			ui->held = i;
+			if(ui->select + ui->dir <= state->last)
+				ui->select += ui->dir;
+			
+			ui->cshow = CSHOW_NONE;
+
+			return dupstr(buf);
+		}
+		/* Highlight an empty cell */
+		else if(n == NUMBER_EMPTY && button == LEFT_BUTTON)
+		{
+			ui_clear(ui);
+			ui->cx = i % w;
+			ui->cy = i / w;
+			ui->cshow = CSHOW_MOUSE;
+			return NULL;
+		}
+	break;
+	case LEFT_RELEASE:
+		ui->dragx = ui->dragy = -1;
+
+		if(ui->doubleclick_cell == i)
+		{
+			/* Deselect edge number */
+			if(IS_NUMBER_EDGE(ui->select))
+				ui_clear(ui);
+			/* Click a placed number again to change direction */
+			else if(!ui->fast_turn)
+			{
+				ui->dir *= -1;
+				ui->select = n + ui->dir;
+				
+				ui_seek(ui, state->last);
+			}
+		}
+		/* Drop number from edge into grid */
+		else if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+		{
+			sprintf(buf, "P%d,%d", i, ui->target);
+			ui_clear(ui);
+			return dupstr(buf);
+		}
+	break;
+	case MIDDLE_BUTTON:
+	case RIGHT_BUTTON:
+		if(n == NUMBER_EMPTY || GET_BIT(state->immutable, i))
+		{
+			ui_clear(ui);
+		}
+
+	/* Deliberate fallthrough */
+	case MIDDLE_DRAG:
+	case RIGHT_DRAG:
+		/* Drag over numbers to clear them */
+		if(ui->typing_cell == CELL_NONE && n != NUMBER_EMPTY && !GET_BIT(state->immutable, i))
+		{
+			sprintf(buf, "C%d", i);
+			return dupstr(buf);
+		}
+	}
+
+	return NULL;
+}
+
 static char *interpret_move(const game_state *state, game_ui *ui,
-							const game_drawstate *ds,
-							int ox, int oy, int button)
+                            const game_drawstate *ds,
+                            int ox, int oy, int button)
 {
 	int w = state->w, h = state->h;
 	int gx, gy;
 	int tilesize = ds->tilesize;
 	cell i;
 	number n;
-	char buf[80];
+	char *ret = NULL;
 	int dir = -1;
 	char finish_typing = FALSE;
 	
 	oy -= ds->offsety;
 	ox -= ds->offsetx;
+
+	/*
+	 * Handle dragging a number from the edge into the grid. When dragging
+	 * from a diagonal edge number, adjust the coordinates to always move
+	 * along the diagonal line.
+	 */
+	if (IS_NUMBER_EDGE(ui->select) && (button == LEFT_DRAG || button == LEFT_RELEASE))
+	{
+		int ex = ui->held % w;
+		int ey = ui->held / w;
+		int tx = ex * tilesize;
+		int ty = ey * tilesize;
+
+		if (ex > 0 && ex < w - 1)
+			ox = tx;
+		else if (ey > 0 && ey < h - 1)
+			oy = ty;
+		else
+		{
+			if (ex > 0)
+				tx += (tilesize-1);
+			if (ey > 0)
+				ty += (tilesize-1);
+
+			int distance = (int)(round((abs(ox - tx) + abs(oy - ty)) / 2.0));
+			if (distance >= (min(w, h) - 1) * tilesize)
+				distance = 0;
+			ox = ex == 0 ? distance : tx - distance;
+			oy = ey == 0 ? distance : ty - distance;
+		}
+	}
+
 	gy = oy < 0 ? -1 : oy / tilesize;
 	if (IS_HEXAGONAL(state->mode))
 	{
@@ -1833,12 +2436,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	/* Pressing Enter, Spacebar or Backspace when not typing will emulate a mouse click */
 	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
 	{
-		gy = ui->cy;
-		gx = ui->cx;
-		button = (button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
+		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
+		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
+		if(!ret)
+		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
+		      button == CURSOR_SELECT ? LEFT_RELEASE : RIGHT_RELEASE);
 	}
 	/* Press Enter to confirm typing */
-	if (button == CURSOR_SELECT && ui->typing_cell != CELL_NONE)
+	if (IS_CURSOR_SELECT(button))
 		finish_typing = TRUE;
 
 	/* Typing a number */
@@ -1869,8 +2474,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
 	{
-		i = gy*w+gx;
-		if(IS_MOUSE_DRAG(button) && ui->held >= 0)
+		if(IS_MOUSE_DRAG(button) && ui->held >= 0 && !IS_NUMBER_EDGE(ui->select))
 		{
 			int hx = (gx * tilesize) + (tilesize / 2);
 			int hy = (gy * tilesize) + (tilesize / 2);
@@ -1883,98 +2487,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(abs(ox-hx) + abs(oy-hy) > DRAG_RADIUS*tilesize)
 				return NULL;
 		}
-		n = state->grid[i];
-		
-		switch(button)
-		{
-		case LEFT_BUTTON:
-			update_positions(ui->positions, state->grid, w*h);
-			
-			/* Click on wall */
-			if(IS_OBSTACLE(n))
-			{
-				ui_clear(ui);
-				finish_typing = TRUE;
-				break;
-			}
-			if(n >= 0)
-			{
-				/* Click a placed number again to change direction */
-				if(i == ui->held && ui->dir != 0)
-				{
-					ui->dir *= -1;
-				}
-				else
-				{
-					/* Highlight a placed number */
-					ui->held = i;
-					ui->dir = n < state->last && ui->positions[n+1] == CELL_NONE ? +1
-						: n > 0 && ui->positions[n-1] == CELL_NONE ? -1 : +1;
-				}
-				ui->select = n + ui->dir;
-				
-				ui_seek(ui, state->last);
-				finish_typing = TRUE;
-				break;
-			}
-		/* Deliberate fallthrough */
-		case LEFT_DRAG:
-			/* Dragging over the next highlighted number moves the highlight forward */
-			if(n >= 0 && ui->select == n && ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
-			{
-				ui->held = i;
-				ui->select += ui->dir;
-				ui_seek(ui, state->last);
-				ui->cshow = CSHOW_NONE;
-				return UI_UPDATE;
-			}
-			/* Place the next number */
-			if(n == NUMBER_EMPTY && ui->held != CELL_NONE && ui->positions[ui->select] == CELL_NONE && is_near(ui->held, i, state))
-			{
-				sprintf(buf, "P%d,%d", i, ui->select);
-				
-				ui->held = i;
-				if(ui->select + ui->dir <= state->last)
-					ui->select += ui->dir;
-				
-				ui->cshow = CSHOW_NONE;
-
-				return dupstr(buf);
-			}
-			/* Highlight an empty cell */
-			else if(n == NUMBER_EMPTY && button == LEFT_BUTTON)
-			{
-				ui_clear(ui);
-				ui->cx = i % w;
-				ui->cy = i / w;
-				ui->cshow = CSHOW_MOUSE;
-				finish_typing = TRUE;
-			}
-		break;
-		case MIDDLE_BUTTON:
-		case RIGHT_BUTTON:
-			update_positions(ui->positions, state->grid, w*h);
-			if(n == NUMBER_EMPTY || GET_BIT(state->immutable, i))
-			{
-				ui_clear(ui);
-				finish_typing = TRUE;
-			}
-
-		/* Deliberate fallthrough */
-		case MIDDLE_DRAG:
-		case RIGHT_DRAG:
-			/* Drag over numbers to clear them */
-			if(ui->typing_cell == CELL_NONE && n != NUMBER_EMPTY && !GET_BIT(state->immutable, i))
-			{
-				sprintf(buf, "C%d", i);
-				return dupstr(buf);
-			}
-		}
+		ret = ascent_mouse_click(state, ui, gx, gy, button);
+		finish_typing = TRUE;
 	}
 	
 	/* Confirm typed number */
-	if (finish_typing && ui->typing_cell != CELL_NONE)
+	if (finish_typing && !ret && ui->typing_cell != CELL_NONE)
 	{
+		char buf[20];
 		n = ui->typing_number - 1;
 		i = ui->typing_cell;
 		ui->typing_cell = CELL_NONE;
@@ -1994,16 +2514,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			return UI_UPDATE;
 
 		sprintf(buf, "P%d,%d", i, n);
-		return dupstr(buf);
+		ret = dupstr(buf);
 	}
 
-	if(button == '\b' && !ui->cshow && ui->held >= 0 && !GET_BIT(state->immutable, ui->held))
+	if(!ret && button == '\b' && !ui->cshow && ui->held >= 0 && !GET_BIT(state->immutable, ui->held))
 	{
+		char buf[20];
 		sprintf(buf, "C%d", ui->held);
-		return dupstr(buf);
+		ret = dupstr(buf);
 	}
 	
-	return finish_typing ? UI_UPDATE : NULL;
+	if(finish_typing && !ret)
+		return UI_UPDATE;
+	return ret;
 }
 
 static game_state *execute_move(const game_state *state, const char *move)
@@ -2073,9 +2596,9 @@ static game_state *execute_move(const game_state *state, const char *move)
 	return NULL;
 }
 
-/* ----------------------------------------------------------------------
- * Drawing routines.
- */
+/* **************** *
+ * Drawing routines *
+ * **************** */
 
 static void game_compute_size(const game_params *params, int tilesize,
                               int *x, int *y)
@@ -2085,6 +2608,11 @@ static void game_compute_size(const game_params *params, int tilesize,
 
 	if (params->mode == MODE_HONEYCOMB)
 		*x += (tilesize / 2);
+	else if (params->mode == MODE_EDGES)
+	{
+		*x += (tilesize * 1.5);
+		*y += (tilesize * 1.5);
+	}
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
@@ -2102,6 +2630,11 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 		ds->offsetx -= ((params->h / 2) - 1) * tilesize;
 		if (params->h & 1)
 			ds->offsetx -= tilesize;
+	}
+	else if (params->mode == MODE_EDGES)
+	{
+		ds->offsetx -= tilesize / 4;
+		ds->offsety -= tilesize / 4;
 	}
 
 	ds->blr = tilesize*0.4;
@@ -2130,6 +2663,10 @@ static float *game_colours(frontend *fe, int *ncolours)
 	ret[COL_CURSOR * 3 + 0] = 0.0F;
 	ret[COL_CURSOR * 3 + 1] = 0.7F;
 	ret[COL_CURSOR * 3 + 2] = 0.0F;
+
+	ret[COL_ARROW * 3 + 0] = 1.0F;
+	ret[COL_ARROW * 3 + 1] = 1.0F;
+	ret[COL_ARROW * 3 + 2] = 0.8F;
 
 	*ncolours = NCOLOURS;
 	return ret;
@@ -2169,6 +2706,21 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 		blitter_free(dr, ds->bl);
 	sfree(ds);
 }
+
+static const float horizontal_arrow[10] = {
+	0.45,   0,
+	0.35,   0.45,
+	-0.45,  0.45,
+	-0.45,  -0.45,
+	0.35,   -0.45,
+};
+
+static const float diagonal_arrow[8] = {
+	-0.45,  0.3,
+	-0.45,  -0.45,
+	0.3,    -0.45,
+	0.45,   0.45,
+};
 
 #define FLASH_FRAME 0.03F
 #define FLASH_SIZE  4
@@ -2219,7 +2771,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			dirty = FALSE;
 			n = state->grid[i];
-			if(n == NUMBER_EMPTY && ui->held != CELL_NONE && is_near(i, ui->held, state) && positions[ui->select] == CELL_NONE)
+			if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+				n = ui->target;
+			if(n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
+					is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
 				n = ui->select;
 			if(i == ui->typing_cell)
 				n = ui->typing_number - 1;
@@ -2232,11 +2787,15 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			
 			if(ui->held != ds->oldheld || ui->target != ds->oldtarget)
 			{
-				if(is_near(i, ui->held, state))
+				if(is_near(i, ui->held, w, state->mode))
 					dirty = TRUE;
-				else if(is_near(i, ds->oldheld, state))
+				else if(is_near(i, ds->oldheld, w, state->mode))
 					dirty = TRUE;
 			}
+
+			if (IS_NUMBER_EDGE(n) &&
+				positions[NUMBER_EDGE(n)] != ds->oldpositions[NUMBER_EDGE(n)])
+				dirty = TRUE;
 			
 			if(dirty)
 				ds->colours[i] = -1;
@@ -2289,6 +2848,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
 		colour = n == NUMBER_WALL ? COL_BORDER :
 			flash >= n && flash <= n + FLASH_SIZE ? COL_LOWLIGHT :
+			ui->dragx == i%w || ui->dragy == i/w ? COL_HIGHLIGHT :
 			ui->held == i || ui->typing_cell == i ||
 				(ui->cshow == CSHOW_MOUSE && ui->cy*w+ui->cx == i) ? COL_LOWLIGHT :
 			ui->target >= 0 && positions[ui->target] == i ? COL_HIGHLIGHT :
@@ -2299,7 +2859,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		/* Draw tile background */
 		clip(dr, tx, ty, tilesize+1, tilesize+1);
 		draw_update(dr, tx, ty, tilesize+1, tilesize+1);
-		draw_rect(dr, tx, ty, tilesize, tilesize, colour);
+		draw_rect(dr, tx+1, ty+1, tilesize-1, tilesize-1,
+			IS_NUMBER_EDGE(n) ? COL_MIDLIGHT : colour);
 		ds->colours[i] = colour;
 		
 		if (ui->typing_cell != i)
@@ -2320,7 +2881,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				if (IS_HEXAGONAL(state->mode))
 					tx2 += (i2/w) * tilesize / 2;
 				ty2 = (i2 / w)*tilesize + ds->offsety + (tilesize / 2);
-				if (is_near(i, i2, state))
+				if (is_near(i, i2, w, state->mode))
 					draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
 				else
 					error = TRUE;
@@ -2332,7 +2893,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				if (IS_HEXAGONAL(state->mode))
 					tx2 += (i2/w) * tilesize / 2;
 				ty2 = (i2 / w)*tilesize + ds->offsety + (tilesize / 2);
-				if (is_near(i, i2, state))
+				if (is_near(i, i2, w, state->mode))
 					draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
 				else
 					error = TRUE;
@@ -2340,18 +2901,24 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		}
 		
 		/* Draw square border */
-		int sqc[8];
-		sqc[0] = tx;
-		sqc[1] = ty;
-		sqc[2] = tx + tilesize;
-		sqc[3] = ty;
-		sqc[4] = tx + tilesize;
-		sqc[5] = ty + tilesize;
-		sqc[6] = tx;
-		sqc[7] = ty + tilesize;
-		draw_polygon(dr, sqc, 4, -1, COL_BORDER);
+		if (!IS_NUMBER_EDGE(n))
+		{
+			int sqc[8];
+			sqc[0] = tx;
+			sqc[1] = ty;
+			sqc[2] = tx + tilesize;
+			sqc[3] = ty;
+			sqc[4] = tx + tilesize;
+			sqc[5] = ty + tilesize;
+			sqc[6] = tx;
+			sqc[7] = ty + tilesize;
+			draw_polygon(dr, sqc, 4, -1, COL_BORDER);
+		}
 
-		if (n == NUMBER_EMPTY && ui->held != CELL_NONE && is_near(i, ui->held, state) && positions[ui->select] == CELL_NONE)
+		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+			n = ui->target;
+		if (n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
+				is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
 			n = ui->select;
 		if (ui->typing_cell == i)
 			n = ui->typing_number - 1;
@@ -2380,6 +2947,62 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				draw_thick_line(dr, 2, tx+margin, ty+margin,
 					(tx+tilesize)-margin, (ty+tilesize)-margin, COL_ERROR);
 			}
+		}
+		if (IS_NUMBER_EDGE(n))
+		{
+			sprintf(buf, "%d", NUMBER_EDGE(n) + 1);
+
+			/* Horizontal arrow */
+			if ((i/w) > 0 && (i/w) < h - 1)
+			{
+				int coords[10];
+				int hdir = (i%w) ? -1 : +1;
+
+				for (i2 = 0; i2 < 10; i2+=2)
+				{
+					coords[i2] = (horizontal_arrow[i2] * tilesize * hdir) + 1 + tx1;
+					coords[i2+1] = (horizontal_arrow[i2+1] * tilesize) + 1 + ty1;
+				}
+
+				draw_polygon(dr, coords, 5, COL_ARROW, COL_BORDER);
+			}
+			/* Vertical arrow */
+			else if ((i%w) > 0 && (i%w) < w - 1)
+			{
+				int coords[10];
+				int vdir = i > w ? -1 : +1;
+
+				for (i2 = 0; i2 < 10; i2 += 2)
+				{
+					coords[i2 + 1] = (horizontal_arrow[i2] * tilesize * vdir) + 1 + ty1;
+					coords[i2] = (horizontal_arrow[i2 + 1] * tilesize) + 1 + tx1;
+				}
+
+				draw_polygon(dr, coords, 5, COL_ARROW, COL_BORDER);
+			}
+			/* Diagonal arrow */
+			else
+			{
+				int coords[8];
+				int hdir = (i%w) ? -1 : +1;
+				int vdir = i > w ? -1 : +1;
+
+				for (i2 = 0; i2 < 8; i2 += 2)
+				{
+					coords[i2] = (diagonal_arrow[i2] * tilesize * hdir) + 1 + tx1;
+					coords[i2 + 1] = (diagonal_arrow[i2 + 1] * tilesize * vdir) + 1 + ty1;
+				}
+
+				draw_polygon(dr, coords, 4, COL_ARROW, COL_BORDER);
+			}
+
+			i2 = positions[NUMBER_EDGE(n)];
+			error = i2 >= 0 && !is_edge_valid(i, i2, w, h);
+
+			draw_text(dr, tx1, ty1,
+				FONT_VARIABLE, tilesize / 2, ALIGN_HCENTRE | ALIGN_VCENTRE,
+				error ? COL_ERROR : i2 >= 0 ? COL_LOWLIGHT :
+				COL_BORDER, buf);
 		}
 		
 		unclip(dr);
@@ -2462,7 +3085,7 @@ const struct game thegame = {
 	game_changed_state,
 	interpret_move,
 	execute_move,
-	32, game_compute_size, game_set_size,
+	48, game_compute_size, game_set_size,
 	game_colours,
 	game_new_drawstate,
 	game_free_drawstate,

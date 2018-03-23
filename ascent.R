@@ -1,9 +1,11 @@
 # -*- makefile -*-
 
-ascent : [X] GTK COMMON ascent ascent-icon|no-icon
-ascent : [G] WINDOWS COMMON ascent ascent.res|noicon.res
-ascentsolver : [U] ascent[STANDALONE_SOLVER] STANDALONE
-ascentsolver : [C] ascent[STANDALONE_SOLVER] STANDALONE
+ASCENT_EXTRA = maxflow
+
+ascent : [X] GTK COMMON ascent ASCENT_EXTRA ascent-icon|no-icon
+ascent : [G] WINDOWS COMMON ascent ASCENT_EXTRA ascent.res|noicon.res
+ascentsolver : [U] ascent[STANDALONE_SOLVER] ASCENT_EXTRA STANDALONE
+ascentsolver : [C] ascent[STANDALONE_SOLVER] ASCENT_EXTRA STANDALONE
 
 ALL += ascent[COMBINED]
 
