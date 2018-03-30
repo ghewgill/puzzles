@@ -2360,7 +2360,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if (ey > 0)
 				ty += (tilesize-1);
 
-			int distance = (int)(round((abs(ox - tx) + abs(oy - ty)) / 2.0));
+			int distance = (abs(ox - tx) + abs(oy - ty) + 1) / 2;
 			if (distance >= (min(w, h) - 1) * tilesize)
 				distance = 0;
 			ox = ex == 0 ? distance : tx - distance;
