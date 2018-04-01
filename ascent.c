@@ -65,11 +65,9 @@ typedef unsigned char bitmap;
 #define CELL_NONE     ((cell)   -1 )
 #define CELL_MULTIPLE ((cell)   -2 )
 
-static const int dir_x[] = {-1,  0,  1, -1, 1, -1, 0, 1};
-static const int dir_y[] = {-1, -1, -1,  0, 0,  1, 1, 1};
-
-#define FLAG_ENDPOINT (1<<8)
-#define FLAG_COMPLETE (1<<10)
+#define MAXIMUM_DIRS 8
+#define FLAG_ENDPOINT (1<<MAXIMUM_DIRS)
+#define FLAG_COMPLETE (1<<(MAXIMUM_DIRS+1))
 
 #define BITMAP_SIZE(i) ( ((i)+7) / 8 )
 #define GET_BIT(bmp, i) ( bmp[(i)/8] & 1<<((i)%8) )
@@ -116,10 +114,46 @@ enum { MODELIST(MODEENUM) MODECOUNT };
 static char const ascent_modechars[] = MODELIST(ENCODE);
 
 /*
-* Hexagonal grids are implemented as normal square grids, but disallowing
-* movement in the top-left and bottom-right directions (dir 0 and dir 7).
-*/
+ * Hexagonal grids are drawn as rectangular grids, with each row having a
+ * horizontal offset of 1/2 tile relative to the row above it.
+ */
 #define IS_HEXAGONAL(mode) ((mode) == MODE_HEXAGON || (mode) == MODE_HONEYCOMB)
+
+typedef struct {
+	int dx, dy;
+} ascent_step;
+typedef struct {
+	int dircount;
+	/* dirs[n] must be the inverse of dirs[dircount-(n+1)] */
+	ascent_step dirs[MAXIMUM_DIRS];
+} ascent_movement;
+
+const static ascent_movement movement_full = {
+	8, {
+		{-1,-1}, {0,-1}, {1,-1},
+		{-1, 0},         {1, 0},
+		{-1, 1}, {0, 1}, {1, 1},
+	}
+};
+
+/*
+* Hexagonal grids are implemented as normal square grids, but disallowing
+* movement in the top-left and bottom-right directions.
+*/
+const static ascent_movement movement_hex = {
+	6, {
+		    {0, -1}, {1,-1},
+		{-1, 0},         {1, 0},
+		    {-1, 1}, {0, 1},
+	}
+};
+
+const static ascent_movement *ascent_movement_for_mode(int mode)
+{
+	if(IS_HEXAGONAL(mode))
+		return &movement_hex;
+	return &movement_full;
+}
 
 const static struct game_params ascent_presets[] = {
 	{ 7,  6, DIFF_EASY, MODE_RECT, FALSE },
@@ -393,9 +427,9 @@ static char is_edge_valid(cell edge, cell i, int w, int h)
 static char check_completion(number *grid, int w, int h, int mode)
 {
 	int x = -1, y = -1, x2 = -1, y2 = -1, i;
-	int maxdirs = IS_HEXAGONAL(mode) ? 7 : 8;
 	char found;
 	number n, last = (w*h) - 1;
+	const ascent_movement *movement = ascent_movement_for_mode(mode);
 
 	/* Check for empty squares, and locate path start */
 	for(i = 0; i < w*h; i++)
@@ -415,10 +449,10 @@ static char check_completion(number *grid, int w, int h, int mode)
 	/* Keep selecting the next number in line */
 	while(grid[y*w+x] != last)
 	{
-		for(i = IS_HEXAGONAL(mode) ? 1 : 0; i < maxdirs; i++)
+		for(i = 0; i < movement->dircount; i++)
 		{
-			x2 = x + dir_x[i];
-			y2 = y + dir_y[i];
+			x2 = x + movement->dirs[i].dx;
+			y2 = y + movement->dirs[i].dy;
 			if(y2 < 0 || y2 >= h || x2 < 0 || x2 >= w)
 				continue;
 			
@@ -427,7 +461,7 @@ static char check_completion(number *grid, int w, int h, int mode)
 		}
 		
 		/* No neighbour found */
-		if(i == maxdirs) return FALSE;
+		if(i == movement->dircount) return FALSE;
 		x = x2;
 		y = y2;
 	}
@@ -474,11 +508,11 @@ static void reverse_path(int i1, int i2, cell *path)
 	}
 }
 
-static int backbite_left(int step, int n, cell *path, int w, int h, const bitmap *walls)
+static int backbite_left(ascent_step step, int n, cell *path, int w, int h, const bitmap *walls)
 {
 	int neighx, neighy, neigh, i;
-	neighx = (path[0] % w) + dir_x[step];
-	neighy = (path[0] / w) + dir_y[step];
+	neighx = (path[0] % w) + step.dx;
+	neighy = (path[0] / w) + step.dy;
 
 	if (neighx < 0 || neighx >= w || neighy < 0 || neighy >= h) return n;
 
@@ -499,11 +533,11 @@ static int backbite_left(int step, int n, cell *path, int w, int h, const bitmap
 	return n + 1;
 }
 
-static int backbite_right(int step, int n, cell *path, int w, int h, const bitmap *walls)
+static int backbite_right(ascent_step step, int n, cell *path, int w, int h, const bitmap *walls)
 {
 	int neighx, neighy, neigh, i;
-	neighx = (path[n-1] % w) + dir_x[step];
-	neighy = (path[n-1] / w) + dir_y[step];
+	neighx = (path[n-1] % w) + step.dx;
+	neighy = (path[n-1] / w) + step.dy;
 
 	if (neighx < 0 || neighx >= w || neighy < 0 || neighy >= h) return n;
 
@@ -523,7 +557,7 @@ static int backbite_right(int step, int n, cell *path, int w, int h, const bitma
 	return n + 1;
 }
 
-static int backbite(int step, int n, cell *path, int w, int h, random_state *rs, const bitmap *walls)
+static int backbite(ascent_step step, int n, cell *path, int w, int h, random_state *rs, const bitmap *walls)
 {
 	return (random_upto(rs, 2) ? backbite_left : backbite_right)(step, n, path, w, h, walls);
 }
@@ -535,6 +569,8 @@ static number *generate_hamiltonian_path(int w, int h, random_state *rs, const g
 	bitmap *walls = NULL;
 	int i, n = 1, nn, attempts = 0, wallcount = 0;
 	number *ret = NULL;
+	
+	const ascent_movement *movement = ascent_movement_for_mode(params->mode);
 
 	if (params->mode == MODE_HEXAGON)
 	{
@@ -603,7 +639,7 @@ static number *generate_hamiltonian_path(int w, int h, random_state *rs, const g
 	*/
 	while (n + wallcount < w*h && attempts < MAX_ATTEMPTS)
 	{
-		int step = IS_HEXAGONAL(params->mode) ? random_upto(rs, 6) + 1 : random_upto(rs, 8);
+		ascent_step step = movement->dirs[random_upto(rs, movement->dircount)];
 		nn = backbite(step, n, path, w, h, rs, walls);
 		if (n == nn)
 			attempts++;
@@ -648,7 +684,8 @@ static void update_positions(cell *positions, number *grid, int s)
 
 struct solver_scratch {
 	int w, h, mode;
-	
+	const ascent_movement *movement;
+
 	/* The position of each number. */
 	cell *positions;
 	
@@ -680,6 +717,7 @@ static struct solver_scratch *new_scratch(int w, int h, int mode, number last)
 	ret->grid = snewn(n, number);
 	ret->path = snewn(n, int);
 	ret->found_endpoints = FALSE;
+	ret->movement = ascent_movement_for_mode(mode);
 	for(i = 0; i < n; i++)
 	{
 		ret->positions[i] = CELL_NONE;
@@ -896,9 +934,9 @@ static int solver_proximity_full(struct solver_scratch *scratch)
 static int ascent_find_direction(cell i1, cell i2, const struct solver_scratch *scratch)
 {
 	int dir;
-	for (dir = IS_HEXAGONAL(scratch->mode) ? 1 : 0; dir < (IS_HEXAGONAL(scratch->mode) ? 7 : 8); dir++)
+	for (dir = 0; dir < scratch->movement->dircount; dir++)
 	{
-		if (i2 - i1 == (dir_y[dir] * scratch->w + dir_x[dir]))
+		if (i2 - i1 == (scratch->movement->dirs[dir].dy * scratch->w + scratch->movement->dirs[dir].dx))
 			return dir;
 	}
 	return -1;
@@ -907,7 +945,7 @@ static int ascent_find_direction(cell i1, cell i2, const struct solver_scratch *
 #ifdef STANDALONE_SOLVER
 static void solver_debug_path(struct solver_scratch *scratch)
 {
-	if(!solver_verbose) return;
+	if(!solver_verbose || scratch->movement->dircount != 8) return;
 	
 	int w = scratch->w, h = scratch->h;
 	int x, y, path;
@@ -945,44 +983,22 @@ static void solver_debug_path(struct solver_scratch *scratch)
 static void solver_initialize_path(struct solver_scratch *scratch)
 {
 	int w = scratch->w, h = scratch->h;
-	int x, y;
-
-	scratch->path[0] = 0xD0; /* top-left */
-	scratch->path[w-1] = 0x68; /* top-right */
-	scratch->path[(w*h) - w] = 0x16; /* bottom-left */
-	scratch->path[(w*h) - 1] = 0x0B; /* bottom-right */
-	
-	for (x = 1; x < w - 1; x++)
-	{
-		scratch->path[x] = 0xF8; /* top */
-		scratch->path[w*h - (x + 1)] = 0x1F; /* bottom */
-	}
-	for (y = 1; y < h - 1; y++)
-	{
-		scratch->path[y*w] = 0xD6; /* left */
-		scratch->path[((y + 1)*w) - 1] = 0x6B; /* right */
-	}
-	for (y = 1; y < h - 1; y++)
-	for (x = 1; x < w - 1; x++)
-	{
-		scratch->path[y*w + x] = 0xFF; /* center */
-	}
-
-	if (IS_HEXAGONAL(scratch->mode))
-	{
-		for (y = 0; y < h; y++)
-		for (x = 0; x < w; x++)
-		{
-			scratch->path[y*w + x] &= 0x7E;
-		}
-	}
+	int x, y, dir, x2, y2;
 
 	for (y = 0; y < h; y++)
 	for (x = 0; x < w; x++)
 	{
-		scratch->path[y*w + x] |= FLAG_ENDPOINT;
+		scratch->path[y*w + x] = FLAG_ENDPOINT;
+		for(dir = 0; dir < scratch->movement->dircount; dir++)
+		{
+			x2 = x + scratch->movement->dirs[dir].dx;
+			y2 = y + scratch->movement->dirs[dir].dy;
+			if(x2 < 0 || x2 >= w || y2 < 0 || y2 >= h)
+				continue;
+			scratch->path[y*w + x] |= (1<<dir);
+		}
 	}
-	
+
 	solver_debug_path(scratch);
 }
 
@@ -1053,7 +1069,7 @@ static int solver_update_path(struct solver_scratch *scratch)
 		 * If it is exactly two, rule out all other neighbouring cells 
 		 * pointing toward this cell. An endpoint counts as one path segment. 
 		 */
-		for (dir = 0; dir <= 8; dir++)
+		for (dir = 0; dir <= MAXIMUM_DIRS; dir++)
 		{
 			if (scratch->path[i] & (1 << dir)) count++;
 		}
@@ -1064,14 +1080,18 @@ static int solver_update_path(struct solver_scratch *scratch)
 			scratch->path[i] |= FLAG_COMPLETE;
 			solver_printf("Completed path segment at %d,%d\n", i%w, i/w);
 			ret++;
-			for (dir = 0; dir < 8; dir++)
+			for (dir = 0; dir < MAXIMUM_DIRS; dir++)
 			{
+				/*
+				 * This loop depends critically on no path flags being set
+				 * which are outside of the range of movement->dirs.
+				 */
 				if (scratch->path[i] & (1 << dir)) continue;
 
-				x = (i%w) + dir_x[dir];
-				y = (i / w) + dir_y[dir];
+				x = (i%w) + scratch->movement->dirs[dir].dx;
+				y = (i / w) + scratch->movement->dirs[dir].dy;
 				if(x < 0 || y < 0 || x >= w || y >= h) continue;
-				scratch->path[y*w + x] &= ~(1 << (7 - dir));
+				scratch->path[y*w + x] &= ~(1 << (scratch->movement->dircount - (dir+1)));
 			}
 		}
 	}
@@ -1140,10 +1160,10 @@ static int solver_adjacent_path(struct solver_scratch *scratch)
 				scratch->path[i] & FLAG_ENDPOINT ? "endpoint" : "path segment", i%w, i/w);
 			
 			/* Check if one of the directions is a known number */
-			for(dir = 0; dir < 8; dir++)
+			for(dir = 0; dir < MAXIMUM_DIRS; dir++)
 			{
 				if(!(scratch->path[i] & (1<<dir))) continue;
-				i2 = dir_y[dir] * w + dir_x[dir] + i;
+				i2 = scratch->movement->dirs[dir].dy * w + scratch->movement->dirs[dir].dx + i;
 				n1 = scratch->grid[i2];
 				if(n1 >= 0)
 				{
@@ -1198,16 +1218,16 @@ static int solver_remove_path(struct solver_scratch *scratch)
 		if (scratch->path[i1] & FLAG_COMPLETE) continue;
 		n1 = scratch->grid[i1];
 		if(n1 < 0) continue;
-		for(dir = 0; dir < 4; dir++)
+		for(dir = 0; dir < MAXIMUM_DIRS; dir++)
 		{
 			if(!(scratch->path[i1] & (1<<dir))) continue;
-			i2 = dir_y[dir] * w + dir_x[dir] + i1;
+			i2 = scratch->movement->dirs[dir].dy * w + scratch->movement->dirs[dir].dx + i1;
 			n2 = scratch->grid[i2];
 			if(n2 >= 0 && abs(n1-n2) != 1)
 			{
 				solver_printf("Disconnect %d,%d (%d) and %d,%d (%d)\n", i1%w, i1/w, n1+1, i2%w, i2/w, n2+1);
 				scratch->path[i1] &= ~(1 << dir);
-				scratch->path[i2] &= ~(1 << (7 - dir));
+				scratch->path[i2] &= ~(1 << (scratch->movement->dircount - (dir+1)));
 				ret++;
 			}
 		}
@@ -1228,12 +1248,12 @@ static int solver_remove_blocks(struct solver_scratch *scratch)
 	for (i1 = 0; i1 < s; i1++)
 	{
 		if(!IS_OBSTACLE(scratch->grid[i1])) continue;
-		for(dir = 0; dir < 8; dir++)
+		for(dir = 0; dir < MAXIMUM_DIRS; dir++)
 		{
 			if(!(scratch->path[i1] & (1<<dir))) continue;
-			i2 = dir_y[dir] * w + dir_x[dir] + i1;
+			i2 = scratch->movement->dirs[dir].dy * w + scratch->movement->dirs[dir].dx + i1;
 			solver_printf("Disconnect block %d,%d from %d,%d\n", i1%w, i1/w, i2%w, i2/w);
-			scratch->path[i2] &= ~(1 << (7 - dir));
+			scratch->path[i2] &= ~(1 << (scratch->movement->dircount - (dir+1)));
 			ret++;
 		}
 		scratch->path[i1] = 0;
@@ -2331,7 +2351,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	cell i;
 	number n;
 	char *ret = NULL;
-	int dir = -1;
+	ascent_step dir = {0,0};
 	char finish_typing = FALSE;
 	
 	oy -= ds->offsety;
@@ -2381,32 +2401,49 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		finish_typing = TRUE;
 	}
 
-	if(!ui->move_with_numpad)
+	/* Parse keyboard cursor movement */
+	if(ui->move_with_numpad)
+	{
+		if(button == (MOD_NUM_KEYPAD | '8')) button = CURSOR_UP;
+		if(button == (MOD_NUM_KEYPAD | '2')) button = CURSOR_DOWN;
+		if(button == (MOD_NUM_KEYPAD | '4')) button = CURSOR_LEFT;
+		if(button == (MOD_NUM_KEYPAD | '6')) button = CURSOR_RIGHT;
+	}
+	else
 		button &= ~MOD_NUM_KEYPAD;
 
-	/* Keyboard cursor movement */
-	if (button == CURSOR_UP || button == (MOD_NUM_KEYPAD | '8'))
-		dir = (IS_HEXAGONAL(state->mode) && ui->cy > 0 && (ui->cy & 1) == 0) ? 2 : 1;
-	else if (button == CURSOR_DOWN || button == (MOD_NUM_KEYPAD | '2'))
-		dir = IS_HEXAGONAL(state->mode) && ui->cy < h-1 && ui->cy & 1 ? 5 : 6;
-	else if (button == CURSOR_LEFT || button == (MOD_NUM_KEYPAD | '4'))
-		dir = 3;
-	else if (button == CURSOR_RIGHT || button == (MOD_NUM_KEYPAD | '6'))
-		dir = 4;
-	else if (button == (MOD_NUM_KEYPAD | '7'))
-		dir = IS_HEXAGONAL(state->mode) ? 1 : 0;
-	else if (button == (MOD_NUM_KEYPAD | '1'))
-		dir = 5;
-	else if (button == (MOD_NUM_KEYPAD | '9'))
-		dir = 2;
-	else if (button == (MOD_NUM_KEYPAD | '3'))
-		dir = IS_HEXAGONAL(state->mode) ? 6 : 7;
+	if(IS_HEXAGONAL(state->mode))
+	{
+		/*
+		 * When moving across a hexagonal field, moving the cursor up or down
+		 * will alternate between moving orthogonally and diagonally.
+		 */
+		if (button == CURSOR_UP && ui->cy > 0 && (ui->cy & 1) == 0)
+			button = MOD_NUM_KEYPAD | '9';
+		else if(button == CURSOR_DOWN && ui->cy < h-1 && ui->cy & 1)
+			button = MOD_NUM_KEYPAD | '1';
+		/* Moving top-left or down-right is replaced with moving directly up or down. */
+		else if(button == (MOD_NUM_KEYPAD | '7'))
+			button = CURSOR_UP;
+		else if(button == (MOD_NUM_KEYPAD | '3'))
+			button = CURSOR_DOWN;
+	}
 
-	if (dir != -1)
+	/* Apply keyboard cursor movement */
+	if      (button == CURSOR_UP)              dir = (ascent_step){ 0, -1};
+	else if (button == CURSOR_DOWN)            dir = (ascent_step){ 0,  1};
+	else if (button == CURSOR_LEFT)            dir = (ascent_step){-1,  0};
+	else if (button == CURSOR_RIGHT)           dir = (ascent_step){ 1,  0};
+	else if (button == (MOD_NUM_KEYPAD | '7')) dir = (ascent_step){-1, -1};
+	else if (button == (MOD_NUM_KEYPAD | '1')) dir = (ascent_step){-1,  1};
+	else if (button == (MOD_NUM_KEYPAD | '9')) dir = (ascent_step){ 1, -1};
+	else if (button == (MOD_NUM_KEYPAD | '3')) dir = (ascent_step){ 1,  1};
+
+	if (dir.dx || dir.dy)
 	{
 		ui->cshow = CSHOW_KEYBOARD;
-		ui->cx += dir_x[dir];
-		ui->cy += dir_y[dir];
+		ui->cx += dir.dx;
+		ui->cy += dir.dy;
 
 		ui->cx = max(0, min(ui->cx, w-1));
 		ui->cy = max(0, min(ui->cy, h-1));
