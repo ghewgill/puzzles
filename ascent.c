@@ -95,6 +95,7 @@ struct game_params {
 	A(HARD,Hard, h)                             \
 
 #define MODELIST(A)                             \
+	A(ORTHOGONAL,Rectangle (No diagonals), O)   \
 	A(RECT,Rectangle, R)                        \
 	A(HEXAGON,Hexagon, H)                       \
 	A(HONEYCOMB,Honeycomb, C)                   \
@@ -128,6 +129,14 @@ typedef struct {
 	ascent_step dirs[MAXIMUM_DIRS];
 } ascent_movement;
 
+const static ascent_movement movement_orthogonal = {
+	4, {
+		     {0,-1},
+		{-1, 0}, {1, 0},
+		     {0, 1},
+	}
+};
+
 const static ascent_movement movement_full = {
 	8, {
 		{-1,-1}, {0,-1}, {1,-1},
@@ -150,6 +159,8 @@ const static ascent_movement movement_hex = {
 
 const static ascent_movement *ascent_movement_for_mode(int mode)
 {
+	if(mode == MODE_ORTHOGONAL)
+		return &movement_orthogonal;
 	if(IS_HEXAGONAL(mode))
 		return &movement_hex;
 	return &movement_full;
@@ -403,6 +414,9 @@ static int is_near(cell a, cell b, int w, int mode)
 {
 	int dx = (a % w) - (b % w);
 	int dy = (a / w) - (b / w);
+
+	if(mode == MODE_ORTHOGONAL)
+		return (abs(dx) + abs(dy)) == 1;
 
 	if (IS_HEXAGONAL(mode) && dx == dy)
 		return FALSE;
@@ -858,12 +872,15 @@ static int solver_near(struct solver_scratch *scratch, cell near, number num, in
 		if(!GET_BIT(scratch->marks, i*s+num)) continue;
 		hdist = (i%w) - (near%w);
 		vdist = (i/w) - (near/w);
-		if (IS_HEXAGONAL(scratch->mode) && ((hdist < 0 && vdist < 0) || (hdist > 0 && vdist > 0)))
+		if (scratch->mode == MODE_ORTHOGONAL ||
+		   (IS_HEXAGONAL(scratch->mode) && ((hdist < 0 && vdist < 0) || (hdist > 0 && vdist > 0))))
 		{
-			if (abs(hdist + vdist) <= distance) continue;
+			/* Manhattan distance */
+			if ((abs(hdist) + abs(vdist)) <= distance) continue;
 		}
 		else
 		{
+			/* Chebyshev distance */
 			if (max(abs(hdist), abs(vdist)) <= distance) continue;
 		}
 		CLR_BIT(scratch->marks, i*s+num);
