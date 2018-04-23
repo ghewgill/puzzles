@@ -19,7 +19,7 @@
 #include <math.h>
 
 #include "puzzles.h"
-#include "maxflow.h"
+#include "matching.h"
 
 #ifdef STANDALONE_SOLVER
 #include <stdarg.h>
@@ -1458,113 +1458,75 @@ static void ascent_grid_size(const game_params *params, int *w, int *h)
 	}
 }
 
-#define SOURCE (w*h)
-#define SINK (w*h+1)
 static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
                              const game_params *params, random_state *rs)
 {
 	/*
 	 * Randomly move grid numbers to the edges. This is done by creating a
-	 * flow network of the grid, connecting inner grid spaces to edge spaces.
+	 * bipartite graph connecting inner grid spaces to edge spaces, then
+	 * finding any maximal matching that produces a viable puzzle.
 	 */
 
 	int attempts = 0;
 	int w = scratch->w, h = scratch->h;
-	int i, j, x, y, x2, y2, nedges;
+	int i, j, x, y, x2, y2;
 	int aw = w-2, ah = h-2;
 
 	/*
-	* (w*h) Entry for inside cells + exit for border cells
 	* (aw*ah*4) Horizontal and vertical connections
 	* (min(aw,ah)*4) Diagonal connections
 	*/
-	int maxedges = (w*h)+(aw*ah*4)+(min(aw,ah)*4);
+	int *adjdata = snewn((aw*ah*4) + (min(aw,ah)*4), int);
+	int **adjlists = snewn(aw*ah, int*);
+	int *adjsizes = snewn(aw*ah, int);
+	int *match = snewn(aw*ah, int);
+	void *mscratch = smalloc(matching_scratch_size(aw*ah, w*h));
+	int p = 0, count;
 
-	int *edges = snewn(maxedges*2, int);
-	int *capacity = snewn(maxedges, int);
-	int *flow = snewn(maxedges, int);
-	int *spaces = snewn(w*h, int);
+	for(i = 0; i < aw*ah; i++)
+	{
+		adjlists[i] = &adjdata[p];
+		x = i%aw + 1;
+		y = i/aw + 1;
+		count = 0;
 
-	for(i = 0; i < maxedges; i++)
-		capacity[i] = 1;
-	for(i = 0; i < w*h; i++)
-		spaces[i] = i;
+		/*
+		* Connect grid space to all edge spaces pointing at this space.
+		* Loop through the grid again to find indices of interest.
+		*/
+		for(j = 0; j < w*h; j++)
+		{
+			x2 = j % w;
+			y2 = j / w;
+
+			if((x2 == 0 || x2 == w - 1 || y2 == 0 || y2 == h - 1)
+				&& is_edge_valid(j, y*w+x, w, h))
+			{
+				adjdata[p++] = j;
+				count++;;
+			}
+		}
+
+		adjsizes[i] = count;
+	}
 
 	while(attempts < MAX_ATTEMPTS)
 	{
-		/*
-		 * The maxflow implementation requires all pairs to be sorted.
-		 * To achieve random generation, we pass in only indices from
-		 * the spaces array, which contains the actual grid positions.
-		 */
-		shuffle(spaces, w*h, sizeof(int), rs);
-
-		nedges = 0;
-		for(i = 0; i < w*h; i++)
-		{
-			x = spaces[i]%w;
-			y = spaces[i]/w;
-
-			/* Connect edge space to the sink */
-			if(x == 0 || x == w-1 || y == 0 || y == h-1)
-			{
-				edges[nedges*2] = i;
-				edges[nedges*2+1] = SINK;
-				nedges++;
-			}
-			else
-			{
-				/*
-				 * Connect grid space to all edge spaces pointing at this space.
-				 * Loop through the spaces array again to find indices of interest.
-				 */
-				for(j = 0; j < w*h; j++)
-				{
-					x2 = spaces[j] % w;
-					y2 = spaces[j] / w;
-
-					if((x2 == 0 || x2 == w - 1 || y2 == 0 || y2 == h - 1)
-						&& is_edge_valid(spaces[j], spaces[i], w, h))
-					{
-						edges[nedges*2] = i;
-						edges[nedges*2+1] = j;
-						nedges++;
-					}
-				}
-			}
-		}
-
-		/*
-		 * The source index comes after all of the grid indices,
-		 * so all starting edges are added last.
-		 */
-		for(i = 0; i < w*h; i++)
-		{
-			x = spaces[i]%w;
-			y = spaces[i]/w;
-
-			if (!params->removeends && grid[spaces[i]] == 0)
-				continue;
-			if(x > 0 && x < w-1 && y > 0 && y < h-1)
-			{
-				edges[nedges*2] = SOURCE;
-				edges[nedges*2+1] = i;
-				nedges++;
-			}
-		}
-
-		int totalflow = maxflow(w*h+2, SOURCE, SINK, nedges, edges, capacity, flow, NULL);
-		assert(totalflow > 0);
+		int total = matching_with_scratch(mscratch, aw*ah, w*h, adjlists, adjsizes, rs, match, NULL);
+		assert(total > 0);
 
 		memcpy(scratch->grid, grid, w*h*sizeof(number));
 		
-		for(i = 0; i < nedges; i++)
+		for(i = 0; i < aw*ah; i++)
 		{
-			if(!flow[i] || edges[i*2] == SOURCE || edges[i*2+1] == SINK)
+			if(match[i] == -1)
 				continue;
 			
-			scratch->grid[spaces[edges[i*2+1]]] = NUMBER_EDGE(grid[spaces[edges[i*2]]]);
-			scratch->grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
+			x = i%aw + 1;
+			y = i/aw + 1;
+
+			scratch->grid[match[i]] = NUMBER_EDGE(grid[y*w+x]);
+			scratch->grid[y*w+x] = NUMBER_EMPTY;
 		}
 
 		ascent_solve(scratch->grid, params->diff, scratch);
@@ -1575,19 +1537,23 @@ static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
 	}
 
 	memcpy(grid, scratch->grid, w*h*sizeof(number));
-	
-	for (i = 0; i < nedges; i++)
-	{
-		if (!flow[i] || edges[i*2] == SOURCE || edges[i*2+1] == SINK)
-			continue;
 
-		grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
+	for(i = 0; i < aw*ah; i++)
+	{
+		if(match[i] == -1)
+			continue;
+		
+		x = i%aw + 1;
+		y = i/aw + 1;
+
+		grid[y*w+x] = NUMBER_EMPTY;
 	}
 
-	sfree(edges);
-	sfree(capacity);
-	sfree(flow);
-	sfree(spaces);
+	sfree(adjlists);
+	sfree(adjdata);
+	sfree(adjsizes);
+	sfree(match);
+	sfree(mscratch);
 
 	return attempts < MAX_ATTEMPTS;
 }
@@ -3244,6 +3210,7 @@ const struct game thegame = {
 	free_ui,
 	encode_ui,
 	decode_ui,
+	NULL, /* game_request_keys */
 	game_changed_state,
 	interpret_move,
 	execute_move,

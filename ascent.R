@@ -1,6 +1,6 @@
 # -*- makefile -*-
 
-ASCENT_EXTRA = maxflow
+ASCENT_EXTRA = matching
 
 ascent : [X] GTK COMMON ascent ASCENT_EXTRA ascent-icon|no-icon
 ascent : [G] WINDOWS COMMON ascent ASCENT_EXTRA ascent.res|noicon.res
