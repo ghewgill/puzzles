@@ -1,12 +1,13 @@
 # -*- makefile -*-
 
-SALAD_EXTRA = latin tree234 maxflow
+SALAD_EXTRA        = LATIN
+SALAD_EXTRA_SOLVER = LATIN_SOLVER
 
 salad  : [X] GTK COMMON salad SALAD_EXTRA salad-icon|no-icon
 salad  : [G] WINDOWS COMMON salad SALAD_EXTRA salad.res|noicon.res
 
-saladsolver : [U] salad[STANDALONE_SOLVER] latin[STANDALONE_SOLVER] tree234 maxflow STANDALONE
-saladsolver : [C] salad[STANDALONE_SOLVER] latin[STANDALONE_SOLVER] tree234 maxflow STANDALONE
+saladsolver : [U] salad[STANDALONE_SOLVER] SALAD_EXTRA_SOLVER STANDALONE
+saladsolver : [C] salad[STANDALONE_SOLVER] SALAD_EXTRA_SOLVER STANDALONE
 
 ALL += salad[COMBINED] SALAD_EXTRA
 
