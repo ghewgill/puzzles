@@ -19,7 +19,7 @@
 #include <math.h>
 
 #include "puzzles.h"
-#include "maxflow.h"
+#include "matching.h"
 
 #ifdef STANDALONE_SOLVER
 #include <stdarg.h>
@@ -1458,113 +1458,75 @@ static void ascent_grid_size(const game_params *params, int *w, int *h)
 	}
 }
 
-#define SOURCE (w*h)
-#define SINK (w*h+1)
 static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
                              const game_params *params, random_state *rs)
 {
 	/*
 	 * Randomly move grid numbers to the edges. This is done by creating a
-	 * flow network of the grid, connecting inner grid spaces to edge spaces.
+	 * bipartite graph connecting inner grid spaces to edge spaces, then
+	 * finding any maximal matching that produces a viable puzzle.
 	 */
 
 	int attempts = 0;
 	int w = scratch->w, h = scratch->h;
-	int i, j, x, y, x2, y2, nedges;
+	int i, j, x, y, x2, y2;
 	int aw = w-2, ah = h-2;
 
 	/*
-	* (w*h) Entry for inside cells + exit for border cells
 	* (aw*ah*4) Horizontal and vertical connections
 	* (min(aw,ah)*4) Diagonal connections
 	*/
-	int maxedges = (w*h)+(aw*ah*4)+(min(aw,ah)*4);
+	int *adjdata = snewn((aw*ah*4) + (min(aw,ah)*4), int);
+	int **adjlists = snewn(aw*ah, int*);
+	int *adjsizes = snewn(aw*ah, int);
+	int *match = snewn(aw*ah, int);
+	void *mscratch = smalloc(matching_scratch_size(aw*ah, w*h));
+	int p = 0, count;
 
-	int *edges = snewn(maxedges*2, int);
-	int *capacity = snewn(maxedges, int);
-	int *flow = snewn(maxedges, int);
-	int *spaces = snewn(w*h, int);
+	for(i = 0; i < aw*ah; i++)
+	{
+		adjlists[i] = &adjdata[p];
+		x = i%aw + 1;
+		y = i/aw + 1;
+		count = 0;
 
-	for(i = 0; i < maxedges; i++)
-		capacity[i] = 1;
-	for(i = 0; i < w*h; i++)
-		spaces[i] = i;
+		/*
+		* Connect grid space to all edge spaces pointing at this space.
+		* Loop through the grid again to find indices of interest.
+		*/
+		for(j = 0; j < w*h; j++)
+		{
+			x2 = j % w;
+			y2 = j / w;
+
+			if((x2 == 0 || x2 == w - 1 || y2 == 0 || y2 == h - 1)
+				&& is_edge_valid(j, y*w+x, w, h))
+			{
+				adjdata[p++] = j;
+				count++;;
+			}
+		}
+
+		adjsizes[i] = count;
+	}
 
 	while(attempts < MAX_ATTEMPTS)
 	{
-		/*
-		 * The maxflow implementation requires all pairs to be sorted.
-		 * To achieve random generation, we pass in only indices from
-		 * the spaces array, which contains the actual grid positions.
-		 */
-		shuffle(spaces, w*h, sizeof(int), rs);
-
-		nedges = 0;
-		for(i = 0; i < w*h; i++)
-		{
-			x = spaces[i]%w;
-			y = spaces[i]/w;
-
-			/* Connect edge space to the sink */
-			if(x == 0 || x == w-1 || y == 0 || y == h-1)
-			{
-				edges[nedges*2] = i;
-				edges[nedges*2+1] = SINK;
-				nedges++;
-			}
-			else
-			{
-				/*
-				 * Connect grid space to all edge spaces pointing at this space.
-				 * Loop through the spaces array again to find indices of interest.
-				 */
-				for(j = 0; j < w*h; j++)
-				{
-					x2 = spaces[j] % w;
-					y2 = spaces[j] / w;
-
-					if((x2 == 0 || x2 == w - 1 || y2 == 0 || y2 == h - 1)
-						&& is_edge_valid(spaces[j], spaces[i], w, h))
-					{
-						edges[nedges*2] = i;
-						edges[nedges*2+1] = j;
-						nedges++;
-					}
-				}
-			}
-		}
-
-		/*
-		 * The source index comes after all of the grid indices,
-		 * so all starting edges are added last.
-		 */
-		for(i = 0; i < w*h; i++)
-		{
-			x = spaces[i]%w;
-			y = spaces[i]/w;
-
-			if (!params->removeends && grid[spaces[i]] == 0)
-				continue;
-			if(x > 0 && x < w-1 && y > 0 && y < h-1)
-			{
-				edges[nedges*2] = SOURCE;
-				edges[nedges*2+1] = i;
-				nedges++;
-			}
-		}
-
-		int totalflow = maxflow(w*h+2, SOURCE, SINK, nedges, edges, capacity, flow, NULL);
-		assert(totalflow > 0);
+		int total = matching_with_scratch(mscratch, aw*ah, w*h, adjlists, adjsizes, rs, match, NULL);
+		assert(total > 0);
 
 		memcpy(scratch->grid, grid, w*h*sizeof(number));
 		
-		for(i = 0; i < nedges; i++)
+		for(i = 0; i < aw*ah; i++)
 		{
-			if(!flow[i] || edges[i*2] == SOURCE || edges[i*2+1] == SINK)
+			if(match[i] == -1)
 				continue;
 			
-			scratch->grid[spaces[edges[i*2+1]]] = NUMBER_EDGE(grid[spaces[edges[i*2]]]);
-			scratch->grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
+			x = i%aw + 1;
+			y = i/aw + 1;
+
+			scratch->grid[match[i]] = NUMBER_EDGE(grid[y*w+x]);
+			scratch->grid[y*w+x] = NUMBER_EMPTY;
 		}
 
 		ascent_solve(scratch->grid, params->diff, scratch);
@@ -1575,19 +1537,23 @@ static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
 	}
 
 	memcpy(grid, scratch->grid, w*h*sizeof(number));
-	
-	for (i = 0; i < nedges; i++)
-	{
-		if (!flow[i] || edges[i*2] == SOURCE || edges[i*2+1] == SINK)
-			continue;
 
-		grid[spaces[edges[i*2]]] = NUMBER_EMPTY;
+	for(i = 0; i < aw*ah; i++)
+	{
+		if(match[i] == -1)
+			continue;
+		
+		x = i%aw + 1;
+		y = i/aw + 1;
+
+		grid[y*w+x] = NUMBER_EMPTY;
 	}
 
-	sfree(edges);
-	sfree(capacity);
-	sfree(flow);
-	sfree(spaces);
+	sfree(adjlists);
+	sfree(adjdata);
+	sfree(adjsizes);
+	sfree(match);
+	sfree(mscratch);
 
 	return attempts < MAX_ATTEMPTS;
 }
@@ -2669,27 +2635,32 @@ static void game_compute_size(const game_params *params, int tilesize,
 	}
 }
 
+static void game_set_offsets(int h, int mode, int tilesize, int *offsetx, int *offsety)
+{
+	*offsetx = tilesize / 2;
+	*offsety = tilesize / 2;
+	if (mode == MODE_HEXAGON)
+		*offsetx -= (h / 2) * (tilesize / 2);
+	else if (mode == MODE_HONEYCOMB)
+	{
+		*offsetx -= ((h / 2) - 1) * tilesize;
+		if (h & 1)
+			*offsetx -= tilesize;
+	}
+	else if (mode == MODE_EDGES)
+	{
+		*offsetx -= tilesize / 4;
+		*offsety -= tilesize / 4;
+	}
+}
+
 static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
 	game_compute_size(params, tilesize, &ds->w, &ds->h);
 
-	ds->offsetx = tilesize / 2;
-	ds->offsety = tilesize / 2;
-	if (params->mode == MODE_HEXAGON)
-		ds->offsetx -= (params->h / 2) * (tilesize / 2);
-	else if (params->mode == MODE_HONEYCOMB)
-	{
-		ds->offsetx -= ((params->h / 2) - 1) * tilesize;
-		if (params->h & 1)
-			ds->offsetx -= tilesize;
-	}
-	else if (params->mode == MODE_EDGES)
-	{
-		ds->offsetx -= tilesize / 4;
-		ds->offsety -= tilesize / 4;
-	}
+	game_set_offsets(params->h, params->mode, tilesize, &ds->offsetx, &ds->offsety);
 
 	ds->blr = tilesize*0.4;
 	assert(!ds->bl);
@@ -2775,6 +2746,56 @@ static const float diagonal_arrow[8] = {
 	0.3,    -0.45,
 	0.45,   0.45,
 };
+
+static void ascent_draw_arrow(drawing *dr, cell i, int w, int h, int tx, int ty, 
+                              int fill, int border, int tilesize)
+{
+	int i2;
+
+	/* Horizontal arrow */
+	if ((i/w) > 0 && (i/w) < h - 1)
+	{
+		int coords[10];
+		int hdir = (i%w) ? -1 : +1;
+
+		for (i2 = 0; i2 < 10; i2 += 2)
+		{
+			coords[i2] = (horizontal_arrow[i2] * tilesize * hdir) + 1 + tx;
+			coords[i2+1] = (horizontal_arrow[i2+1] * tilesize) + 1 + ty;
+		}
+
+		draw_polygon(dr, coords, 5, fill, border);
+	}
+	/* Vertical arrow */
+	else if ((i%w) > 0 && (i%w) < w - 1)
+	{
+		int coords[10];
+		int vdir = i > w ? -1 : +1;
+
+		for (i2 = 0; i2 < 10; i2 += 2)
+		{
+			coords[i2 + 1] = (horizontal_arrow[i2] * tilesize * vdir) + 1 + ty;
+			coords[i2] = (horizontal_arrow[i2 + 1] * tilesize) + 1 + tx;
+		}
+
+		draw_polygon(dr, coords, 5, fill, border);
+	}
+	/* Diagonal arrow */
+	else
+	{
+		int coords[8];
+		int hdir = (i%w) ? -1 : +1;
+		int vdir = i > w ? -1 : +1;
+
+		for (i2 = 0; i2 < 8; i2 += 2)
+		{
+			coords[i2] = (diagonal_arrow[i2] * tilesize * hdir) + 1 + tx;
+			coords[i2 + 1] = (diagonal_arrow[i2 + 1] * tilesize * vdir) + 1 + ty;
+		}
+
+		draw_polygon(dr, coords, 4, fill, border);
+	}
+}
 
 #define FLASH_FRAME 0.03F
 #define FLASH_SIZE  4
@@ -3006,49 +3027,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			sprintf(buf, "%d", NUMBER_EDGE(n) + 1);
 
-			/* Horizontal arrow */
-			if ((i/w) > 0 && (i/w) < h - 1)
-			{
-				int coords[10];
-				int hdir = (i%w) ? -1 : +1;
-
-				for (i2 = 0; i2 < 10; i2+=2)
-				{
-					coords[i2] = (horizontal_arrow[i2] * tilesize * hdir) + 1 + tx1;
-					coords[i2+1] = (horizontal_arrow[i2+1] * tilesize) + 1 + ty1;
-				}
-
-				draw_polygon(dr, coords, 5, COL_ARROW, COL_BORDER);
-			}
-			/* Vertical arrow */
-			else if ((i%w) > 0 && (i%w) < w - 1)
-			{
-				int coords[10];
-				int vdir = i > w ? -1 : +1;
-
-				for (i2 = 0; i2 < 10; i2 += 2)
-				{
-					coords[i2 + 1] = (horizontal_arrow[i2] * tilesize * vdir) + 1 + ty1;
-					coords[i2] = (horizontal_arrow[i2 + 1] * tilesize) + 1 + tx1;
-				}
-
-				draw_polygon(dr, coords, 5, COL_ARROW, COL_BORDER);
-			}
-			/* Diagonal arrow */
-			else
-			{
-				int coords[8];
-				int hdir = (i%w) ? -1 : +1;
-				int vdir = i > w ? -1 : +1;
-
-				for (i2 = 0; i2 < 8; i2 += 2)
-				{
-					coords[i2] = (diagonal_arrow[i2] * tilesize * hdir) + 1 + tx1;
-					coords[i2 + 1] = (diagonal_arrow[i2 + 1] * tilesize * vdir) + 1 + ty1;
-				}
-
-				draw_polygon(dr, coords, 4, COL_ARROW, COL_BORDER);
-			}
+			ascent_draw_arrow(dr, i, w, h, tx1, ty1, COL_ARROW, COL_BORDER, tilesize);
 
 			i2 = positions[NUMBER_EDGE(n)];
 			error = i2 >= 0 && !is_edge_valid(i, i2, w, h);
@@ -3103,12 +3082,107 @@ static int game_timing_state(const game_state *state, game_ui *ui)
 	return TRUE;
 }
 
+/* Using 9mm squares */
+#define PRINT_SQUARE_SIZE 900
 static void game_print_size(const game_params *params, float *x, float *y)
 {
+	int pw, ph;
+
+	game_compute_size(params, PRINT_SQUARE_SIZE, &pw, &ph);
+	*x = pw / 100.0F;
+	*y = ph / 100.0F;
 }
 
 static void game_print(drawing *dr, const game_state *state, int tilesize)
 {
+	int w = state->w;
+	int h = state->h;
+	int tx, ty, tx2, ty2;
+	int offsetx, offsety;
+	cell i, i2;
+	number n;
+	char buf[8];
+	cell *positions = snewn(w*h, cell);
+
+	int ink = print_mono_colour(dr, 0);
+    int grey = print_grey_colour(dr, 0.8f);
+
+	game_set_offsets(h, state->mode, tilesize, &offsetx, &offsety);
+	update_positions(positions, state->grid, w*h);
+
+    print_line_width(dr, tilesize / 5);
+	for(n = 0; n < w*h; n++)
+	{
+		i = positions[n];
+		tx = (i%w) * tilesize + offsetx + (tilesize/2);
+		ty = (i/w) * tilesize + offsety + (tilesize/2);
+
+		if (IS_HEXAGONAL(state->mode))
+			tx += (i/w) * tilesize / 2;
+
+		/* Draw a circle on the beginning and the end of the path */
+		if((n == 0 || n == state->last) && i >= 0)
+			draw_circle(dr, tx, ty, tilesize/4, grey, grey);
+
+		if(n == w*h-1) break;
+
+		i2 = positions[n+1];
+		tx2 = (i2%w) * tilesize + offsetx + (tilesize/2);
+		ty2 = (i2/w) * tilesize + offsety + (tilesize/2);
+
+		if (IS_HEXAGONAL(state->mode))
+			tx2 += (i2/w) * tilesize / 2;
+
+		/* Draw path lines */
+		if(i >= 0 && i2 >= 0 && is_near(i, i2, w, state->mode))
+			draw_line(dr, tx, ty, tx2, ty2, grey);
+	}
+
+	print_line_width(dr, tilesize / 40);
+	for(i = 0; i < w*h; i++)
+	{
+		tx = (i%w) * tilesize + offsetx;
+		ty = (i/w) * tilesize + offsety;
+
+		if (IS_HEXAGONAL(state->mode))
+			tx += (i/w) * tilesize / 2;
+
+		n = state->grid[i];
+		if (n == NUMBER_BOUND)
+			continue;
+
+		/* Draw square border */
+		if (!IS_NUMBER_EDGE(n))
+		{
+			int sqc[8];
+			sqc[0] = tx;
+			sqc[1] = ty;
+			sqc[2] = tx + tilesize;
+			sqc[3] = ty;
+			sqc[4] = tx + tilesize;
+			sqc[5] = ty + tilesize;
+			sqc[6] = tx;
+			sqc[7] = ty + tilesize;
+			draw_polygon(dr, sqc, 4, n == NUMBER_WALL ? ink : -1, ink);
+		}
+		else
+		{
+			n = NUMBER_EDGE(n);
+			ascent_draw_arrow(dr, i, w, h, tx + tilesize/2, ty + tilesize/2, -1, ink, tilesize);
+		}
+
+		/* Draw the number */
+		if(n >= 0)
+		{
+			sprintf(buf, "%d", n+1);
+			
+			draw_text(dr, tx + tilesize/2, ty + tilesize/2,
+			          FONT_VARIABLE, tilesize/2, 
+			          ALIGN_HCENTRE|ALIGN_VCENTRE, ink, buf);
+		}
+	}
+
+	sfree(positions);
 }
 
 #ifdef COMBINED
@@ -3136,6 +3210,7 @@ const struct game thegame = {
 	free_ui,
 	encode_ui,
 	decode_ui,
+	NULL, /* game_request_keys */
 	game_changed_state,
 	interpret_move,
 	execute_move,
@@ -3147,7 +3222,7 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	FALSE, FALSE, game_print_size, game_print,
+	TRUE, FALSE, game_print_size, game_print,
 	FALSE, /* wants_statusbar */
 	FALSE, game_timing_state,
 	0, /* flags */
