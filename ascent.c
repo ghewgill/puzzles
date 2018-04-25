@@ -86,6 +86,8 @@ struct game_params {
 	int diff, mode;
 	/* Should the start and end point be removed? */
 	char removeends;
+	/* Should all given numbers be in a rotationally symmetric pattern? */
+	char symmetrical;
 };
 
 #define DIFFLIST(A)                             \
@@ -167,35 +169,35 @@ const static ascent_movement *ascent_movement_for_mode(int mode)
 }
 
 const static struct game_params ascent_presets[] = {
-	{ 7,  6, DIFF_EASY, MODE_RECT, FALSE },
-	{ 7,  6, DIFF_NORMAL, MODE_RECT, FALSE },
-	{ 7,  6, DIFF_TRICKY, MODE_RECT, FALSE },
-	{ 7,  6, DIFF_HARD, MODE_RECT, FALSE },
-	{ 10, 8, DIFF_EASY, MODE_RECT, FALSE },
-	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE },
-	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE },
-	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE },
-	{ 5, 5, DIFF_NORMAL, MODE_EDGES, TRUE },
-	{ 5, 5, DIFF_TRICKY, MODE_EDGES, TRUE },
-	{ 5, 5, DIFF_HARD, MODE_EDGES, TRUE },
+	{ 7,  6, DIFF_EASY, MODE_RECT, FALSE, FALSE },
+	{ 7,  6, DIFF_NORMAL, MODE_RECT, FALSE, FALSE },
+	{ 7,  6, DIFF_TRICKY, MODE_RECT, FALSE, FALSE },
+	{ 7,  6, DIFF_HARD, MODE_RECT, FALSE, FALSE },
+	{ 10, 8, DIFF_EASY, MODE_RECT, FALSE, FALSE },
+	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE, FALSE },
+	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE, FALSE },
+	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE, FALSE },
+	{ 5, 5, DIFF_NORMAL, MODE_EDGES, TRUE, FALSE },
+	{ 5, 5, DIFF_TRICKY, MODE_EDGES, TRUE, FALSE },
+	{ 5, 5, DIFF_HARD, MODE_EDGES, TRUE, FALSE },
 };
 
 const static struct game_params ascent_honeycomb_presets[] = {
-	{ 7,  6, DIFF_NORMAL, MODE_HONEYCOMB, FALSE },
-	{ 7,  6, DIFF_TRICKY, MODE_HONEYCOMB, FALSE },
-	{ 7,  6, DIFF_HARD, MODE_HONEYCOMB, FALSE },
-	{ 10, 8, DIFF_NORMAL, MODE_HONEYCOMB, FALSE },
-	{ 10, 8, DIFF_TRICKY, MODE_HONEYCOMB, FALSE },
-	{ 10, 8, DIFF_HARD, MODE_HONEYCOMB, FALSE },
+	{ 7,  6, DIFF_NORMAL, MODE_HONEYCOMB, FALSE, FALSE },
+	{ 7,  6, DIFF_TRICKY, MODE_HONEYCOMB, FALSE, FALSE },
+	{ 7,  6, DIFF_HARD, MODE_HONEYCOMB, FALSE, FALSE },
+	{ 10, 8, DIFF_NORMAL, MODE_HONEYCOMB, FALSE, FALSE },
+	{ 10, 8, DIFF_TRICKY, MODE_HONEYCOMB, FALSE, FALSE },
+	{ 10, 8, DIFF_HARD, MODE_HONEYCOMB, FALSE, FALSE },
 };
 
 const static struct game_params ascent_hexagonal_presets[] = {
-	{ 7, 7, DIFF_NORMAL, MODE_HEXAGON, FALSE },
-	{ 7, 7, DIFF_TRICKY, MODE_HEXAGON, FALSE },
-	{ 7, 7, DIFF_HARD, MODE_HEXAGON, FALSE },
-	{ 9, 9, DIFF_NORMAL, MODE_HEXAGON, FALSE },
-	{ 9, 9, DIFF_TRICKY, MODE_HEXAGON, FALSE },
-	{ 9, 9, DIFF_HARD, MODE_HEXAGON, FALSE },
+	{ 7, 7, DIFF_NORMAL, MODE_HEXAGON, FALSE, FALSE },
+	{ 7, 7, DIFF_TRICKY, MODE_HEXAGON, FALSE, FALSE },
+	{ 7, 7, DIFF_HARD, MODE_HEXAGON, FALSE, FALSE },
+	{ 9, 9, DIFF_NORMAL, MODE_HEXAGON, FALSE, FALSE },
+	{ 9, 9, DIFF_TRICKY, MODE_HEXAGON, FALSE, FALSE },
+	{ 9, 9, DIFF_HARD, MODE_HEXAGON, FALSE, FALSE },
 };
 
 #define DEFAULT_PRESET 0
@@ -313,6 +315,14 @@ static void decode_params(game_params *params, char const *string)
 	}
 	else if (params->mode == MODE_EDGES)
 		params->diff = max(params->diff, DIFF_NORMAL);
+
+	if (*string == 'S')
+	{
+		params->symmetrical = TRUE;
+		string++;
+	}
+	else
+		params->symmetrical = FALSE;
 }
 
 static char *encode_params(const game_params *params, int full)
@@ -323,7 +333,11 @@ static char *encode_params(const game_params *params, int full)
 	if(full && params->removeends)
 		*p++ = 'E';
 	if (full)
+	{
 		p += sprintf(p, "d%c", ascent_diffchars[params->diff]);
+		if (params->symmetrical && params->mode != MODE_EDGES)
+			p += sprintf(p, "S");
+	}
 
 	*p++ = '\0';
 	
@@ -335,7 +349,7 @@ static config_item *game_configure(const game_params *params)
 	config_item *ret;
 	char buf[80];
 	
-	ret = snewn(6, config_item);
+	ret = snewn(7, config_item);
 	
 	ret[0].name = "Width";
 	ret[0].type = C_STRING;
@@ -351,18 +365,22 @@ static config_item *game_configure(const game_params *params)
 	ret[2].type = C_BOOLEAN;
 	ret[2].u.boolean.bval = !params->removeends;
 	
-	ret[3].name = "Grid type";
-	ret[3].type = C_CHOICES;
-	ret[3].u.choices.choicenames = MODELIST(CONFIG);
-	ret[3].u.choices.selected = params->mode;
+	ret[3].name = "Symmetrical clues";
+	ret[3].type = C_BOOLEAN;
+	ret[3].u.boolean.bval = params->symmetrical;
 
-	ret[4].name = "Difficulty";
+	ret[4].name = "Grid type";
 	ret[4].type = C_CHOICES;
-	ret[4].u.choices.choicenames = DIFFLIST(CONFIG);
-	ret[4].u.choices.selected = params->diff;
+	ret[4].u.choices.choicenames = MODELIST(CONFIG);
+	ret[4].u.choices.selected = params->mode;
+
+	ret[5].name = "Difficulty";
+	ret[5].type = C_CHOICES;
+	ret[5].u.choices.choicenames = DIFFLIST(CONFIG);
+	ret[5].u.choices.selected = params->diff;
 	
-	ret[5].name = NULL;
-	ret[5].type = C_END;
+	ret[6].name = NULL;
+	ret[6].type = C_END;
 	
 	return ret;
 }
@@ -374,8 +392,9 @@ static game_params *custom_params(const config_item *cfg)
 	ret->w = atoi(cfg[0].u.string.sval);
 	ret->h = atoi(cfg[1].u.string.sval);
 	ret->removeends = !cfg[2].u.boolean.bval;
-	ret->mode = cfg[3].u.choices.selected;
-	ret->diff = cfg[4].u.choices.selected;
+	ret->symmetrical = cfg[3].u.boolean.bval;
+	ret->mode = cfg[4].u.choices.selected;
+	ret->diff = cfg[5].u.choices.selected;
 	
 	return ret;
 }
@@ -402,6 +421,8 @@ static const char *validate_params(const game_params *params, int full)
 		return "Grid for Edges mode must be bigger than 2x2";
 	if (full && params->mode == MODE_EDGES && params->diff < DIFF_NORMAL)
 		return "Difficulty level for Edges mode must be at least Normal";
+	if (full && params->symmetrical && params->mode == MODE_EDGES)
+		return "Symmetrical clues must be disabled for Edges mode";
 	
 	return NULL;
 }
@@ -1563,25 +1584,35 @@ static char ascent_remove_numbers(struct solver_scratch *scratch, number *grid,
 {
 	int w = scratch->w, h = scratch->h;
 	cell *spaces = snewn(w*h, cell);
-	cell i, j;
-	number temp;
+	cell i1, i2, j;
+	number temp1, temp2;
 
-	for (i = 0; i < w*h; i++)
-		spaces[i] = i;
+	for (j = 0; j < w*h; j++)
+		spaces[j] = j;
 
 	shuffle(spaces, w*h, sizeof(*spaces), rs);
 	for(j = 0; j < w*h; j++)
 	{
-		i = spaces[j];
-		temp = grid[i];
-		if (temp < 0) continue;
-		if (!params->removeends && (temp == 0 || temp == scratch->end)) continue;
-		grid[i] = NUMBER_EMPTY;
+		i1 = spaces[j];
+		i2 = (w*h) - (i1 + 1);
+		temp1 = grid[i1];
+		temp2 = grid[i2];
+		if (temp1 < 0) continue;
+		if (params->symmetrical && temp2 < 0) continue;
+		if (!params->removeends && (temp1 == 0 || temp1 == scratch->end)) continue;
+		if (!params->removeends && params->symmetrical && (temp2 == 0 || temp2 == scratch->end)) continue;
+		grid[i1] = NUMBER_EMPTY;
+		if (params->symmetrical)
+			grid[i2] = NUMBER_EMPTY;
 
 		ascent_solve(grid, params->diff, scratch);
 
 		if (!check_completion(scratch->grid, w, h, params->mode))
-			grid[i] = temp;
+		{
+			if (params->symmetrical)
+				grid[i2] = temp2;
+			grid[i1] = temp1;
+		}
 	}
 
 	sfree(spaces);
