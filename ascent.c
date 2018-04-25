@@ -1512,6 +1512,16 @@ static char ascent_add_edges(struct solver_scratch *scratch, number *grid,
 		count = 0;
 
 		/*
+		 * If "Always show start and end points" is enabled, prevent the
+		 * starting position from being moved to an edge.
+		 */
+		if(!params->removeends && grid[y*w+x] == 0)
+		{
+			adjsizes[i] = 0;
+			continue;
+		}
+
+		/*
 		* Connect grid space to all edge spaces pointing at this space.
 		* Loop through the grid again to find indices of interest.
 		*/
