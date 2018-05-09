@@ -566,7 +566,7 @@ static int latinholes_check(game_state *state)
 	
 	for(i = 0; i < od; i++)
 	{
-		if(rows[i] != 1 || cols[o] != 1)
+		if(rows[i] != 1 || cols[i] != 1)
 		{
 #ifdef STANDALONE_SOLVER
 			if(solver_show_working)
