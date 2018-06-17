@@ -325,6 +325,25 @@ static game_state *blank_state(int w, int h, int n, int diag)
 	return ret;
 }
 
+static key_label *game_request_keys(const game_params *params, int *nkeys)
+{
+	int i;
+	int n = params->n;
+
+	key_label *keys = snewn(n + 1, key_label);
+	*nkeys = n + 1;
+
+	for (i = 0; i < n; i++)
+	{
+		keys[i].button = 'A' + i;
+		keys[i].label = NULL;
+	}
+	keys[n].button = '\b';
+	keys[n].label = NULL;
+
+	return keys;
+}
+
 static game_state *new_game(midend *me, const game_params *params, const char *desc)
 {
 	int w = params->w;
@@ -2066,7 +2085,7 @@ const struct game thegame = {
 	free_ui,
 	encode_ui,
 	decode_ui,
-	NULL, /* game_request_keys */
+	game_request_keys,
 	game_changed_state,
 	interpret_move,
 	execute_move,

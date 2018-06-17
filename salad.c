@@ -1081,6 +1081,31 @@ static int salad_solve(game_state *state, int maxdiff)
 	
 	return 1;
 }
+
+static key_label *game_request_keys(const game_params *params, int *nkeys)
+{
+	int i;
+	int n = params->nums;
+	char base = params->mode == GAMEMODE_LETTERS ? 'A' : '1';
+
+	key_label *keys = snewn(n + 3, key_label);
+	*nkeys = n + 3;
+
+	for (i = 0; i < n; i++)
+	{
+		keys[i].button = base + i;
+		keys[i].label = NULL;
+	}
+	keys[n].button = 'X';
+	keys[n].label = NULL;
+	keys[n+1].button = 'O';
+	keys[n+1].label = NULL;
+	keys[n+2].button = '\b';
+	keys[n+2].label = NULL;
+
+	return keys;
+}
+
 static game_state *new_game(midend *me, const game_params *params, const char *desc)
 {
 	char *fail;
@@ -2443,7 +2468,7 @@ const struct game thegame = {
 	free_ui,
 	encode_ui,
 	decode_ui,
-	NULL, /* game_request_keys */
+	game_request_keys,
 	game_changed_state,
 	interpret_move,
 	execute_move,
@@ -2462,7 +2487,7 @@ const struct game thegame = {
 	FALSE,
 #endif
 	FALSE, game_timing_state,
-	0,				       /* flags */
+	REQUIRE_RBUTTON, /* flags */
 };
 
 /* ***************** *
