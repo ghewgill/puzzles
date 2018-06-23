@@ -593,7 +593,7 @@ static void update_path_hints(number *prevhints, number *nexthints, const game_s
 			hint = other - len;
 			prevhints[i] = hint >= 0 ? hint : NUMBER_WALL;
 			hint = other + len;
-			nexthints[i] = hint >= 0 ? hint : NUMBER_WALL;
+			nexthints[i] = hint <= state->last ? hint : NUMBER_WALL;
 		}
 	}
 }
@@ -2947,12 +2947,12 @@ static char ascent_apply_path(game_state *state)
 		cn = NUMBER_EMPTY;
 
 		n2 = n - 1;
-		i2 = n >= 0 ? positions[n2] : i;
+		i2 = n > 0 ? positions[n2] : i;
 		if(i2 != CELL_NONE && i2 != CELL_MULTIPLE)
 			cn = n + 1;
 		
 		n2 = n + 1;
-		i2 = n <= state->last ? positions[n2] : i;
+		i2 = n < state->last ? positions[n2] : i;
 		if(i2 != CELL_NONE && i2 != CELL_MULTIPLE)
 			cn = n - 1;
 		
