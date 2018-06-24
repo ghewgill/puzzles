@@ -2573,6 +2573,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			int dir1 = ascent_find_direction(ui->held, i, w, movement);
 			int dir2 = ascent_find_direction(i, ui->held, w, movement);
 
+			if(state->grid[i] >= 0 && state->grid[ui->held] >= 0)
+				return NULL;
 			if(ascent_count_segments(state, ui->held) == 2 && !(state->path && state->path[ui->held] & (1<<dir1)))
 				return NULL;
 			if(ascent_count_segments(state, i) == 2 && !(state->path && state->path[i] & (1<<dir2)))
