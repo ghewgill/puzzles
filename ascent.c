@@ -2626,7 +2626,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 	case MIDDLE_DRAG:
 	case RIGHT_DRAG:
 		/* Drag over numbers to clear them */
-		if(ui->typing_cell == CELL_NONE && n != NUMBER_EMPTY && !GET_BIT(state->immutable, i))
+		if(ui->typing_cell == CELL_NONE && !GET_BIT(state->immutable, i) &&
+			(n != NUMBER_EMPTY || (state->path && state->path[i])))
 		{
 			sprintf(buf, "C%d", i);
 			return dupstr(buf);
@@ -3036,6 +3037,22 @@ static game_state *execute_move(const game_state *state, const char *move)
 			}
 
 			ret->grid[i] = NUMBER_EMPTY;
+
+			if(ret->path && ret->path[i])
+			{
+				int dir;
+				const ascent_movement *movement = ascent_movement_for_mode(ret->mode);
+
+				for(dir = 0; dir < movement->dircount; dir++)
+				{
+					if(ret->path[i] & (1<<dir))
+					{
+						i2 = (movement->dirs[dir].dy * w) + movement->dirs[dir].dx + i;
+						ascent_modify_path(ret, 'D', i, i2);
+						ascent_modify_path(ret, 'D', i2, i);
+					}
+				}
+			}
 		}
 		else if (*p == 'S')
 		{
