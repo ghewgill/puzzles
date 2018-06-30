@@ -2056,11 +2056,14 @@ static char *game_text_format(const game_state *state)
  * User Interface *
  * ************** */
 
+#define TARGET_SHOW 0x1
+#define TARGET_CONNECTED 0x2
+
 struct game_ui
 {
 	cell held;
 	number select, next_target, prev_target;
-	char show_next_target, show_prev_target;
+	char next_target_mode, prev_target_mode;
 	int dir;
 	
 	cell *positions;
@@ -2078,7 +2081,6 @@ struct game_ui
 
 	/* User interface tweaks. Can be enabled from code. */
 	char move_with_numpad;
-	char fast_turn;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -2088,7 +2090,7 @@ static game_ui *new_ui(const game_state *state)
 	
 	ret->held = CELL_NONE;
 	ret->select = ret->next_target = ret->prev_target = NUMBER_EMPTY;
-	ret->show_next_target = ret->show_prev_target = FALSE;
+	ret->next_target_mode = ret->prev_target_mode = 0;
 	ret->dir = 0;
 	ret->positions = snewn(s, cell);
 	ret->prevhints = snewn(s, number);
@@ -2097,7 +2099,6 @@ static game_ui *new_ui(const game_state *state)
 	ret->cshow = CSHOW_NONE;
 
 	ret->move_with_numpad = FALSE;
-	ret->fast_turn = FALSE;
 
 	for (i = 0; i < s; i++)
 	{
@@ -2232,11 +2233,11 @@ static void ui_clear(game_ui *ui)
 	/* Deselect the current number */
 	ui->held = CELL_NONE;
 	ui->select = ui->next_target = ui->prev_target = NUMBER_EMPTY;
-	ui->show_next_target = ui->show_prev_target = FALSE;
+	ui->next_target_mode = ui->prev_target_mode = 0;
 	ui->dir = 0;
 }
 
-static void ui_seek(game_ui *ui, number last)
+static void ui_seek(game_ui *ui, const game_state *state)
 {
 	/* 
 	 * Find the two numbers which should be highlighted. 
@@ -2251,22 +2252,29 @@ static void ui_seek(game_ui *ui, number last)
 	 * will be the next placed number in one direction. The other highlight
 	 * will be invisible.
 	 */
-	if(ui->held == CELL_NONE || ui->select < 0 || ui->select > last)
+	number start = ui->held >= 0 ? state->grid[ui->held] : NUMBER_EMPTY;
+
+	ui->next_target_mode = ui->prev_target_mode = 0;
+
+	if(start < 0)
 	{
 		ui->select = NUMBER_EMPTY;
 		ui->next_target = NUMBER_EMPTY;
 		ui->prev_target = NUMBER_EMPTY;
-		ui->show_next_target = ui->show_prev_target = FALSE;
 	}
 	else
 	{
-		number n, start = ui->select - ui->dir;
-		char hasprev, hasnext;
+		number n = start;
+		char hasnext = n == state->last || ui->positions[n + 1] != CELL_NONE;
+		char hasprev = n == 0 || ui->positions[n - 1] != CELL_NONE;
+		ui->dir = n < 0 || (hasnext && hasprev) ? 0 : 
+			hasnext ? -1 : hasprev ? +1 : 0;
+		ui->select = start + ui->dir;
 
 		n = start;
 		do 
 			n++;
-		while(n + 1 <= last && ui->positions[n] == CELL_NONE);
+		while(n + 1 <= state->last && ui->positions[n] == CELL_NONE);
 		ui->next_target = n;
 
 		n = start;
@@ -2275,16 +2283,23 @@ static void ui_seek(game_ui *ui, number last)
 		while(n - 1 >= 0 && ui->positions[n] == CELL_NONE);
 		ui->prev_target = n;
 
-		hasprev = abs(ui->prev_target - start) == 1;
-		hasnext = abs(ui->next_target - start) == 1;
+		hasprev = start == 0 || abs(ui->prev_target - start) == 1;
+		hasnext = start == state->last || abs(ui->next_target - start) == 1;
 
-		ui->show_next_target = !hasnext || hasprev;
-		ui->show_prev_target = !hasprev || hasnext;
+		if (!hasnext || hasprev)
+			ui->next_target_mode |= TARGET_SHOW;
+		if (!hasprev || hasnext)
+			ui->prev_target_mode |= TARGET_SHOW;
+		if (hasnext && hasprev)
+		{
+			ui->next_target_mode |= TARGET_CONNECTED;
+			ui->prev_target_mode |= TARGET_CONNECTED;
+		}
 
 		/* Look for the edges of the current line */
 		if(hasnext)
 		{
-			while(ui->next_target + 1 <= last && ui->positions[ui->next_target + 1] != CELL_NONE)
+			while(ui->next_target + 1 <= state->last && ui->positions[ui->next_target + 1] != CELL_NONE)
 				ui->next_target++;
 		}
 		if(hasprev)
@@ -2327,7 +2342,7 @@ static void ui_backtrack(game_ui *ui, const game_state *state)
 
 		ui->select = n;
 		ui->dir = 0;
-		ui_seek(ui, state->last);
+		ui_seek(ui, state);
 		return;
 	}
 	
@@ -2339,7 +2354,7 @@ static void ui_backtrack(game_ui *ui, const game_state *state)
 	while(ui->dir && n > 0 && n < state->last && ui->held == CELL_NONE);
 	
 	ui->select = n + ui->dir;
-	ui_seek(ui, state->last);
+	ui_seek(ui, state);
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -2356,9 +2371,12 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 	{
 		ui_clear(ui);
 	}
-	else if(ui->held < 0 || ui->select != NUMBER_EMPTY)
+	else
 	{
-		ui_seek(ui, oldstate->last);
+		if (ui->held >= 0)
+			ui->select = newstate->grid[ui->held];
+
+		ui_seek(ui, newstate);
 	}
 }
 
@@ -2449,7 +2467,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 	int w = state->w, h = state->h;
 	cell i = gy*w+gx;
 	number n = state->grid[i];
-		
+	number start = ui->held >= 0 ? state->grid[ui->held] : NUMBER_EMPTY;
+
 	switch(button)
 	{
 	case LEFT_BUTTON:
@@ -2472,23 +2491,9 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 		}
 		if(n >= 0)
 		{
-			/* Click a placed number again to change direction */
-			if(i == ui->held && ui->dir != 0)
-			{
-				if(ui->fast_turn)
-					ui->dir *= -1;
-			}
-			else
-			{
-				char hasnext = n < state->last && ui->positions[n+1] == CELL_NONE;
-				char hasprev = n > 0 && ui->positions[n-1] == CELL_NONE;
-				/* Highlight a placed number */
-				ui->held = i;
-				ui->dir = hasnext && hasprev ? 0 : hasnext ? +1 : -1;
-			}
-			ui->select = n + ui->dir;
-			
-			ui_seek(ui, state->last);
+			/* Highlight a placed number */
+			ui->held = i;
+			ui_seek(ui, state);
 			return NULL;
 		}
 		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
@@ -2497,10 +2502,7 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			sprintf(buf, "P%d,%d", i, n);
 			
 			ui->held = i;
-			ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
-				: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
-			ui->select = n + ui->dir;
-			ui_seek(ui, state->last);
+			ui_seek(ui, state);
 
 			return dupstr(buf);
 		}
@@ -2523,13 +2525,12 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			return NULL;
 		}
 		/* Dragging over a number in sequence will move the highlight forward or backward */
-		if(n >= 0 && ui->held >= 0 && state->grid[ui->held] >= 0 && abs(state->grid[ui->held] - n) == 1)
+		if(n >= 0 && ui->held >= 0 && start >= 0 &&
+			((n > start && (ui->next_target_mode & TARGET_CONNECTED) && n <= ui->next_target) ||
+			(n < start && (ui->prev_target_mode & TARGET_CONNECTED) && n >= ui->prev_target)))
 		{
 			ui->held = i;
-			ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
-				: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
-			ui->select = n + ui->dir;
-			ui_seek(ui, state->last);
+			ui_seek(ui, state);
 			ui->cshow = CSHOW_NONE;
 			return NULL;
 		}
@@ -2545,8 +2546,7 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			sprintf(buf, "P%d,%d", i, ui->select);
 			
 			ui->held = i;
-			if(ui->select + ui->dir <= state->last && ui->select + ui->dir >= 0)
-				ui->select += ui->dir;
+			ui_seek(ui, state);
 			
 			ui->cshow = CSHOW_NONE;
 
@@ -2573,7 +2573,7 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			int dir1 = ascent_find_direction(ui->held, i, w, movement);
 			int dir2 = ascent_find_direction(i, ui->held, w, movement);
 
-			if(state->grid[i] >= 0 && state->grid[ui->held] >= 0)
+			if(state->grid[i] >= 0 && start >= 0)
 				return NULL;
 			if(ascent_count_segments(state, ui->held) == 2 && !(state->path && state->path[ui->held] & (1<<dir1)))
 				return NULL;
@@ -2593,14 +2593,6 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			/* Deselect edge number */
 			if(IS_NUMBER_EDGE(ui->select))
 				ui_clear(ui);
-			/* Click a placed number again to change direction */
-			else if(!ui->fast_turn)
-			{
-				ui->dir *= -1;
-				ui->select = n + ui->dir;
-				
-				ui_seek(ui, state->last);
-			}
 		}
 		/* Drop number from edge into grid */
 		else if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
@@ -2608,11 +2600,6 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			sprintf(buf, "P%d,%d", i, NUMBER_EDGE(ui->select));
 			ui_clear(ui);
 			return dupstr(buf);
-		}
-		/* End path drag */
-		else if(ui->held >= 0 && ui->select == NUMBER_EMPTY)
-		{
-			ui_clear(ui);
 		}
 	break;
 	case MIDDLE_BUTTON:
@@ -2840,7 +2827,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			ui->dir = n < state->last && ui->positions[n + 1] == CELL_NONE ? +1
 				: n > 0 && ui->positions[n - 1] == CELL_NONE ? -1 : +1;
 			ui->select = n + ui->dir;
-			ui_seek(ui, state->last);
+			ui_seek(ui, state);
 		}
 
 		if (state->grid[i] == n || n > state->last)
@@ -3425,8 +3412,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
 	ds->redraw = FALSE;
 	ds->oldheld = ui->held;
-	ds->old_next_target = ui->show_next_target ? ui->next_target : NUMBER_EMPTY;
-	ds->old_prev_target = ui->show_prev_target ? ui->prev_target : NUMBER_EMPTY;
+	ds->old_next_target = ui->next_target_mode & TARGET_SHOW ? ui->next_target : NUMBER_EMPTY;
+	ds->old_prev_target = ui->prev_target_mode & TARGET_SHOW ? ui->prev_target : NUMBER_EMPTY;
 	
 	/* Draw squares */
 	for(i = 0; i < w*h; i++)
