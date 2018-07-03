@@ -3039,6 +3039,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 						ascent_modify_path(ret, 'D', i2, i);
 					}
 				}
+				ret->path[i] = 0;
 			}
 		}
 		else if (*p == 'S')
