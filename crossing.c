@@ -419,6 +419,24 @@ static const char *validate_desc(const game_params *params, const char *desc)
 	}
 }
 
+static key_label *game_request_keys(const game_params *params, int *nkeys)
+{
+	int i;
+
+	key_label *keys = snewn(10, key_label);
+	*nkeys = 10;
+
+	for (i = 0; i < 9; i++)
+	{
+		keys[i].button = '1' + i;
+		keys[i].label = NULL;
+	}
+	keys[9].button = '\b';
+	keys[9].label = NULL;
+
+	return keys;
+}
+
 static game_state *new_game(midend *me, const game_params *params, const char *desc)
 {
 	game_state *state = NULL;
@@ -1832,7 +1850,7 @@ const struct game thegame = {
 	free_ui,
 	encode_ui,
 	decode_ui,
-	NULL, /* game_request_keys */
+	game_request_keys,
 	game_changed_state,
 	interpret_move,
 	execute_move,
@@ -1847,7 +1865,7 @@ const struct game thegame = {
 	FALSE, FALSE, game_print_size, game_print,
 	FALSE,                 /* wants_statusbar */
 	FALSE, game_timing_state,
-	0,                     /* flags */
+	REQUIRE_RBUTTON, /* flags */
 };
 
 /* ***************** *
