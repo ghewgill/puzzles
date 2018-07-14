@@ -2573,12 +2573,35 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			int dir1 = ascent_find_direction(ui->held, i, w, movement);
 			int dir2 = ascent_find_direction(i, ui->held, w, movement);
 
+			/* Don't draw a line between two adjacent confirmed numbers */
 			if(state->grid[i] >= 0 && start >= 0)
 				return NULL;
+
+			/* Don't connect to a cell with two confirmed path segments, except when erasing a line*/
 			if(ascent_count_segments(state, ui->held) == 2 && !(state->path && state->path[ui->held] & (1<<dir1)))
 				return NULL;
 			if(ascent_count_segments(state, i) == 2 && !(state->path && state->path[i] & (1<<dir2)))
 				return NULL;
+
+			if (state->path && !(state->path[i] & (1<<dir2)))
+			{
+				/* Don't connect a line to a confirmed number if the hints don't match */
+				if (start >= 0 && ui->nexthints[i] != NUMBER_EMPTY &&
+					ui->nexthints[i] - start != -1 &&
+					ui->prevhints[i] - start != +1)
+					return NULL;
+				
+				if (n >= 0 && ui->nexthints[ui->held] != NUMBER_EMPTY &&
+					ui->nexthints[ui->held] - n != -1 &&
+					ui->prevhints[ui->held] - n != +1)
+					return NULL;
+
+				/* Don't connect two line ends if both have hints, and they don't match */
+				if (ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[ui->held] != NUMBER_EMPTY &&
+					ui->nexthints[ui->held] - ui->prevhints[i] != -1 &&
+					ui->prevhints[ui->held] - ui->nexthints[i] != +1)
+					return NULL;
+			}
 
 			sprintf(buf, "L%d,%d", i, ui->held);
 			ui->held = i;
