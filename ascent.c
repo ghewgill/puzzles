@@ -2301,11 +2301,15 @@ static void ui_seek(game_ui *ui, const game_state *state)
 		{
 			while(ui->next_target + 1 <= state->last && ui->positions[ui->next_target + 1] != CELL_NONE)
 				ui->next_target++;
+			if (ui->next_target == state->last)
+				ui->next_target_mode &= ~TARGET_SHOW;
 		}
 		if(hasprev)
 		{
 			while(ui->prev_target - 1 >= 0 && ui->positions[ui->prev_target - 1] != CELL_NONE)
 				ui->prev_target--;
+			if (ui->prev_target == 0)
+				ui->prev_target_mode &= ~TARGET_SHOW;
 		}
 	}
 }
