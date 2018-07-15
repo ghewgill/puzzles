@@ -2252,7 +2252,14 @@ static void ui_seek(game_ui *ui, const game_state *state)
 	 * will be the next placed number in one direction. The other highlight
 	 * will be invisible.
 	 */
-	number start = ui->held >= 0 ? state->grid[ui->held] : NUMBER_EMPTY;
+	number start;
+
+	if (ui->held < 0)
+		start = NUMBER_EMPTY;
+	else if (ui->nexthints[ui->held] != NUMBER_EMPTY)
+		start = ascent_follow_path(state, ui->held, CELL_NONE, NULL);
+	else
+		start = state->grid[ui->held];
 
 	ui->next_target_mode = ui->prev_target_mode = 0;
 
