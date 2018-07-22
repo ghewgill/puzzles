@@ -44,6 +44,7 @@ enum {
 	COL_LOWLIGHT,
 	COL_HIGHLIGHT,
 	COL_BORDER,
+	COL_LINE,
 	COL_IMMUTABLE,
 	COL_ERROR,
 	COL_CURSOR,
@@ -2393,6 +2394,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 
 struct game_drawstate {
 	int tilesize, w, h;
+	double thickness;
 	int offsetx, offsety;
 
 	int *colours;
@@ -3172,6 +3174,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
+	ds->thickness = max(2.0L, tilesize / 7.0L);
 	game_compute_size(params, tilesize, &ds->w, &ds->h);
 
 	game_set_offsets(params->h, params->mode, tilesize, &ds->offsetx, &ds->offsety);
@@ -3191,6 +3194,10 @@ static float *game_colours(frontend *fe, int *ncolours)
 	ret[COL_BORDER * 3 + 1] = 0.0F;
 	ret[COL_BORDER * 3 + 2] = 0.0F;
 	
+	ret[COL_LINE * 3 + 0] = 0.0F;
+	ret[COL_LINE * 3 + 1] = 0.5F;
+	ret[COL_LINE * 3 + 2] = 0.0F;
+
 	ret[COL_IMMUTABLE * 3 + 0] = 0.0F;
 	ret[COL_IMMUTABLE * 3 + 1] = 0.0F;
 	ret[COL_IMMUTABLE * 3 + 2] = 1.0F;
@@ -3487,15 +3494,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		
 		if (ui->typing_cell != i)
 		{
+			int linecolour = state->path && state->path[i] & ~FLAG_COMPLETE ? COL_LINE : COL_HIGHLIGHT;
 			int pathline = ds->oldpath[i];
-
-			/* Draw a circle on the beginning and the end of the path */
-			if ((n == 0 || n == state->last) && 
-				(GET_BIT(state->immutable, i) || positions[n] != CELL_MULTIPLE))
-			{
-				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
-					tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
-			}
 
 			/* Add confirmed path lines */
 			if (n > 0 && positions[n] != CELL_MULTIPLE && positions[n - 1] >= 0)
@@ -3515,6 +3515,20 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 					error = TRUE;
 			}
 
+			/* Draw a circle on the beginning and the end of the path */
+			if ((n == 0 || n == state->last) &&
+				(GET_BIT(state->immutable, i) || positions[n] != CELL_MULTIPLE))
+			{
+				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+					tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
+			}
+			/* Draw a small circle with the same size as the line thickness, to round off corners */
+			else if (pathline & ~FLAG_COMPLETE)
+			{
+				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+					ds->thickness / 2, linecolour, linecolour);
+			}
+
 			/* Draw path lines */
 			for (dir = 0; dir < movement->dircount; dir++)
 			{
@@ -3527,7 +3541,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 					tx2 += (i2 / w) * tilesize / 2;
 				ty2 = (i2 / w)*tilesize + ds->offsety + (tilesize / 2);
 
-				draw_thick_line(dr, 5.0, tx1, ty1, tx2, ty2, COL_HIGHLIGHT);
+				draw_thick_line(dr, ds->thickness, tx1, ty1, tx2, ty2, linecolour);
 			}
 		}
 		
@@ -3546,8 +3560,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			draw_polygon(dr, sqc, 4, -1, COL_BORDER);
 		}
 
-		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
-			n = NUMBER_EDGE(ui->select);
 		if (n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
 				is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
 			n = ui->select;
@@ -3557,6 +3569,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		if (state->grid[i] == NUMBER_EMPTY && state->path && state->path[i] & FLAG_COMPLETE)
 			n = NUMBER_EMPTY;
 
+		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+			n = NUMBER_EDGE(ui->select);
+
 		if (ui->typing_cell == i)
 			n = ui->typing_number - 1;
 		
@@ -3565,6 +3580,17 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			draw_circle(dr, tx+(tilesize/2), ty+(tilesize/2),
 				tilesize/3, colour, COL_LOWLIGHT);
+		}
+		
+		/*
+		 * Manually placed lines have a similar color to numbers.
+		 * Draw a circle in the same color as the background over the lines,
+		 * to make the number more readable.
+		 */
+		if (n > 0 && n < state->last && state->path && state->path[i] & ~FLAG_COMPLETE)
+		{
+			draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+				tilesize / 3, colour, colour);
 		}
 		
 		/* Draw the number */
