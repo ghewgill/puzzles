@@ -2618,6 +2618,7 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 
 			sprintf(buf, "L%d,%d", i, ui->held);
 			ui->held = i;
+			ui->cshow = CSHOW_NONE;
 			return dupstr(buf);
 		}
 	break;
