@@ -2319,6 +2319,9 @@ static void ui_seek(game_ui *ui, const game_state *state)
 			if (ui->prev_target == 0)
 				ui->prev_target_mode &= ~TARGET_SHOW;
 		}
+
+		if (ui->next_target > state->last)
+			ui->next_target = NUMBER_EMPTY;
 	}
 }
 
