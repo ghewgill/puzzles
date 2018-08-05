@@ -69,6 +69,8 @@ typedef unsigned char bitmap;
 #define MAXIMUM_DIRS 8
 #define FLAG_ENDPOINT (1<<MAXIMUM_DIRS)
 #define FLAG_COMPLETE (1<<(MAXIMUM_DIRS+1))
+#define FLAG_ERROR    (1<<(MAXIMUM_DIRS+2))
+#define FLAG_USER     (1<<(MAXIMUM_DIRS+3))
 
 #define BITMAP_SIZE(i) ( ((i)+7) / 8 )
 #define GET_BIT(bmp, i) ( bmp[(i)/8] & 1<<((i)%8) )
@@ -2406,7 +2408,7 @@ struct game_drawstate {
 	number *oldgrid;
 	cell oldheld;
 	number old_next_target, old_prev_target;
-	int *oldpath;
+	int *oldpath, *path;
 	number *prevhints, *nexthints;
 
 	/* Blitter for the background of the keyboard cursor */
@@ -3236,6 +3238,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	ds->oldgrid = snewn(s, number);
 	ds->oldpositions = snewn(s, cell);
 	ds->oldpath = snewn(s, int);
+	ds->path = snewn(s, int);
 	ds->nexthints = snewn(s, number);
 	ds->prevhints = snewn(s, number);
 
@@ -3243,6 +3246,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	memset(ds->oldgrid, ~0, s*sizeof(number));
 	memset(ds->oldpositions, ~0, s*sizeof(cell));
 	memset(ds->oldpath, ~0, s*sizeof(cell));
+	memset(ds->path, ~0, s*sizeof(cell));
 	memset(ds->nexthints, ~0, s*sizeof(number));
 	memset(ds->prevhints, ~0, s*sizeof(number));
 
@@ -3260,6 +3264,7 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 	sfree(ds->oldgrid);
 	sfree(ds->oldpositions);
 	sfree(ds->oldpath);
+	sfree(ds->path);
 	sfree(ds->nexthints);
 	sfree(ds->prevhints);
 	if (ds->bl)
@@ -3346,7 +3351,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int tx, ty, tx1, ty1, tx2, ty2;
 	cell i, i2;
 	number n;
-	char error;
 	char buf[8];
 	const cell *positions = ui->positions;
 	int flash = -2, colour;
@@ -3370,91 +3374,101 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	{
 		draw_rect(dr, 0, 0, ds->w, ds->h, COL_MIDLIGHT);
 		draw_update(dr, 0, 0, ds->w, ds->h);
-
-		memcpy(ds->oldgrid, state->grid, w*h * sizeof(number));
-		if (state->path)
-			memcpy(ds->oldpath, state->path, w*h * sizeof(int));
-		else
-			memset(ds->oldpath, 0, w*h * sizeof(int));
 	}
-	else
+	
+	/* Add confirmed path lines */
+	for (i = 0; i < w*h; i++)
 	{
-		char dirty;
-		
-		/* Invalidate squares */
-		for(i = 0; i < w*h; i++)
+		int pathline = (state->path ? state->path[i] : 0);
+		n = state->grid[i];
+
+		if (n > 0 && positions[n] != CELL_MULTIPLE && positions[n - 1] >= 0)
 		{
-			dirty = FALSE;
-			n = state->grid[i];
-			if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
-				n = NUMBER_EDGE(ui->select);
-			if(n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
-					is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
-				n = ui->select;
-			if(i == ui->typing_cell)
-				n = ui->typing_number - 1;
-			
-			if(ds->oldgrid[i] != n)
-			{
-				dirty = TRUE;
-				ds->oldgrid[i] = n;
-			}
-
-			if (ds->oldpath[i] != (state->path ? state->path[i] : 0))
-			{
-				dirty = TRUE;
-				ds->oldpath[i] = (state->path ? state->path[i] : 0);
-			}
-			
-			if(ui->held != ds->oldheld 
-				|| ui->next_target != ds->old_next_target
-				|| ui->prev_target != ds->old_prev_target)
-			{
-				if(is_near(i, ui->held, w, state->mode))
-					dirty = TRUE;
-				else if(is_near(i, ds->oldheld, w, state->mode))
-					dirty = TRUE;
-			}
-
-			if (IS_NUMBER_EDGE(n) &&
-				positions[NUMBER_EDGE(n)] != ds->oldpositions[NUMBER_EDGE(n)])
-				dirty = TRUE;
-
-			if (ds->prevhints[i] != ui->prevhints[i] ||
-				ds->nexthints[i] != ui->nexthints[i])
-			{
-				ds->prevhints[i] = ui->prevhints[i];
-				ds->nexthints[i] = ui->nexthints[i];
-				dirty = TRUE;
-			}
-			
-			if(dirty)
-				ds->colours[i] = -1;
+			i2 = positions[n - 1];
+			if (is_near(i, i2, w, state->mode))
+				pathline |= (1 << ascent_find_direction(i, i2, w, movement));
+			else
+				pathline |= FLAG_ERROR;
 		}
-		
-		/* Invalidate numbers */
-		for(n = 0; n <= state->last; n++)
+		if (n >= 0 && n < state->last && positions[n] != CELL_MULTIPLE && positions[n + 1] >= 0)
 		{
-			dirty = FALSE;
-			
-			if(n > 0 && ds->oldpositions[n-1] != positions[n-1])
-				dirty = TRUE;
-			if(n < state->last && ds->oldpositions[n+1] != positions[n+1])
-				dirty = TRUE;
-			if(ds->oldpositions[n] != positions[n])
-				dirty = TRUE;
-			
-			if(dirty)
-			{
-				if(ds->oldpositions[n] >= 0)
-					ds->colours[ds->oldpositions[n]] = -1;
-				if(positions[n] >= 0)
-					ds->colours[positions[n]] = -1;
-			}
+			i2 = positions[n + 1];
+			if (is_near(i, i2, w, state->mode))
+				pathline |= (1 << ascent_find_direction(i, i2, w, movement));
+			else
+				pathline |= FLAG_ERROR;
 		}
+
+		if (state->path && state->path[i] & ~FLAG_COMPLETE)
+			pathline |= FLAG_USER;
+
+		ds->path[i] = pathline;
 	}
 
-	memcpy(ds->oldpositions, ui->positions, w*h * sizeof(cell));
+	/* Invalidate squares */
+	for(i = 0; i < w*h; i++)
+	{
+		char dirty = FALSE;
+
+		n = state->grid[i];
+
+		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
+			n = NUMBER_EDGE(ui->select);
+		if(n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
+				is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
+			n = ui->select;
+		if(i == ui->typing_cell)
+			n = ui->typing_number - 1;
+			
+		if(ds->oldgrid[i] != n)
+		{
+			dirty = TRUE;
+			ds->oldgrid[i] = n;
+		}
+
+		if (ds->oldpath[i] != ds->path[i])
+		{
+			dirty = TRUE;
+
+			/* Invalidate neighbours of adjacent cells */
+			for (i2 = max(0, i - (w+1)); i2 < w*h && i2 < i + w+1; i2++)
+			{
+				if (is_near(i, i2, w, state->mode))
+					ds->colours[i2] = -1;
+			}
+
+			ds->oldpath[i] = ds->path[i];
+		}
+			
+		if (IS_NUMBER_EDGE(n) &&
+			positions[NUMBER_EDGE(n)] != ds->oldpositions[NUMBER_EDGE(n)])
+			dirty = TRUE;
+
+		if (ds->prevhints[i] != ui->prevhints[i] ||
+			ds->nexthints[i] != ui->nexthints[i])
+		{
+			ds->prevhints[i] = ui->prevhints[i];
+			ds->nexthints[i] = ui->nexthints[i];
+			dirty = TRUE;
+		}
+			
+		if(dirty)
+			ds->colours[i] = -1;
+	}
+		
+	/* Invalidate numbers */
+	for(n = 0; n <= state->last; n++)
+	{
+		if (ds->oldpositions[n] != positions[n])
+		{
+			if(ds->oldpositions[n] >= 0)
+				ds->colours[ds->oldpositions[n]] = -1;
+			if(positions[n] >= 0)
+				ds->colours[positions[n]] = -1;
+		
+			ds->oldpositions[n] = positions[n];
+		}
+	}
 
 	ds->redraw = FALSE;
 	ds->oldheld = ui->held;
@@ -3473,7 +3487,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		}
 		tx1 = tx + (tilesize/2), ty1 = ty + (tilesize/2);
 		n = state->grid[i];
-		error = FALSE;
 		
 		if (n == NUMBER_BOUND)
 			continue;
@@ -3498,25 +3511,33 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		
 		if (ui->typing_cell != i)
 		{
-			int linecolour = state->path && state->path[i] & ~FLAG_COMPLETE ? COL_LINE : COL_HIGHLIGHT;
-			int pathline = ds->oldpath[i];
+			int linecolour = ds->path[i] & FLAG_USER ? COL_LINE : COL_HIGHLIGHT;
 
-			/* Add confirmed path lines */
-			if (n > 0 && positions[n] != CELL_MULTIPLE && positions[n - 1] >= 0)
+			if (!IS_HEXAGONAL(state->mode))
 			{
-				i2 = positions[n - 1];
-				if (is_near(i, i2, w, state->mode))
-					pathline |= (1 << ascent_find_direction(i, i2, w, movement));
-				else
-					error = TRUE;
-			}
-			if (n >= 0 && n < state->last && positions[n] != CELL_MULTIPLE && positions[n + 1] >= 0)
-			{
-				i2 = positions[n + 1];
-				if (is_near(i, i2, w, state->mode))
-					pathline |= (1 << ascent_find_direction(i, i2, w, movement));
-				else
-					error = TRUE;
+				int dy;
+				/* Draw diagonal lines connecting neighbours */
+				for (dy = -1; dy <= 1; dy += 2)
+				{
+					i2 = i + (w*dy);
+					if (i2 < 0 || i2 >= w*h)
+						continue;
+
+					tx2 = (i2%w)*tilesize + ds->offsetx + (tilesize / 2);
+					ty2 = (i2 / w)*tilesize + ds->offsety + (tilesize / 2);
+
+					for (dir = 0; dir < movement->dircount; dir++)
+					{
+						if (!movement->dirs[dir].dy || !movement->dirs[dir].dx)
+							continue;
+
+						if (ds->path[i2] & (1 << dir))
+							draw_thick_line(dr, ds->thickness,
+								tx2 + (movement->dirs[dir].dx*tilesize),
+								ty2 + (movement->dirs[dir].dy*tilesize),
+								tx2, ty2, ds->path[i2] & FLAG_USER ? COL_LINE : COL_HIGHLIGHT);
+					}
+				}
 			}
 
 			/* Draw a circle on the beginning and the end of the path */
@@ -3527,7 +3548,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 					tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
 			}
 			/* Draw a small circle with the same size as the line thickness, to round off corners */
-			else if (pathline & ~FLAG_COMPLETE)
+			else if (ds->path[i] & ~FLAG_COMPLETE)
 			{
 				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
 					ds->thickness / 2, linecolour, linecolour);
@@ -3536,7 +3557,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			/* Draw path lines */
 			for (dir = 0; dir < movement->dircount; dir++)
 			{
-				if (!(pathline & (1 << dir)))
+				if (!(ds->path[i] & (1 << dir)))
 					continue;
 
 				i2 = i + (w * movement->dirs[dir].dy) + movement->dirs[dir].dx;
@@ -3609,7 +3630,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 					n <= state->last && positions[n] == CELL_MULTIPLE && ui->typing_cell != i ? COL_ERROR :
 					COL_BORDER, buf);
 			
-			if(error)
+			if(ds->path[i] & FLAG_ERROR)
 			{
 				draw_thick_line(dr, 2, tx+margin, ty+margin,
 					(tx+tilesize)-margin, (ty+tilesize)-margin, COL_ERROR);
@@ -3617,12 +3638,11 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		}
 		else if (IS_NUMBER_EDGE(n))
 		{
+			i2 = positions[NUMBER_EDGE(n)];
+			char error = i2 >= 0 && !is_edge_valid(i, i2, w, h);
 			sprintf(buf, "%d", NUMBER_EDGE(n) + 1);
 
 			ascent_draw_arrow(dr, i, w, h, tx1, ty1, COL_ARROW, COL_BORDER, tilesize);
-
-			i2 = positions[NUMBER_EDGE(n)];
-			error = i2 >= 0 && !is_edge_valid(i, i2, w, h);
 
 			draw_text(dr, tx1, ty1,
 				FONT_VARIABLE, tilesize / 2, ALIGN_HCENTRE | ALIGN_VCENTRE,
