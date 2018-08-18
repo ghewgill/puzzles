@@ -2521,7 +2521,7 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
                                 int gx, int gy, int button, char keyboard)
 {
 	/*
-	 * There are three ways to enter a number:
+	 * There are four ways to enter a number:
 	 *
 	 * 1. Click a number to highlight it, then click (or drag to) an adjacent
 	 * cell to place the next number in the sequence. The arrow keys and Enter
@@ -2532,6 +2532,15 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 	 *
 	 * 3. In Edges mode, click and drag from an edge number, then release in an
 	 * empty grid cell in the same row, column or diagonal.
+	 * 
+	 * 4. Connect two numbers with a path, and all cells inbetween the 
+	 * two numbers will be filled.
+	 * 
+	 * Paths can be added in two ways:
+	 * 
+	 * 1. Drag with the left mouse button between two adjacent cells.
+	 * 2. Highlight a cell, then move the keyboard cursor to an adjacent cell
+	 * and press Enter.
 	 */
 	
 	char buf[80];
@@ -2668,6 +2677,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 		{
 			/* Deselect number */
 			ui_clear(ui);
+			if(ui->cshow == CSHOW_MOUSE)
+				ui->cshow = CSHOW_NONE;
 		}
 		/* Drop number from edge into grid */
 		else if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
@@ -3391,10 +3402,6 @@ static number ascent_display_number(cell i, const game_drawstate *ds, const game
 		n = ui->select >= 0 && ui->positions[ui->select] == CELL_NONE ? ui->select :
 		ui->cshow == CSHOW_KEYBOARD ? NUMBER_MOVE : NUMBER_EMPTY;
 
-	/* Cells which cause a backtrack should display a Clear symbol instead of a Move symbol */
-	if (n == NUMBER_MOVE && state->path && state->path[i] & (1 << ascent_find_direction(i, ui->held, w, movement)))
-		n = NUMBER_CLEAR;
-
 	/* Only show moves or highlights for valid path moves */
 	if(state->grid[i] == NUMBER_EMPTY && !ascent_validate_path_move(i, state, ui))
 		n = NUMBER_EMPTY;
@@ -3402,6 +3409,10 @@ static number ascent_display_number(cell i, const game_drawstate *ds, const game
 	/* When this cell has hints, only show candidate number if it matches one of these hints */
 	if (n != NUMBER_MOVE && ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[i] != n && ui->prevhints[i] != n)
 		n = NUMBER_EMPTY;
+
+	/* Cells which cause a backtrack should display a Clear symbol instead of a Move symbol */
+	if (n == NUMBER_MOVE && state->path && state->path[i] & (1 << ascent_find_direction(i, ui->held, w, movement)))
+		n = NUMBER_CLEAR;
 
 	/* Possible drop target for the selected edge number */
 	if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, state->h))
