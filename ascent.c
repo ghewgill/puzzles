@@ -63,6 +63,10 @@ typedef unsigned char bitmap;
 #define NUMBER_EDGE(n) (-10 - (n))
 #define IS_NUMBER_EDGE(i) (i <= -10)
 
+/* Draw-only numbers */
+#define NUMBER_MOVE   ((number) -4 )
+#define NUMBER_CLEAR  ((number) -5 )
+
 #define CELL_NONE     ((cell)   -1 )
 #define CELL_MULTIPLE ((cell)   -2 )
 
@@ -2462,10 +2466,59 @@ static int ascent_count_segments(const game_state *ret, cell i)
 	return segments;
 }
 
+static char ascent_validate_path_move(cell i, const game_state *state, const game_ui *ui)
+{
+	if (ui->held < 0 || ui->held == i)
+		return FALSE;
+
+	int w = state->w;
+	number start = ui->held >= 0 ? state->grid[ui->held] : NUMBER_EMPTY;
+	number n = state->grid[i];
+
+	if (!is_near(ui->held, i, w, state->mode))
+		return FALSE;
+
+	const ascent_movement *movement = ascent_movement_for_mode(state->mode);
+	int dir1 = ascent_find_direction(ui->held, i, w, movement);
+	int dir2 = ascent_find_direction(i, ui->held, w, movement);
+
+	/* Don't draw a line between two adjacent confirmed numbers */
+	if (state->grid[i] >= 0 && start >= 0)
+		return FALSE;
+
+	/* Don't connect to a cell with two confirmed path segments, except when erasing a line*/
+	if (ascent_count_segments(state, ui->held) == 2 && !(state->path && state->path[ui->held] & (1 << dir1)))
+		return FALSE;
+	if (ascent_count_segments(state, i) == 2 && !(state->path && state->path[i] & (1 << dir2)))
+		return FALSE;
+
+	if (state->path && !(state->path[i] & (1 << dir2)))
+	{
+		/* Don't connect a line to a confirmed number if the hints don't match */
+		if (start >= 0 && ui->nexthints[i] != NUMBER_EMPTY &&
+			ui->nexthints[i] - start != -1 &&
+			ui->prevhints[i] - start != +1)
+			return FALSE;
+
+		if (n >= 0 && ui->nexthints[ui->held] != NUMBER_EMPTY &&
+			ui->nexthints[ui->held] - n != -1 &&
+			ui->prevhints[ui->held] - n != +1)
+			return FALSE;
+
+		/* Don't connect two line ends if both have hints, and they don't match */
+		if (ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[ui->held] != NUMBER_EMPTY &&
+			ui->nexthints[ui->held] - ui->prevhints[i] != -1 &&
+			ui->prevhints[ui->held] - ui->nexthints[i] != +1)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
 #define DRAG_RADIUS 0.6F
 
 static char *ascent_mouse_click(const game_state *state, game_ui *ui,
-                                int gx, int gy, int button)
+                                int gx, int gy, int button, char keyboard)
 {
 	/*
 	 * There are three ways to enter a number:
@@ -2509,6 +2562,14 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 		}
 		if(n >= 0)
 		{
+			/* When using the keyboard, draw a line to this number */
+			if (keyboard && ascent_validate_path_move(i, state, ui))
+			{
+				sprintf(buf, "L%d,%d", i, ui->held);
+				ui->held = i;
+				return dupstr(buf);
+			}
+
 			/* Highlight a placed number */
 			ui->held = i;
 			ui_seek(ui, state);
@@ -2570,13 +2631,20 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 
 			return dupstr(buf);
 		}
+		/* Keyboard-drag a pathline */
+		else if (keyboard && !ui->dir && ascent_validate_path_move(i, state, ui))
+		{
+			sprintf(buf, "L%d,%d", i, ui->held);
+			ui->held = i;
+			return dupstr(buf);
+		}
 		/* Highlight an empty cell */
 		else if(n == NUMBER_EMPTY && button == LEFT_BUTTON)
 		{
 			ui_clear(ui);
 			ui->cx = i % w;
 			ui->cy = i / w;
-			ui->cshow = CSHOW_MOUSE;
+			ui->cshow = keyboard ? CSHOW_KEYBOARD : CSHOW_MOUSE;
 
 			ui->held = i;
 			ui->select = NUMBER_EMPTY;
@@ -2585,42 +2653,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			return NULL;
 		}
 		/* Drag a pathline */
-		else if(ui->held >= 0 && ui->held != i && !ui->dir && is_near(ui->held, i, w, state->mode))
+		else if(!ui->dir && ascent_validate_path_move(i, state, ui))
 		{
-			const ascent_movement *movement = ascent_movement_for_mode(state->mode);
-			int dir1 = ascent_find_direction(ui->held, i, w, movement);
-			int dir2 = ascent_find_direction(i, ui->held, w, movement);
-
-			/* Don't draw a line between two adjacent confirmed numbers */
-			if(state->grid[i] >= 0 && start >= 0)
-				return NULL;
-
-			/* Don't connect to a cell with two confirmed path segments, except when erasing a line*/
-			if(ascent_count_segments(state, ui->held) == 2 && !(state->path && state->path[ui->held] & (1<<dir1)))
-				return NULL;
-			if(ascent_count_segments(state, i) == 2 && !(state->path && state->path[i] & (1<<dir2)))
-				return NULL;
-
-			if (state->path && !(state->path[i] & (1<<dir2)))
-			{
-				/* Don't connect a line to a confirmed number if the hints don't match */
-				if (start >= 0 && ui->nexthints[i] != NUMBER_EMPTY &&
-					ui->nexthints[i] - start != -1 &&
-					ui->prevhints[i] - start != +1)
-					return NULL;
-				
-				if (n >= 0 && ui->nexthints[ui->held] != NUMBER_EMPTY &&
-					ui->nexthints[ui->held] - n != -1 &&
-					ui->prevhints[ui->held] - n != +1)
-					return NULL;
-
-				/* Don't connect two line ends if both have hints, and they don't match */
-				if (ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[ui->held] != NUMBER_EMPTY &&
-					ui->nexthints[ui->held] - ui->prevhints[i] != -1 &&
-					ui->prevhints[ui->held] - ui->nexthints[i] != +1)
-					return NULL;
-			}
-
 			sprintf(buf, "L%d,%d", i, ui->held);
 			ui->held = i;
 			ui->cshow = CSHOW_NONE;
@@ -2632,9 +2666,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 
 		if(ui->doubleclick_cell == i)
 		{
-			/* Deselect edge number */
-			if(IS_NUMBER_EDGE(ui->select))
-				ui_clear(ui);
+			/* Deselect number */
+			ui_clear(ui);
 		}
 		/* Drop number from edge into grid */
 		else if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
@@ -2799,10 +2832,10 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
 	{
 		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
-		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON);
+		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON, TRUE);
 		if(!ret)
 		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
-		      button == CURSOR_SELECT ? LEFT_RELEASE : RIGHT_RELEASE);
+		      button == CURSOR_SELECT ? LEFT_RELEASE : RIGHT_RELEASE, TRUE);
 	}
 	/* Press Enter to confirm typing */
 	if (IS_CURSOR_SELECT(button))
@@ -2849,7 +2882,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(abs(ox-hx) + abs(oy-hy) > DRAG_RADIUS*tilesize)
 				return NULL;
 		}
-		ret = ascent_mouse_click(state, ui, gx, gy, button);
+		ret = ascent_mouse_click(state, ui, gx, gy, button, FALSE);
 		finish_typing = TRUE;
 	}
 	
@@ -3337,6 +3370,50 @@ static void ascent_draw_arrow(drawing *dr, cell i, int w, int h, int tx, int ty,
 	}
 }
 
+static number ascent_display_number(cell i, const game_drawstate *ds, const game_ui *ui, const game_state *state, const ascent_movement *movement)
+{
+	number n = state->grid[i];
+	int w = state->w;
+
+	if (n == NUMBER_BOUND || n == NUMBER_WALL)
+		return n;
+
+	/* Typing a number overrides all other symbols */
+	if (ui->typing_cell == i)
+		return ui->typing_number - 1;
+
+	/*
+	 * If a cell is adjacent to to the highlighted cell, a line can be drawn.
+	 * Show a number if the seleced number is known, otherwise show a Move symbol.
+	 */
+	if (n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 &&
+		is_near(i, ui->held, w, state->mode))
+		n = ui->select >= 0 && ui->positions[ui->select] == CELL_NONE ? ui->select :
+		ui->cshow == CSHOW_KEYBOARD ? NUMBER_MOVE : NUMBER_EMPTY;
+
+	/* Cells which cause a backtrack should display a Clear symbol instead of a Move symbol */
+	if (n == NUMBER_MOVE && state->path && state->path[i] & (1 << ascent_find_direction(i, ui->held, w, movement)))
+		n = NUMBER_CLEAR;
+
+	/* Only show moves or highlights for valid path moves */
+	if(state->grid[i] == NUMBER_EMPTY && !ascent_validate_path_move(i, state, ui))
+		n = NUMBER_EMPTY;
+
+	/* When this cell has hints, only show candidate number if it matches one of these hints */
+	if (n != NUMBER_MOVE && ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[i] != n && ui->prevhints[i] != n)
+		n = NUMBER_EMPTY;
+
+	/* Possible drop target for the selected edge number */
+	if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, state->h))
+		n = NUMBER_EDGE(ui->select);
+
+	/* Only show a Clear symbol when the keyboard cursor is over it */
+	if (n == NUMBER_CLEAR && ui->cy*w + ui->cx != i)
+		n = NUMBER_EMPTY;
+
+	return n;
+}
+
 #define FLASH_FRAME 0.03F
 #define FLASH_SIZE  4
 #define ERROR_MARGIN 0.1F
@@ -3380,6 +3457,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	for (i = 0; i < w*h; i++)
 	{
 		int pathline = (state->path ? state->path[i] : 0);
+		int lines = 0;
 		n = state->grid[i];
 
 		if (n > 0 && positions[n] != CELL_MULTIPLE && positions[n - 1] >= 0)
@@ -3389,6 +3467,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				pathline |= (1 << ascent_find_direction(i, i2, w, movement));
 			else
 				pathline |= FLAG_ERROR;
+			lines++;
 		}
 		if (n >= 0 && n < state->last && positions[n] != CELL_MULTIPLE && positions[n + 1] >= 0)
 		{
@@ -3397,7 +3476,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				pathline |= (1 << ascent_find_direction(i, i2, w, movement));
 			else
 				pathline |= FLAG_ERROR;
+			lines++;
 		}
+
+		if (n == 0 || n == state->last)
+			lines++;
+
+		if (lines == 2)
+			pathline |= FLAG_COMPLETE;
 
 		if (state->path && state->path[i] & ~FLAG_COMPLETE)
 			pathline |= FLAG_USER;
@@ -3410,16 +3496,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	{
 		char dirty = FALSE;
 
-		n = state->grid[i];
+		n = ascent_display_number(i, ds, ui, state, movement);
 
-		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
-			n = NUMBER_EDGE(ui->select);
-		if(n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
-				is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
-			n = ui->select;
-		if(i == ui->typing_cell)
-			n = ui->typing_number - 1;
-			
 		if(ds->oldgrid[i] != n)
 		{
 			dirty = TRUE;
@@ -3585,21 +3663,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			draw_polygon(dr, sqc, 4, -1, COL_BORDER);
 		}
 
-		if (n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && 
-				is_near(i, ui->held, w, state->mode) && positions[ui->select] == CELL_NONE)
-			n = ui->select;
+		n = ascent_display_number(i, ds, ui, state, movement);
 
-		if (ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[i] != n && ui->prevhints[i] != n)
-			n = NUMBER_EMPTY;
-		if (state->grid[i] == NUMBER_EMPTY && state->path && state->path[i] & FLAG_COMPLETE)
-			n = NUMBER_EMPTY;
-
-		if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, h))
-			n = NUMBER_EDGE(ui->select);
-
-		if (ui->typing_cell == i)
-			n = ui->typing_number - 1;
-		
 		/* Draw a light circle on possible endpoints */
 		if(state->grid[i] == NUMBER_EMPTY && (n == 0 || n == state->last))
 		{
@@ -3618,6 +3683,20 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				tilesize / 3, colour, colour);
 		}
 		
+		if (n == NUMBER_MOVE)
+		{
+			draw_circle(dr, tx1, ty1, tilesize * 0.22, COL_LOWLIGHT, COL_LOWLIGHT);
+		}
+
+		if (n == NUMBER_CLEAR)
+		{
+			/* Draw a cross */
+			int shape = tilesize / 4;
+
+			draw_thick_line(dr, tilesize / 7, tx + shape, ty + shape, tx + tilesize - shape, ty + tilesize - shape, COL_LOWLIGHT);
+			draw_thick_line(dr, tilesize / 7, tx + tilesize - shape, ty + shape, tx + shape, ty + tilesize - shape, COL_LOWLIGHT);
+		}
+
 		/* Draw the number */
 		if(n >= 0)
 		{
@@ -3649,7 +3728,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 				error ? COL_ERROR : i2 >= 0 ? COL_LOWLIGHT :
 				COL_BORDER, buf);
 		}
-		else
+		else if(n != NUMBER_CLEAR)
 		{
 			if (ui->prevhints[i] >= 0)
 			{
