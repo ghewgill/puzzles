@@ -66,6 +66,8 @@ typedef unsigned char bitmap;
 /* Draw-only numbers */
 #define NUMBER_MOVE   ((number) -4 )
 #define NUMBER_CLEAR  ((number) -5 )
+#define NUMBER_FLAG_MOVE   ((number) 0x4000 )
+#define NUMBER_FLAG_MASK   NUMBER_FLAG_MOVE
 
 #define CELL_NONE     ((cell)   -1 )
 #define CELL_MULTIPLE ((cell)   -2 )
@@ -3397,30 +3399,36 @@ static number ascent_display_number(cell i, const game_drawstate *ds, const game
 	 * If a cell is adjacent to to the highlighted cell, a line can be drawn.
 	 * Show a number if the seleced number is known, otherwise show a Move symbol.
 	 */
-	if (n == NUMBER_EMPTY && !IS_NUMBER_EDGE(ui->select) && ui->held >= 0 &&
-		is_near(i, ui->held, w, state->mode))
-		n = ui->select >= 0 && ui->positions[ui->select] == CELL_NONE ? ui->select :
-		ui->cshow == CSHOW_KEYBOARD ? NUMBER_MOVE : NUMBER_EMPTY;
-
-	/* Only show moves or highlights for valid path moves */
-	if(state->grid[i] == NUMBER_EMPTY && !ascent_validate_path_move(i, state, ui))
-		n = NUMBER_EMPTY;
+	if (!IS_NUMBER_EDGE(ui->select) && ui->held >= 0 && ascent_validate_path_move(i, state, ui))
+	{
+		if(n == NUMBER_EMPTY)
+			n = ui->select >= 0 && ui->positions[ui->select] == CELL_NONE ? ui->select :
+				ui->cshow == CSHOW_KEYBOARD ? NUMBER_MOVE : NUMBER_EMPTY;
+		else if(ui->cshow == CSHOW_KEYBOARD)
+			n |= NUMBER_FLAG_MOVE;
+	}
 
 	/* When this cell has hints, only show candidate number if it matches one of these hints */
 	if (n != NUMBER_MOVE && ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[i] != n && ui->prevhints[i] != n)
 		n = NUMBER_EMPTY;
 
-	/* Cells which cause a backtrack should display a Clear symbol instead of a Move symbol */
-	if (n == NUMBER_MOVE && state->path && state->path[i] & (1 << ascent_find_direction(i, ui->held, w, movement)))
-		n = NUMBER_CLEAR;
-
 	/* Possible drop target for the selected edge number */
 	if (n == NUMBER_EMPTY && IS_NUMBER_EDGE(ui->select) && is_edge_valid(ui->held, i, w, state->h))
 		n = NUMBER_EDGE(ui->select);
 
-	/* Only show a Clear symbol when the keyboard cursor is over it */
-	if (n == NUMBER_CLEAR && ui->cy*w + ui->cx != i)
-		n = NUMBER_EMPTY;
+	/* 
+	 * Cells which cause a backtrack should display a Clear symbol instead of a Move symbol.
+	 * Only show a Clear symbol when the cursor is over it, otherwise show the original number.
+	 */
+	if (state->path && state->path[i] & (1 << ascent_find_direction(i, ui->held, w, movement)))
+	{
+		if(n == NUMBER_MOVE)
+			n = ui->cy*w + ui->cx == i ? NUMBER_CLEAR : NUMBER_EMPTY;
+		else if (n >= 0 && n & NUMBER_FLAG_MOVE && ui->cy*w + ui->cx == i)
+			n = NUMBER_CLEAR;
+		else if (n >= 0)
+			n &= ~NUMBER_FLAG_MOVE;
+	}
 
 	return n;
 }
@@ -3438,7 +3446,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int tilesize = ds->tilesize;
 	int tx, ty, tx1, ty1, tx2, ty2;
 	cell i, i2;
-	number n;
+	number n, fn;
 	char buf[8];
 	const cell *positions = ui->positions;
 	int flash = -2, colour;
@@ -3591,6 +3599,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		
 		if(ds->colours[i] == colour) continue;
 		
+		fn = ascent_display_number(i, ds, ui, state, movement);
+		n = fn < 0 ? fn : fn & ~NUMBER_FLAG_MASK;
+
 		/* Draw tile background */
 		clip(dr, tx, ty, tilesize+1, tilesize+1);
 		draw_update(dr, tx, ty, tilesize+1, tilesize+1);
@@ -3633,8 +3644,19 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			if ((n == 0 || n == state->last) &&
 				(GET_BIT(state->immutable, i) || positions[n] != CELL_MULTIPLE))
 			{
-				draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
-					tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
+				if(fn & NUMBER_FLAG_MOVE)
+				{
+					/* Draw a large lowlight circle under a slightly smaller light circle */
+					draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+						tilesize * 0.4, COL_LOWLIGHT, COL_LOWLIGHT);
+					draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+						tilesize * 0.3, COL_HIGHLIGHT, COL_HIGHLIGHT);
+				}
+				else
+				{
+					draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
+						tilesize / 3, COL_HIGHLIGHT, COL_HIGHLIGHT);
+				}
 			}
 			/* Draw a small circle with the same size as the line thickness, to round off corners */
 			else if (ds->path[i] & ~FLAG_COMPLETE)
@@ -3674,8 +3696,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			draw_polygon(dr, sqc, 4, -1, COL_BORDER);
 		}
 
-		n = ascent_display_number(i, ds, ui, state, movement);
-
 		/* Draw a light circle on possible endpoints */
 		if(state->grid[i] == NUMBER_EMPTY && (n == 0 || n == state->last))
 		{
@@ -3692,9 +3712,19 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		{
 			draw_circle(dr, tx + (tilesize / 2), ty + (tilesize / 2),
 				tilesize / 3, colour, colour);
+			
+			if (fn > 0 && fn & NUMBER_FLAG_MOVE)
+			{
+				draw_circle(dr, tx1, ty1, tilesize * 0.22, COL_LOWLIGHT, COL_LOWLIGHT);
+			}
 		}
-		
-		if (n == NUMBER_MOVE)
+		/* Draw a slightly larger lowlight circle if there's a number, but no path */
+		else if (n > 0 && n < state->last && fn & NUMBER_FLAG_MOVE)
+		{
+			draw_circle(dr, tx1, ty1, tilesize * 0.28, COL_LOWLIGHT, COL_LOWLIGHT);
+		}
+		/* Draw a normal lowlight circle in all other cases */
+		else if (n == NUMBER_MOVE)
 		{
 			draw_circle(dr, tx1, ty1, tilesize * 0.22, COL_LOWLIGHT, COL_LOWLIGHT);
 		}
