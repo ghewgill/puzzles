@@ -783,7 +783,7 @@ static number *generate_hamiltonian_path(int w, int h, random_state *rs, const g
 	return ret;
 }
 
-static void update_positions(cell *positions, number *grid, int s)
+static void update_positions(cell *positions, const number *grid, int s)
 {
 	cell i;
 	number n;
@@ -2638,7 +2638,8 @@ static char *ascent_mouse_click(const game_state *state, game_ui *ui,
 			ui->held = i;
 			ui_seek(ui, state);
 			
-			ui->cshow = CSHOW_NONE;
+			if(!keyboard)
+				ui->cshow = CSHOW_NONE;
 
 			return dupstr(buf);
 		}
@@ -2842,7 +2843,9 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ui_clear(ui);
 
 	/* Pressing Enter, Spacebar or Backspace when not typing will emulate a mouse click */
-	if ((IS_CURSOR_SELECT(button) || button == '\b') && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
+	if (button == '\b' && ui->typing_cell == CELL_NONE)
+		button = CURSOR_SELECT2;
+	if (IS_CURSOR_SELECT(button) && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
 	{
 		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
 		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON, TRUE);
@@ -2925,13 +2928,6 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ret = dupstr(buf);
 	}
 
-	if(!ret && button == '\b' && !ui->cshow && ui->held >= 0 && !GET_BIT(state->immutable, ui->held))
-	{
-		char buf[20];
-		sprintf(buf, "C%d", ui->held);
-		ret = dupstr(buf);
-	}
-	
 	if(finish_typing && !ret)
 		return UI_UPDATE;
 	return ret;
@@ -3005,16 +3001,14 @@ static void ascent_clean_path(game_state *state)
 	}
 }
 
-static char ascent_apply_path(game_state *state)
+static char ascent_apply_path(game_state *state, const cell *positions)
 {
 	/* Check all numbers, and place an adjacent number when possible. */
-	int w = state->w, h = state->h;
+	int w = state->w;
 	cell i, i2; number n, n2, cn;
 	char ret = FALSE;
 	int dir;
-	cell *positions = snewn(w*h, cell); // TODO reuse between calls
 	const ascent_movement *movement = ascent_movement_for_mode(state->mode);
-	update_positions(positions, state->grid, w*h);
 
 	for(n = 0; n <= state->last; n++)
 	{
@@ -3056,7 +3050,6 @@ static char ascent_apply_path(game_state *state)
 		}
 	}
 
-	sfree(positions);
 	return ret;
 }
 
@@ -3160,10 +3153,13 @@ static game_state *execute_move(const game_state *state, const char *move)
 	
 	if(ret->path)
 	{
+		cell *positions = snewn(w*h, cell);
+
 		do
 		{
 			ascent_clean_path(ret);
-		} while(ascent_apply_path(ret));
+			update_positions(positions, ret->grid, w*h);
+		} while(ascent_apply_path(ret, positions));
 
 		for(i = 0; i < w*h; i++)
 		{
@@ -3176,6 +3172,8 @@ static game_state *execute_move(const game_state *state, const char *move)
 			sfree(ret->path);
 			ret->path = NULL;
 		}
+
+		sfree(positions);
 	}
 	
 	if (check_completion(ret->grid, w, h, ret->mode))
@@ -3974,7 +3972,7 @@ const struct game thegame = {
 	TRUE, FALSE, game_print_size, game_print,
 	FALSE, /* wants_statusbar */
 	FALSE, game_timing_state,
-	0, /* flags */
+	REQUIRE_RBUTTON, /* flags */
 };
 
 /* ***************** *
