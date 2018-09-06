@@ -22,19 +22,10 @@
 #include "matching.h"
 
 #ifdef STANDALONE_SOLVER
-#include <stdarg.h>
 int solver_verbose = FALSE;
 
-void solver_printf(char *fmt, ...)
-{
-	if(!solver_verbose) return;
-	char buf[1024];
-	va_list ap;
-	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, ap);
-	va_end(ap);
-	printf("%s", buf);
-}
+#define solver_printf if(!solver_verbose) {} else printf
+
 #else
 #define solver_printf(...)
 #endif
@@ -3445,7 +3436,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int tx, ty, tx1, ty1, tx2, ty2;
 	cell i, i2;
 	number n, fn;
-	char buf[8];
+	char buf[20];
 	const cell *positions = ui->positions;
 	int flash = -2, colour;
 	int margin = tilesize*ERROR_MARGIN;
@@ -3848,7 +3839,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 	int offsetx, offsety;
 	cell i, i2;
 	number n;
-	char buf[8];
+	char buf[20];
 	cell *positions = snewn(w*h, cell);
 
 	int ink = print_mono_colour(dr, 0);

@@ -39,20 +39,11 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-#include <stdarg.h>
 int solver_verbose = FALSE;
 int solver_steps = FALSE;
 
-void solver_printf(char *fmt, ...)
-{
-	if(!solver_verbose) return;
-	char buf[1024];
-	va_list ap;
-	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, ap);
-	va_end(ap);
-	printf("%s", buf);
-}
+#define solver_printf if(!solver_verbose) {} else printf
+
 #else
 #define solver_printf(...)
 #endif
