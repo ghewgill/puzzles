@@ -91,7 +91,7 @@ struct game_state {
 	/* Extra map of confirmed holes/characters */
 	char *holes;
 	
-	char completed, cheated;
+	bool completed, cheated;
 	
 	unsigned int *marks;
 };
@@ -121,13 +121,13 @@ static game_params *default_params(void)
 	return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	game_params *ret;
 	char buf[64];
 	
 	if(i < 0 || i >= lenof(salad_presets))
-		return FALSE;
+		return false;
 	
 	ret = snew(game_params);
 	*ret = salad_presets[i]; /* struct copy */
@@ -139,7 +139,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 		sprintf(buf, "Numbers: %dx%d 1~%c", ret->order, ret->order, ret->nums + '0');
 	*name = dupstr(buf);
 	
-	return TRUE;
+	return true;
 }
 
 static void free_params(game_params *params)
@@ -190,7 +190,7 @@ static void decode_params(game_params *params, char const *string)
 	}
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char ret[80];
 	sprintf(ret, "%dn%d%c", params->order, params->nums,
@@ -246,7 +246,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	if(params->nums < 2)
 		return "Symbols must be at least 2.";
@@ -276,7 +276,7 @@ static game_state *blank_game(const game_params *params)
 	state->borderclues = snewn(o*4, digit);
 	state->gridclues = snewn(o2, digit);
 	state->marks = snewn(o2, unsigned int);
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 	
 	memset(state->marks, 0, o2 * sizeof(unsigned int));
 	
@@ -359,7 +359,7 @@ static int latinholes_solver_sync(struct latin_solver *solver, struct solver_ctx
 	int i, n;
 	int o = solver->o;
 	int o2 = o*o;
-	int match;
+	bool match;
 	int nums = sctx->nums;
 	int nchanged = 0;
 	
@@ -372,11 +372,11 @@ static int latinholes_solver_sync(struct latin_solver *solver, struct solver_ctx
 			continue;
 		
 		/* Check for possibilities for numbers */
-		match = FALSE;
+		match = false;
 		for(n = 0; n < nums; n++)
 		{
 			if(cube(i%o, i/o, n+1))
-				match = TRUE;
+				match = true;
 		}
 		if(!match)
 		{
@@ -391,11 +391,11 @@ static int latinholes_solver_sync(struct latin_solver *solver, struct solver_ctx
 		}
 		
 		/* Check for possibilities for hole */
-		match = FALSE;
+		match = false;
 		for(n = nums; n < o; n++)
 		{
 			if(cube(i%o, i/o, n+1))
-				match = TRUE;
+				match = true;
 		}
 		if(!match)
 		{
@@ -428,7 +428,7 @@ static int latinholes_solver_place_cross(struct latin_solver *solver, struct sol
 		if(!cube(x, y, n+1))
 			continue;
 		
-		cube(x, y, n+1) = FALSE;
+		cube(x, y, n+1) = false;
 		nchanged++;
 	}
 	
@@ -452,7 +452,7 @@ static int latinholes_solver_place_circle(struct latin_solver *solver, struct so
 		if(!cube(x, y, n+1))
 			continue;
 		
-		cube(x, y, n+1) = FALSE;
+		cube(x, y, n+1) = false;
 		nchanged++;
 	}
 	
@@ -518,10 +518,11 @@ static int latinholes_check(game_state *state)
 	int o = state->params->order;
 	int nums = state->params->nums;
 	int od = o*nums;
-	int x, y, i, fail;
+	int x, y, i;
+	bool fail;
 	digit d;
 	
-	fail = FALSE;
+	fail = false;
 	
 	int *rows, *cols, *hrows, *hcols;
 	rows = snewn(od, int);
@@ -549,7 +550,7 @@ static int latinholes_check(game_state *state)
 		}
 		
 		if(d == 0 && state->holes[y*o+x] == LATINH_CIRCLE)
-			fail = TRUE;
+			fail = true;
 	}
 	
 	for(i = 0; i < o; i++)
@@ -560,7 +561,7 @@ static int latinholes_check(game_state *state)
 			if(solver_show_working)
 				printf("Hole miscount in %d\n", i);
 #endif
-			fail = TRUE;
+			fail = true;
 		}
 	}
 	
@@ -572,7 +573,7 @@ static int latinholes_check(game_state *state)
 			if(solver_show_working)
 				printf("Number miscount in %d\n", i);
 #endif
-			fail = TRUE;
+			fail = true;
 		}
 	}
 	
@@ -601,8 +602,8 @@ static int salad_letters_solver_dir(struct latin_solver *solver, struct solver_c
 	
 	int dist = 0;
 	int maxdist;
-	int found = FALSE;
-	int outofrange = FALSE;
+	bool found = false;
+	bool outofrange = false;
 	
 	/* 
 	 * Determine max. distance by counting the holes
@@ -631,14 +632,14 @@ static int salad_letters_solver_dir(struct latin_solver *solver, struct solver_c
 					if(solver_show_working)
 						printf("Border %c (%d) rules out %c at %d,%d\n", clue+'A'-1, cd, j+'A'-1, i%o, i/o);
 #endif
-					cube(i%o, i/o, j) = FALSE;
+					cube(i%o, i/o, j) = false;
 					nchanged++;
 				}
 			}
 		}
 		
 		if(sctx->state->holes[i] != LATINH_CROSS)
-			found = TRUE;
+			found = true;
 		
 		/* Rule out this possibility too far away from clue */
 		
@@ -650,14 +651,14 @@ static int salad_letters_solver_dir(struct latin_solver *solver, struct solver_c
 				if(solver_show_working)
 					printf("Border %c is too far away from %d,%d\n", clue+'A'-1, i%o, i/o);
 #endif
-				cube(i%o, i/o, clue) = FALSE;
+				cube(i%o, i/o, clue) = false;
 				nchanged++;
 			}
 		}
 		dist++;
 		
 		if(sctx->state->holes[i] == LATINH_CIRCLE || dist > maxdist)
-			outofrange = TRUE;
+			outofrange = true;
 	}
 	
 	return nchanged;
@@ -685,9 +686,9 @@ static int salad_letters_solver(struct latin_solver *solver, struct solver_ctx *
 	return nchanged;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-	return TRUE;
+	return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -928,7 +929,7 @@ static int salad_solver_easy(struct latin_solver *solver, void *vctx)
 	return nchanged;
 }
 
-static digit salad_scan_dir(digit *grid, char *holes, int si, int di, int ei, int direct)
+static digit salad_scan_dir(digit *grid, char *holes, int si, int di, int ei, bool direct)
 {
 	int i;
 	for(i = si; i != ei; i+=di)
@@ -942,7 +943,7 @@ static digit salad_scan_dir(digit *grid, char *holes, int si, int di, int ei, in
 	return 0;
 }
 
-static char salad_checkborders(game_state *state)
+static bool salad_checkborders(game_state *state)
 {
 	int o = state->params->order;
 	int o2 = o*o;
@@ -953,34 +954,34 @@ static char salad_checkborders(game_state *state)
 		/* Top */
 		if(state->borderclues[i])
 		{		
-			c = salad_scan_dir(state->grid, NULL, i, o, o2+i, FALSE);
+			c = salad_scan_dir(state->grid, NULL, i, o, o2+i, false);
 			if(c != state->borderclues[i])
-				return FALSE;
+				return false;
 		}
 		/* Left */
 		if(state->borderclues[i+o])
 		{
-			c = salad_scan_dir(state->grid, NULL, i*o, 1, ((i+1)*o), FALSE);
+			c = salad_scan_dir(state->grid, NULL, i*o, 1, ((i+1)*o), false);
 			if(c != state->borderclues[i+o])
-				return FALSE;
+				return false;
 		}
 		/* Bottom */
 		if(state->borderclues[i+(o*2)])
 		{
-			c = salad_scan_dir(state->grid, NULL, (o2-o)+i, -o, i-o, FALSE);
+			c = salad_scan_dir(state->grid, NULL, (o2-o)+i, -o, i-o, false);
 			if(c != state->borderclues[i+(o*2)])
-				return FALSE;
+				return false;
 		}
 		/* Right */
 		if(state->borderclues[i+(o*3)])
 		{
-			c = salad_scan_dir(state->grid, NULL, ((i+1)*o)-1, -1, i*o - 1, FALSE);
+			c = salad_scan_dir(state->grid, NULL, ((i+1)*o)-1, -1, i*o - 1, false);
 			if(c != state->borderclues[i+(o*3)])
-				return FALSE;
+				return false;
 		}
 	}
 	
-	return TRUE;
+	return true;
 }
 
 #define SOLVER(upper,title,func,lower) func,
@@ -1243,7 +1244,7 @@ static char *salad_new_numbers_desc(const game_params *params, random_state *rs,
 	game_state *state = NULL;
 	int *spaces = snewn(o2, int);
 
-	while(TRUE)
+	while(true)
 	{
 		/* Generate a solved grid */
 		grid = latin_generate(o, rs);
@@ -1332,16 +1333,16 @@ static char *salad_new_letters_desc(const game_params *params, random_state *rs,
 	int i;
 	digit *grid;
 	game_state *state;
-	char nogrid = FALSE;
+	bool nogrid = false;
 	
 	/*
 	 * Quality check: With certain parameters, force the grid 
 	 * to contain no clues.
 	 */
 	if(o < 8)
-		nogrid = TRUE;
+		nogrid = true;
 	
-	while(TRUE)
+	while(true)
 	{
 		grid = latin_generate(o, rs);
 		state = blank_game(params);
@@ -1359,13 +1360,13 @@ static char *salad_new_letters_desc(const game_params *params, random_state *rs,
 		for(i = 0; i < o; i++)
 		{
 			/* Top */
-			state->borderclues[i] = salad_scan_dir(state->gridclues, NULL, i, o, o2+i, FALSE);
+			state->borderclues[i] = salad_scan_dir(state->gridclues, NULL, i, o, o2+i, false);
 			/* Left */
-			state->borderclues[i+o] = salad_scan_dir(state->gridclues, NULL, i*o, 1, ((i+1)*o), FALSE);
+			state->borderclues[i+o] = salad_scan_dir(state->gridclues, NULL, i*o, 1, ((i+1)*o), false);
 			/* Bottom */
-			state->borderclues[i+(o*2)] = salad_scan_dir(state->gridclues, NULL, (o2-o)+i, -o, i-o, FALSE);
+			state->borderclues[i+(o*2)] = salad_scan_dir(state->gridclues, NULL, (o2-o)+i, -o, i-o, false);
 			/* Right */
-			state->borderclues[i+(o*3)] = salad_scan_dir(state->gridclues, NULL, ((i+1)*o)-1, -1, i*o - 1, FALSE);
+			state->borderclues[i+(o*3)] = salad_scan_dir(state->gridclues, NULL, ((i+1)*o)-1, -1, i*o - 1, false);
 		}
 		
 		if(nogrid)
@@ -1404,7 +1405,7 @@ static char *salad_new_letters_desc(const game_params *params, random_state *rs,
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	if(params->mode == GAMEMODE_NUMBERS)
 		return salad_new_numbers_desc(params, rs, aux);
@@ -1417,9 +1418,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
  * ************** */
 struct game_ui {
 	int hx, hy;
-	char hpencil;
-	char hshow;
-	char hcursor;
+	bool hpencil;
+	bool hshow;
+	bool hcursor;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1427,7 +1428,7 @@ static game_ui *new_ui(const game_state *state)
 	game_ui *ret = snew(game_ui);
 	
 	ret->hx = ret->hy = 0;
-	ret->hpencil = ret->hshow = ret->hcursor = FALSE;
+	ret->hpencil = ret->hshow = ret->hcursor = false;
 	return ret;
 }
 
@@ -1460,7 +1461,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 
 struct game_drawstate {
 	int tilesize;
-	char redraw;
+	bool redraw;
 	int oldflash;
 	int *gridfs;
 	int *borderfs;
@@ -1507,13 +1508,13 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				ui->hx = gx;
 				ui->hy = gy;
 				ui->hpencil = newpencil;
-				ui->hcursor = FALSE;
-				ui->hshow = TRUE;
+				ui->hcursor = false;
+				ui->hshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->hshow = FALSE;
+				ui->hshow = false;
 			}
 			return UI_UPDATE;
 		}
@@ -1525,21 +1526,21 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			{
 				sprintf(buf, "%c%d,%d,%c", 'R',
 					gx, gy, 'O');
-				ui->hshow = FALSE;
+				ui->hshow = false;
 				return dupstr(buf);
 			}
 			else if(state->holes[(gy*o)+gx] == LATINH_CIRCLE && state->grid[(gy*o)+gx] == 0)
 			{
 				sprintf(buf, "%c%d,%d,%c", 'R',
 					gx, gy, 'X');
-				ui->hshow = FALSE;
+				ui->hshow = false;
 				return dupstr(buf);
 			}
 			else if(state->holes[(gy*o)+gx] == LATINH_CROSS)
 			{
 				sprintf(buf, "%c%d,%d,%c", 'R',
 					gx, gy, '-');
-				ui->hshow = FALSE;
+				ui->hshow = false;
 				return dupstr(buf);
 			}
 		}
@@ -1551,14 +1552,14 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		gx = ui->hx; gy = ui->hy;
 		move_cursor(button, &gx, &gy, o, o, 0);
 		ui->hx = gx; ui->hy = gy;
-		ui->hshow = ui->hcursor = TRUE;
+		ui->hshow = ui->hcursor = true;
 		return UI_UPDATE;
 	}
 	/* Keyboard change pencil cursor */
 	if (ui->hshow && button == CURSOR_SELECT)
 	{
 		ui->hpencil = !ui->hpencil;
-		ui->hcursor = TRUE;
+		ui->hcursor = true;
 		return UI_UPDATE;
 	}
 	
@@ -1595,7 +1596,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			
 			/* When not in keyboard and pencil mode, hide cursor */
 			if (!ui->hcursor && !ui->hpencil)
-				ui->hshow = FALSE;
+				ui->hshow = false;
 					
 			return dupstr(buf);
 		}
@@ -1610,7 +1611,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			
 			/* When not in keyboard and pencil mode, hide cursor */
 			if (!ui->hcursor && !ui->hpencil)
-				ui->hshow = FALSE;
+				ui->hshow = false;
 					
 			return dupstr(buf);
 		}
@@ -1627,7 +1628,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			
 			/* When not in keyboard and pencil mode, hide cursor */
 			if (!ui->hcursor && !ui->hpencil)
-				ui->hshow = FALSE;
+				ui->hshow = false;
 					
 			return dupstr(buf);
 		}
@@ -1683,7 +1684,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 			p++;
 		}
 		
-		ret->completed = ret->cheated = TRUE;
+		ret->completed = ret->cheated = true;
 		return ret;
 	}
 	/* Write number or pencil mark in square */
@@ -1743,7 +1744,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		
 		/* Check for completion */
 		if(latinholes_check(ret) && salad_checkborders(ret))
-			ret->completed = TRUE;
+			ret->completed = true;
 		
 		return ret;
 	}
@@ -1779,7 +1780,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 			  const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
-	ds->redraw = TRUE;
+	ds->redraw = true;
 }
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -1861,7 +1862,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	struct game_drawstate *ds = snew(struct game_drawstate);
 
 	ds->tilesize = DEFAULT_TILE_SIZE;
-	ds->redraw = TRUE;
+	ds->redraw = true;
 	ds->oldflash = -1;
 	ds->gridfs = snewn(o2, int);
 	ds->grid = snewn(o2, digit);
@@ -2004,7 +2005,7 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 		/* Top */
 		if(state->borderclues[i])
 		{		
-			c = salad_scan_dir(state->grid, state->holes, i, o, o2+i, TRUE);
+			c = salad_scan_dir(state->grid, state->holes, i, o, o2+i, true);
 			if(c && c != state->borderclues[i])
 				ds->borderfs[i] |= FD_ERROR;
 			else
@@ -2013,7 +2014,7 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 		/* Left */
 		if(state->borderclues[i+o])
 		{
-			c = salad_scan_dir(state->grid, state->holes, i*o, 1, ((i+1)*o), TRUE);
+			c = salad_scan_dir(state->grid, state->holes, i*o, 1, ((i+1)*o), true);
 			if(c && c != state->borderclues[i+o])
 				ds->borderfs[i+o] |= FD_ERROR;
 			else
@@ -2022,7 +2023,7 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 		/* Bottom */
 		if(state->borderclues[i+(o*2)])
 		{
-			c = salad_scan_dir(state->grid, state->holes, (o2-o)+i, -o, i-o, TRUE);
+			c = salad_scan_dir(state->grid, state->holes, (o2-o)+i, -o, i-o, true);
 			if(c && c != state->borderclues[i+(o*2)])
 				ds->borderfs[i+(o*2)] |= FD_ERROR;
 			else
@@ -2031,7 +2032,7 @@ static void salad_set_drawflags(game_drawstate *ds, const game_ui *ui, const gam
 		/* Right */
 		if(state->borderclues[i+(o*3)])
 		{
-			c = salad_scan_dir(state->grid, state->holes, ((i+1)*o)-1, -1, i*o - 1, TRUE);
+			c = salad_scan_dir(state->grid, state->holes, ((i+1)*o)-1, -1, i*o - 1, true);
 			if(c && c != state->borderclues[i+(o*3)])
 				ds->borderfs[i+(o*3)] |= FD_ERROR;
 			else
@@ -2100,14 +2101,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int x, y, i, j, tx, ty, color;
 	char base = (mode == GAMEMODE_LETTERS ? 'A' - 1 : '0');
 	char buf[80];
-	int hshow = ui->hshow;
+	bool hshow = ui->hshow;
 	double thick = (TILE_SIZE <= 21 ? 1 : 2.5);
 	
 	int flash = -1;
 	if(flashtime > 0)
 	{
 		flash = (int)(flashtime / FLASH_FRAME) % 3;
-		hshow = FALSE;
+		hshow = false;
 	}
 	
 	if(ds->redraw)
@@ -2283,7 +2284,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 		}
 	}
 	
-	ds->redraw = FALSE;
+	ds->redraw = false;
 	ds->oldflash = flash;
 }
 
@@ -2307,9 +2308,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 /* Using 8mm squares */
@@ -2455,15 +2456,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -2480,13 +2481,13 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	TRUE, FALSE, game_print_size, game_print,
+	true, false, game_print_size, game_print,
 #ifndef STYLUS_BASED
-	TRUE,			       /* wants_statusbar */
+	true,			       /* wants_statusbar */
 #else
-	FALSE,
+	false,
 #endif
-	FALSE, game_timing_state,
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };
 
@@ -2533,7 +2534,7 @@ int main(int argc, char *argv[])
 			argc--;
 		}
 		else if(!strcmp(p, "-v"))
-			solver_show_working = TRUE;
+			solver_show_working = true;
 		else if(!strcmp(p, "--soak"))
 			attempts = 10000;
 		else if (*p == '-')
@@ -2549,7 +2550,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err)
 		{
 			fprintf(stderr, "Parameters are invalid\n");
@@ -2566,11 +2567,11 @@ int main(int argc, char *argv[])
 		char *aux = NULL;
 		char *fail = NULL;
 		char *fmt = NULL;
-		printf("Generating puzzle with parameters %s\n", encode_params(params, TRUE));
+		printf("Generating puzzle with parameters %s\n", encode_params(params, true));
 		
 		for(i = 0; i < attempts; i++)
 		{
-			desc_gen = new_game_desc(params, rs, &aux, FALSE);
+			desc_gen = new_game_desc(params, rs, &aux, false);
 			printf("Game ID: %s\n",desc_gen);
 			
 			game_state *state = load_game(params, desc_gen, &fail);

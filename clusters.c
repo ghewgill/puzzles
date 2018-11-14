@@ -51,7 +51,7 @@ struct game_state {
 	int w, h;
 	char *grid;
 
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 const static struct game_params clusters_presets[] = {
@@ -71,13 +71,13 @@ static game_params *default_params(void)
 	return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	game_params *ret;
 	char buf[80];
 
 	if (i < 0 || i >= lenof(clusters_presets))
-		return FALSE;
+		return false;
 
 	ret = snew(game_params);
 	*ret = clusters_presets[i]; /* structure copy */
@@ -86,7 +86,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 
 	*name = dupstr(buf);
 	*params = ret;
-	return TRUE;
+	return true;
 }
 
 static void free_params(game_params *params)
@@ -117,7 +117,7 @@ static void decode_params(game_params *params, char const *string)
 	}
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char buf[80];
 
@@ -159,7 +159,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	if (params->w * params->h >= 10000)
 		return "Puzzle is too large";
@@ -197,7 +197,8 @@ static int clusters_validate(game_state *state)
 	int w = state->w;
 	int h = state->h;
 	int x, y, col, count, othercount, emptycount, maxcount;
-	char error, ret = STATUS_COMPLETE;
+	bool error;
+	char ret = STATUS_COMPLETE;
 
 	for (y = 0; y < h; y++)
 		for (x = 0; x < w; x++)
@@ -209,7 +210,7 @@ static int clusters_validate(game_state *state)
 			}
 			col = state->grid[y*w + x] & COLMASK;
 			count = othercount = emptycount = maxcount = 0;
-			error = FALSE;
+			error = false;
 
 			maxcount += clusters_count(state, x - 1, y, col, &count, &othercount, &emptycount);
 			maxcount += clusters_count(state, x + 1, y, col, &count, &othercount, &emptycount);
@@ -217,11 +218,11 @@ static int clusters_validate(game_state *state)
 			maxcount += clusters_count(state, x, y + 1, col, &count, &othercount, &emptycount);
 
 			if (othercount == maxcount)
-				error = TRUE;
+				error = true;
 			else if (state->grid[y*w + x] & F_SINGLE && count > 1)
-				error = TRUE;
+				error = true;
 			else if (!(state->grid[y*w + x] & F_SINGLE) && othercount == maxcount - 1)
-				error = TRUE;
+				error = true;
 
 			if (error)
 			{
@@ -271,7 +272,7 @@ static game_state *new_game(midend *me, const game_params *params,
 	int s = w*h;
 	game_state *state = snew(game_state);
 
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 	state->w = w;
 	state->h = h;
 
@@ -309,9 +310,9 @@ static game_state *new_game(midend *me, const game_params *params,
 	return state;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-	return TRUE;
+	return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -490,12 +491,12 @@ static char *solve_game(const game_state *state, const game_state *currstate,
  * Generator *
  * ********* */
 
-static int clusters_generate(game_state *state, char *temp, random_state *rs, int force)
+static int clusters_generate(game_state *state, char *temp, random_state *rs, bool force)
 {
 	int w = state->w;
 	int h = state->h;
 	int i, x, y, col, count, etc = 0;
-	char reset = TRUE;
+	bool reset = true;
 
 	for (i = 0; i < w*h; i++)
 	{
@@ -505,7 +506,7 @@ static int clusters_generate(game_state *state, char *temp, random_state *rs, in
 
 	while (reset)
 	{
-		reset = FALSE;
+		reset = false;
 		for (i = 0; i < w*h; i++)
 		{
 			col = state->grid[i] & COLMASK;
@@ -526,7 +527,7 @@ static int clusters_generate(game_state *state, char *temp, random_state *rs, in
 			if (temp[i] == 0)
 			{
 				state->grid[i] ^= COLMASK;
-				reset = TRUE;
+				reset = true;
 				break;
 			}
 		}
@@ -563,7 +564,7 @@ static int clusters_generate(game_state *state, char *temp, random_state *rs, in
 
 #define MAX_ATTEMPTS 100
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	int w = params->w;
 	int h = params->h;
@@ -572,11 +573,11 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	char *ret, *p;
 	char *temp = snewn(w*h, char);
 	int run, i, attempts = 0;
-	char force = FALSE;
+	bool force = false;
 
 	state->w = w;
 	state->h = h;
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 
 	state->grid = snewn(w*h, char);
 	memset(state->grid, 0, w*h * sizeof(char));
@@ -626,7 +627,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 struct game_ui {
 	int cx, cy;
-	char cursor;
+	bool cursor;
 
 	int *drag;
 	int dragtype;
@@ -638,7 +639,7 @@ static game_ui *new_ui(const game_state *state)
 	game_ui *ret = snew(game_ui);
 
 	ret->cx = ret->cy = 0;
-	ret->cursor = FALSE;
+	ret->cursor = false;
 	ret->ndrags = 0;
 	ret->dragtype = -1;
 	ret->drag = snewn(state->w*state->h, int);
@@ -703,7 +704,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			&& oy >= (ds->tilesize / 2) && gy < h) {
 			hx = gx;
 			hy = gy;
-			ui->cursor = FALSE;
+			ui->cursor = false;
 		}
 		else
 			return NULL;
@@ -713,7 +714,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (IS_CURSOR_MOVE(button)) {
 		int ox = ui->cx, oy = ui->cy;
 		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
-		ui->cursor = TRUE;
+		ui->cursor = true;
 
 		if (shift | control)
 		{
@@ -882,7 +883,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 					ret->grid[i] = 0;
 			}
 
-			ret->cheated = TRUE;
+			ret->cheated = true;
 		}
 		else if (sscanf(p, "%c%d", &c, &i) == 2 && i >= 0
 			&& i < w*h && (c == 'A' || c == 'B'
@@ -903,7 +904,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 			p++;
 	}
 
-	if (clusters_validate(ret) == STATUS_COMPLETE) ret->completed = TRUE;
+	if (clusters_validate(ret) == STATUS_COMPLETE) ret->completed = true;
 	return ret;
 }
 
@@ -1085,9 +1086,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -1110,15 +1111,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -1135,8 +1136,8 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	FALSE, FALSE, game_print_size, game_print,
-	FALSE, /* wants_statusbar */
-	FALSE, game_timing_state,
+	false, false, game_print_size, game_print,
+	false, /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };
