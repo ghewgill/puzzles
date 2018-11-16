@@ -20,7 +20,7 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_debug = FALSE;
+bool solver_debug = false;
 #endif
 
 enum {
@@ -77,7 +77,7 @@ typedef unsigned int hub_t;
 #define SPOKE_MARKED 3
 
 #define GET_SPOKE(s,d) ( ((s) >> ((d)*2)) & SPOKE_MASK )
-#define SET_SPOKE(s,d,v) do { (s) &= ~(SPOKE_MASK << ((d)*2)); (s) |= (v) << ((d)*2); } while(FALSE)
+#define SET_SPOKE(s,d,v) do { (s) &= ~(SPOKE_MASK << ((d)*2)); (s) |= (v) << ((d)*2); } while(false)
 
 /* Define directions */
 #define INV_DIR(d) ( (d) ^ 4 )
@@ -113,7 +113,7 @@ struct game_state {
 	
 	hub_t *spokes;
 	
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 static game_params *default_params(void)
@@ -123,10 +123,10 @@ static game_params *default_params(void)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	if (i < 0 || i >= lenof(spokes_presets))
-		return FALSE;
+		return false;
 		
 	game_params *ret = snew(game_params);
 	*ret = spokes_presets[i]; /* struct copy */
@@ -136,7 +136,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 	sprintf(buf, "%dx%d %s", ret->w, ret->h, spokes_diffnames[ret->diff]);
 	*name = dupstr(buf);
 	
-	return TRUE;
+	return true;
 }
 
 static void free_params(game_params *params)
@@ -180,7 +180,7 @@ static void decode_params(game_params *params, char const *string)
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[80];
 	char *p = buf;
@@ -230,7 +230,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	if(params->w < 2)
 		return "Width must be at least 2";
@@ -280,7 +280,7 @@ static game_state *blank_game(const game_params *params, game_state *previous)
     state->w = w;
     state->h = h;
 	
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 	
 	for(i = 0; i < w*h; i++)
 	{
@@ -445,7 +445,7 @@ struct spokes_scratch {
 	int *dsf;
 };
 
-static void spokes_solver_recount(const game_state *state, struct spokes_scratch *solver, char full)
+static void spokes_solver_recount(const game_state *state, struct spokes_scratch *solver, bool full)
 {
 	int i, j, x, y;
 	int w = state->w;
@@ -624,8 +624,8 @@ static int spokes_solver_attempt(game_state *state, int diff)
 	int i, dir, l, w = state->w, h = state->h;
 	game_state *copy = dup_game(state);
 #ifdef STANDALONE_SOLVER
-	int temp_debug = solver_debug;
-	solver_debug = FALSE;
+	bool temp_debug = solver_debug;
+	solver_debug = false;
 #endif
 	for(i = 0; i < w*h; i++)
 	{
@@ -694,11 +694,11 @@ static int spokes_validate(game_state *state, struct spokes_scratch *solver)
 {
 	int i, w = state->w, h = state->h;
 	int ret = STATUS_VALID;
-	char hassolver = solver != NULL;
+	bool hassolver = solver != NULL;
 	if(!hassolver)
 		solver = spokes_new_scratch(state);
 	
-	spokes_solver_recount(state, solver, FALSE);
+	spokes_solver_recount(state, solver, false);
 	
 	for(i = 0; i < w*h && ret != STATUS_INVALID; i++)
 	{
@@ -751,7 +751,7 @@ static int spokes_solve(game_state *state, int diff)
 	
 	spokes_solver_ones(state);
 	
-	while(TRUE)
+	while(true)
 	{
 		if(spokes_validate(state, solver) != STATUS_INCOMPLETE)
 			break;
@@ -947,11 +947,11 @@ static int spokes_generate(const game_params *params, game_state *generated, gam
 
 	for (k = 0; k < w*h; k++)
 		state->numbers[k] = spokes_count(generated->spokes[k], SPOKE_LINE);
-	return TRUE;
+	return true;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	char *ret;
 	int w = params->w, h = params->h;
@@ -985,9 +985,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -1031,7 +1031,7 @@ struct game_ui {
 	int drag_end;
 	int drag;
 	
-	char cshow;
+	bool cshow;
 	int cx, cy;
 };
 
@@ -1042,7 +1042,7 @@ static game_ui *new_ui(const game_state *state)
 	ui->drag_start = -1;
 	ui->drag_end = -1;
 	ui->drag = DRAG_NONE;
-	ui->cshow = FALSE;
+	ui->cshow = false;
 	ui->cx = ui->cy = 0;
 	
     return ui;
@@ -1080,7 +1080,7 @@ struct game_drawstate {
 	
 	/* Blitter for the background of the keyboard cursor */
 	blitter *bl;
-	char bl_on;
+	bool bl_on;
 	/* Position of the center of the blitter */
 	int blx, bly;
 	/* Radius of the keyboard cursor */
@@ -1115,7 +1115,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		
 		ui->drag_start = y*w+x;
 		ui->drag = button == LEFT_BUTTON ? DRAG_LEFT : DRAG_RIGHT;
-		ui->cshow = FALSE;
+		ui->cshow = false;
 	}
 	if(button == LEFT_BUTTON || button == RIGHT_BUTTON || 
 		button == LEFT_DRAG || button == RIGHT_DRAG)
@@ -1210,7 +1210,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if(IS_CURSOR_MOVE(button))
 	{
 		move_cursor(button, &ui->cx, &ui->cy, w*3-2, h*3-2, 0);
-		ui->cshow = TRUE;
+		ui->cshow = true;
 		return UI_UPDATE;
 	}
 	
@@ -1222,7 +1222,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 	const char *p = move;
 	game_state *ret = NULL;
 	int i, j, d, s;
-	char cheated = FALSE;
+	bool cheated = false;
 	
 	while(*p)
 	{
@@ -1240,7 +1240,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 				}
 			}
 			
-			cheated = TRUE;
+			cheated = true;
 		}
 		
 		else if(sscanf(p, "%d,%d,%d", &i, &d, &s) == 3)
@@ -1256,12 +1256,12 @@ static game_state *execute_move(const game_state *state, const char *move)
 	}
 	
 	if(ret && spokes_validate(ret, NULL) == STATUS_VALID)
-		ret->completed = TRUE;
+		ret->completed = true;
 	else
 		/* Don't mark a game as cheated if the solver didn't complete the grid */
-		cheated = FALSE;
+		cheated = false;
 	
-	if(cheated) ret->cheated = TRUE;
+	if(cheated) ret->cheated = true;
 	
     return ret;
 }
@@ -1343,7 +1343,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	memset(ds->corners, ~0, w*h*sizeof(char));
 	
 	ds->bl = NULL;
-	ds->bl_on = FALSE;
+	ds->bl_on = false;
 	ds->blx = -1;
 	ds->bly = -1;
 	ds->blr = -1;
@@ -1418,7 +1418,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         draw_update(dr, 
 			ds->blx - ds->blr, ds->bly - ds->blr, 
 			ds->bls, ds->bls);
-		ds->bl_on = FALSE;
+		ds->bl_on = false;
 	}
 	
 	/* Initialize background */
@@ -1431,13 +1431,13 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	if(flashtime > 0)
 		flash = (int)(flashtime/FLASH_FRAME) & 1;
 	else
-		flash = FALSE;
+		flash = false;
 	cshow = ui->cshow && !flashtime;
 	
 	double thick = (tilesize <= 80 ? 2 : 4);
 	float radius = tilesize/3.5F;
 	
-    spokes_solver_recount(state, ds->scratch, TRUE);
+    spokes_solver_recount(state, ds->scratch, true);
 	spokes_find_isolated(state, ds->scratch, ds->isolated);
 	
 	connected = dsf_size(ds->scratch->dsf, 0) == w*h;
@@ -1568,7 +1568,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		ds->bly += dy*(tilesize*0.4)*SQRTHALF;
 		
 		blitter_save(dr, ds->bl, ds->blx - ds->blr, ds->bly - ds->blr);
-		ds->bl_on = TRUE;
+		ds->bl_on = true;
 		
 		draw_rect_corners(dr, ds->blx, ds->bly, ds->blr-1, COL_CURSOR);
 		draw_update(dr, ds->blx - ds->blr, ds->bly - ds->blr, ds->bls, ds->bls);
@@ -1595,9 +1595,9 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-    return TRUE;
+    return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -1659,15 +1659,15 @@ const struct game thegame = {
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
@@ -1684,9 +1684,9 @@ const struct game thegame = {
     game_anim_length,
     game_flash_length,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
+    false, game_timing_state,
     REQUIRE_RBUTTON, /* flags */
 };
 
@@ -1743,7 +1743,7 @@ int main(int argc, char *argv[])
 			argc--;
 		}
 		else if (!strcmp(p, "-d"))
-			solver_debug = TRUE;
+			solver_debug = true;
 		else if (*p == '-')
 			usage_exit("unrecognised option");
 		else
@@ -1757,7 +1757,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err) {
 			fprintf(stderr, "Parameters are invalid\n");
 			fprintf(stderr, "%s: %s", argv[0], err);
@@ -1773,13 +1773,13 @@ int main(int argc, char *argv[])
 			params = default_params();
 		printf("Generating %d puzzle%s with parameters %s\n",
 			   n, n != 1 ? "s" : "",
-			   encode_params(params, TRUE));
+			   encode_params(params, true));
 			   
 		tt_start = time(NULL);
 		for(i = 0; i < n; i++)
 		{
 			fflush(stdout);
-			desc_gen = new_game_desc(params, rs, &aux, FALSE);
+			desc_gen = new_game_desc(params, rs, &aux, false);
 
 			fmt = game_text_format(new_game(NULL, params, desc_gen));
 			fputs(fmt, stdout);

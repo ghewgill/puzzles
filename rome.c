@@ -110,7 +110,7 @@ struct game_state {
 	cell *grid;
 	cell *marks;
 	
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 #define DEFAULT_PRESET 3
@@ -130,13 +130,13 @@ static const struct game_params rome_presets[] = {
 	{10, 10, DIFF_TRICKY},
 };
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	game_params *ret;
 	char buf[64];
 	
 	if(i < 0 || i >= lenof(rome_presets))
-		return FALSE;
+		return false;
 	
 	ret = snew(game_params);
 	*ret = rome_presets[i]; /* struct copy */
@@ -145,7 +145,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 	sprintf(buf, "%dx%d %s", ret->w, ret->h, rome_diffnames[ret->diff]);
 	*name = dupstr(buf);
 	
-	return TRUE;
+	return true;
 }
 
 static game_params *default_params(void)
@@ -197,7 +197,7 @@ static void decode_params(game_params *params, char const *string)
 	}
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char buf[80];
 
@@ -247,7 +247,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	if(params->w < 3)
 		return "Width must be at least 3";
@@ -274,13 +274,13 @@ static void free_game(game_state *state)
 enum { STATUS_COMPLETE, STATUS_INCOMPLETE, STATUS_INVALID };
 enum { VALID, INVALID_WALLS, INVALID_CLUES, INVALID_REGIONS, INVALID_GOALS };
 
-static char rome_validate_game(game_state *state, char fullerrors, int *dsf, cell *sets)
+static char rome_validate_game(game_state *state, bool fullerrors, int *dsf, cell *sets)
 {
 	int w = state->w;
 	int h = state->h;
 	int x, y, i, c;
-	char hasdsf = dsf != NULL;
-	char hassets = sets != NULL;
+	bool hasdsf = dsf != NULL;
+	bool hassets = sets != NULL;
 	char ret = STATUS_COMPLETE;
 	cell *seterrs;
 	
@@ -435,19 +435,19 @@ static int rome_read_desc(const game_params *params, const char *desc, game_stat
 	char *walls = snewn(ws, char);
 	const char *p;
 	
-	memset(walls, FALSE, ws*sizeof(char));
+	memset(walls, false, ws*sizeof(char));
 	
 	state->w = w;
 	state->h = h;
 	state->dsf = snew_dsf(w*h);
 	
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 	
 	state->grid = snewn(w*h, cell);
 	state->marks = snewn(w*h, cell);
 	memset(state->grid, EMPTY, w*h*sizeof(cell));
 	memset(state->marks, EMPTY, w*h*sizeof(cell));
-	memset(walls, FALSE, ws*sizeof(char));
+	memset(walls, false, ws*sizeof(char));
 	
 	/* Read list of walls */
 	p = desc;
@@ -477,12 +477,12 @@ static int rome_read_desc(const game_params *params, const char *desc, game_stat
 		}
 		if(erun > 0)
 		{
-			walls[i] = FALSE;
+			walls[i] = false;
 			erun--;
 		}
 		else if(erun == 0 && wrun > 0)
 		{
-			walls[i] = TRUE;
+			walls[i] = true;
 			wrun--;
 		}
 	}
@@ -564,7 +564,7 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 	
 	assert(state);
 	
-	rome_validate_game(state, TRUE, NULL, NULL);
+	rome_validate_game(state, true, NULL, NULL);
 	
 	return state;
 }
@@ -579,7 +579,7 @@ static const char *validate_desc(const game_params *params, const char *desc)
 	
 	if(valid == VALID)
 	{
-		status = rome_validate_game(state, TRUE, NULL, NULL);
+		status = rome_validate_game(state, true, NULL, NULL);
 		if(status != STATUS_INCOMPLETE)
 		{
 			free_game(state);
@@ -990,9 +990,9 @@ static char rome_solve(game_state *state, int maxdiff)
 		state->marks[i*w+(w-1)] &= ~FM_RIGHT;
 	}
 	
-	while(TRUE)
+	while(true)
 	{
-		status = rome_validate_game(state, FALSE, dsf, sets);
+		status = rome_validate_game(state, false, dsf, sets);
 		if(status != STATUS_INCOMPLETE)
 			break;
 		
@@ -1119,7 +1119,7 @@ static void rome_join_arrows(game_state *state, int *arrdsf, cell *suggest)
 	}
 }
 
-static char rome_generate_arrows(game_state *state, random_state *rs)
+static bool rome_generate_arrows(game_state *state, random_state *rs)
 {
 	int w = state->w;
 	int h = state->h;
@@ -1191,13 +1191,13 @@ static char rome_generate_arrows(game_state *state, random_state *rs)
 	}
 	
 	/* Keep the amount of Goal squares to a minimum */
-	if(j > max(1,(w*h)/25) || rome_validate_game(state, FALSE, NULL, NULL) != STATUS_COMPLETE)
-		return FALSE;
+	if(j > max(1,(w*h)/25) || rome_validate_game(state, false, NULL, NULL) != STATUS_COMPLETE)
+		return false;
 	
-	return TRUE;
+	return true;
 }
 
-static char rome_generate_regions(game_state *state, random_state *rs)
+static bool rome_generate_regions(game_state *state, random_state *rs)
 {
 	/*
 	 * From a grid filled with arrows in 1x1 regions, randomly pick
@@ -1263,10 +1263,10 @@ static char rome_generate_regions(game_state *state, random_state *rs)
 	sfree(spaces);
 	sfree(cells);
 	
-	return TRUE;
+	return true;
 }
 
-static char rome_generate_clues(game_state *state, random_state *rs, int diff)
+static bool rome_generate_clues(game_state *state, random_state *rs, int diff)
 {
 	/* Remove clues from the grid if the puzzle is solvable without them. */
 	
@@ -1307,35 +1307,35 @@ static char rome_generate_clues(game_state *state, random_state *rs, int diff)
 	sfree(spaces);
 	sfree(grid);
 	
-	return TRUE;
+	return true;
 }
 
-static char rome_generate(game_state *state, random_state *rs, int diff)
+static bool rome_generate(game_state *state, random_state *rs, int diff)
 {
 	game_state *solved;
-	char ret = TRUE;
+	bool ret = true;
 	
 	if(!rome_generate_arrows(state, rs))
-		return FALSE;
+		return false;
 	
 	if(!rome_generate_regions(state, rs))
-		return FALSE;
+		return false;
 	
 	if(!rome_generate_clues(state, rs, diff))
-		return FALSE;
+		return false;
 	
 	solved = dup_game(state);
 	rome_solve(solved, diff);
-	if(rome_validate_game(solved, FALSE, NULL, NULL) != STATUS_COMPLETE)
-		ret = FALSE;
+	if(rome_validate_game(solved, false, NULL, NULL) != STATUS_COMPLETE)
+		ret = false;
 	free_game(solved);
 	
 	if(ret && diff > 0)
 	{
 		solved = dup_game(state);
 		rome_solve(solved, diff-1);
-		if(rome_validate_game(solved, FALSE, NULL, NULL) == STATUS_COMPLETE)
-			ret = FALSE;
+		if(rome_validate_game(solved, false, NULL, NULL) == STATUS_COMPLETE)
+			ret = false;
 		free_game(solved);
 	}
 	
@@ -1343,7 +1343,7 @@ static char rome_generate(game_state *state, random_state *rs, int diff)
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	int w = params->w;
 	int h = params->h;
@@ -1377,18 +1377,18 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	for(x = 0; x < w-1; x++)
 	{
 		if(dsf_canonify(state->dsf, y*w+x) != dsf_canonify(state->dsf, y*w+x+1))
-			walls[i] = TRUE;
+			walls[i] = true;
 		else
-			walls[i] = FALSE;
+			walls[i] = false;
 		i++;
 	}
 	for(y = 0; y < h-1; y++)
 	for(x = 0; x < w; x++)
 	{
 		if(dsf_canonify(state->dsf, y*w+x) != dsf_canonify(state->dsf, (y+1)*w+x))
-			walls[i] = TRUE;
+			walls[i] = true;
 		else
-			walls[i] = FALSE;
+			walls[i] = false;
 		i++;
 	}
 	
@@ -1460,9 +1460,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
  * User interface *
  * ************** */
  
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-	return TRUE;
+	return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -1480,7 +1480,7 @@ struct game_ui
 	char mmode;
 	cell mdir;
 	
-	char sloops, sgoals;
+	bool sloops, sgoals;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1506,8 +1506,8 @@ static game_ui *new_ui(const game_state *state)
 	 *
 	 * I'm disabling the loop highlighting for the time being.
 	 */
-	ret->sloops = FALSE;
-	ret->sgoals = TRUE;
+	ret->sloops = false;
+	ret->sgoals = true;
 	
 	return ret;
 }
@@ -1532,7 +1532,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 }
 
 struct game_drawstate {
-	char redraw;
+	bool redraw;
 	int tilesize;
 	int oldflash;
 	cell *oldgrid;
@@ -1559,7 +1559,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		if (IS_CURSOR_MOVE(button) && 
 			(ui->kmode == KEYMODE_OFF || ui->kmode == KEYMODE_MOVE))
 		{
-			move_cursor(button, &ui->hx, &ui->hy, w, h, FALSE);
+			move_cursor(button, &ui->hx, &ui->hy, w, h, false);
 			ui->kmode = KEYMODE_MOVE;
 			return UI_UPDATE;
 		}
@@ -1771,8 +1771,8 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
 			}
 		}
 		
-		if(rome_validate_game(state, TRUE, NULL, NULL) == STATUS_COMPLETE)
-			state->completed = TRUE;
+		if(rome_validate_game(state, true, NULL, NULL) == STATUS_COMPLETE)
+			state->completed = true;
 		return state;
 	}
 	
@@ -1809,7 +1809,7 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
 			i++;
 		}
 		
-		state->completed = (rome_validate_game(state, TRUE, NULL, NULL) == STATUS_COMPLETE);
+		state->completed = (rome_validate_game(state, true, NULL, NULL) == STATUS_COMPLETE);
 		state->cheated = state->completed;
 		return state;
 	}
@@ -1832,7 +1832,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 			  const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
-	ds->redraw = TRUE;
+	ds->redraw = true;
 }
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -1889,7 +1889,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	
 	ds->tilesize = 0;
 	ds->oldflash = -1;
-	ds->redraw = TRUE;
+	ds->redraw = true;
 	ds->oldgrid = snewn(s, cell);
 	ds->oldpencil = snewn(s, cell);
 	memset(ds->oldgrid, EMPTY, s*sizeof(cell));
@@ -2118,7 +2118,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 		}
 	}
 
-	ds->redraw = FALSE;
+	ds->redraw = false;
 	ds->oldflash = flash;
 }
 
@@ -2142,9 +2142,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 /* Using 9mm squares */
@@ -2230,15 +2230,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	FALSE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	false, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -2255,8 +2255,8 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	TRUE, FALSE, game_print_size, game_print,
-	FALSE,			       /* wants_statusbar */
-	FALSE, game_timing_state,
+	true, false, game_print_size, game_print,
+	false,			       /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };

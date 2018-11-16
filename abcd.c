@@ -36,7 +36,7 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_verbose = FALSE;
+bool solver_verbose = false;
 #endif
 
 enum {
@@ -50,17 +50,17 @@ enum {
 
 struct game_params {
 	int w, h, n;
-	int diag; /* disallow diagonal adjacent letters */
-	int removenums; /* incomplete clue set */
+	bool diag; /* disallow diagonal adjacent letters */
+	bool removenums; /* incomplete clue set */
 };
 
 struct game_state {
 	int w, h, n;
-	int diag;
+	bool diag;
 	char *grid; /* size w*h */
 	unsigned char *clues; /* remaining possibilities, size w*h*n */
 	int *numbers; /* size n*(w+h) */
-	int completed, cheated;
+	bool completed, cheated;
 };
 
 #define PREFERRED_TILE_SIZE 36
@@ -75,19 +75,19 @@ struct game_state {
 #define NO_NUMBER -1
 
 const struct game_params abcd_presets[] = {
-	{4, 4, 4, FALSE, FALSE},
-	{4, 4, 4, FALSE, TRUE},
-	{5, 5, 4, FALSE, FALSE},
-	{5, 5, 4, FALSE, TRUE},
-	{6, 6, 4, FALSE, FALSE},
-	{7, 7, 3, FALSE, FALSE},
-	{7, 7, 4, FALSE, FALSE},
+	{4, 4, 4, false, false},
+	{4, 4, 4, false, true},
+	{5, 5, 4, false, false},
+	{5, 5, 4, false, true},
+	{6, 6, 4, false, false},
+	{7, 7, 3, false, false},
+	{7, 7, 4, false, false},
 };
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	if (i < 0 || i >= lenof(abcd_presets))
-		return FALSE;
+		return false;
 		
 	game_params *ret = snew(game_params);
 	*ret = abcd_presets[i]; /* struct copy */
@@ -98,7 +98,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 			ret->diag ? "No diagonals" : ret->removenums ? "Hard" : "Easy");
 	*name = dupstr(buf);
 	
-	return TRUE;
+	return true;
 }
 
 static game_params *default_params(void)
@@ -144,22 +144,22 @@ static void decode_params(game_params *ret, char const *string)
 	while (*string && isdigit((unsigned char) *string)) ++string;
 	
 	/* Find Diagonal flag */
-	ret->diag = FALSE;
+	ret->diag = false;
 	if (*string == 'D')
 	{
-		ret->diag = TRUE;
+		ret->diag = true;
 		++string;
 	}
 	/* Find Remove clues flag */
-	ret->removenums = FALSE;
+	ret->removenums = false;
 	if (*string == 'R')
 	{
-		ret->removenums = TRUE;
+		ret->removenums = true;
 		++string;
 	}
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char data[256];
 	sprintf(data, "%dx%dn%d", params->w, params->h, params->n);
@@ -219,7 +219,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	/* A width or height under 2 could possibly break the solver */
 	if (params->w < 2) return "Width must be at least 2";
@@ -301,7 +301,7 @@ static const char *validate_desc(const game_params *params, const char *desc)
 	return NULL;
 }
 
-static game_state *blank_state(int w, int h, int n, int diag)
+static game_state *blank_state(int w, int h, int n, bool diag)
 {
 	int l = w + h;
 	
@@ -317,10 +317,10 @@ static game_state *blank_state(int w, int h, int n, int diag)
 	ret->numbers = snewn(l * n, int);
 	
 	memset(ret->grid, EMPTY, w * h);
-	memset(ret->clues, TRUE, w*h*n);
+	memset(ret->clues, true, w*h*n);
 	memset(ret->numbers, 0, l*n * sizeof(int));
 	
-	ret->completed = ret->cheated = FALSE;
+	ret->completed = ret->cheated = false;
 	
 	return ret;
 }
@@ -349,12 +349,12 @@ static game_state *new_game(midend *me, const game_params *params, const char *d
 	int w = params->w;
 	int h = params->h;
 	int n = params->n;
-	int diag = params->diag;
+	bool diag = params->diag;
 	
 	game_state *state = blank_state(w, h, n, diag);
 	
 	/* Disable all clues for user interaction */
-	memset(state->clues, FALSE, w*h*n);
+	memset(state->clues, false, w*h*n);
 	
 	const char *p = desc;
 	int num;
@@ -385,7 +385,7 @@ static game_state *dup_game(const game_state *state)
 	int w = state->w;
 	int h = state->h;
 	int n = state->n;
-	int diag = state->diag;
+	bool diag = state->diag;
 	
 	int l = w + h;
 		
@@ -410,7 +410,7 @@ static void free_game(game_state *state)
 	sfree(state);
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
 	/*
 	* Puzzles with a width or height of 19 or more could contain a clue number
@@ -547,7 +547,7 @@ static void abcd_place_letter(game_state *state, int x, int y, char l, int *rema
 	int w = state->w;
 	int h = state->h;
 	int n = state->n;
-	int diag = state->diag;
+	bool diag = state->diag;
 	int pos = y*w+x;
 	char i;
 	
@@ -559,26 +559,26 @@ static void abcd_place_letter(game_state *state, int x, int y, char l, int *rema
 	{
 		if (i == l)
 			continue;
-		state->clues[CUBOID(x,y,i)] = FALSE;
+		state->clues[CUBOID(x,y,i)] = false;
 	}
 	
 	/* Remove possibility for adjacent squares */
 	if (diag && x > 0 && y > 0)
-		state->clues[CUBOID(x-1,y-1,l)] = FALSE;
+		state->clues[CUBOID(x-1,y-1,l)] = false;
 	if (diag && x < w-1 && y > 0)
-		state->clues[CUBOID(x+1,y-1,l)] = FALSE;
+		state->clues[CUBOID(x+1,y-1,l)] = false;
 	if (diag && x > 0 && y < h-1)
-		state->clues[CUBOID(x-1,y+1,l)] = FALSE;
+		state->clues[CUBOID(x-1,y+1,l)] = false;
 	if (diag && x < w-1 && y < h-1)
-		state->clues[CUBOID(x+1,y+1,l)] = FALSE;
+		state->clues[CUBOID(x+1,y+1,l)] = false;
 	if (x > 0)
-		state->clues[CUBOID(x-1,y,l)] = FALSE;
+		state->clues[CUBOID(x-1,y,l)] = false;
 	if (x < w-1)
-		state->clues[CUBOID(x+1,y,l)] = FALSE;
+		state->clues[CUBOID(x+1,y,l)] = false;
 	if (y > 0)
-		state->clues[CUBOID(x,y-1,l)] = FALSE;
+		state->clues[CUBOID(x,y-1,l)] = false;
 	if (y < h-1)
-		state->clues[CUBOID(x,y+1,l)] = FALSE;
+		state->clues[CUBOID(x,y+1,l)] = false;
 	
 	/* Update remaining array if entered */
 	if (remaining)
@@ -617,7 +617,7 @@ static int abcd_solver_runs(game_state *state, int *remaining, int horizontal, c
 	int x = 0, y = 0;
 	int a,b,amx,bmx,i,point;
 	
-	int action = FALSE;
+	int action = false;
 	int *rslen;
 	int *rspos;
 	
@@ -684,7 +684,7 @@ static int abcd_solver_runs(game_state *state, int *remaining, int horizontal, c
 			for (i = 0; i < point; i++)
 				if (rslen[i] & 1)
 				{
-					action = TRUE;
+					action = true;
 					for (b = rspos[i]; b <= rspos[i] + rslen[i]; b+=2)
 					{
 						x = (horizontal ? b : x);
@@ -725,10 +725,10 @@ static int abcd_validate_adjacency(game_state *state, int sx, int sy, int ex, in
 			py = y+dy;
 			
 			if (state->grid[y*w+x] != EMPTY && state->grid[y*w+x] == state->grid[py*w+px])
-				return FALSE;
+				return false;
 		}
 	
-	return TRUE;
+	return true;
 }
 
 static int abcd_validate_clues(game_state *state, int horizontal)
@@ -779,23 +779,23 @@ static int abcd_validate_puzzle(game_state *state)
 {
 	int w = state->w;
 	int h = state->h;
-	int diag = state->diag;
+	bool diag = state->diag;
 	
 	/* Check for clue violations */
 	int invalid;
-	invalid = abcd_validate_clues(state,TRUE);
+	invalid = abcd_validate_clues(state,true);
 	if(invalid == -1)
 		return -1;
 		
 	if(invalid == 1)
 	{
-		int invalid2 = abcd_validate_clues(state,FALSE);
+		int invalid2 = abcd_validate_clues(state,false);
 		if(invalid2 == -1)
 			return invalid2;
 	}
 	else
 	{
-		invalid = abcd_validate_clues(state,FALSE);
+		invalid = abcd_validate_clues(state,false);
 		if(invalid == -1)
 			return invalid;
 	}
@@ -851,7 +851,7 @@ static int abcd_solve_game(int *numbers, game_state *state)
 	char c;
 	
 	int *remaining;
-	int busy = TRUE;
+	int busy = true;
 	int error = 0;
 
 #ifdef STANDALONE_SOLVER
@@ -871,7 +871,7 @@ char *debug;
 	/* Enter loop */
 	while(busy && error == 0)
 	{
-		busy = FALSE;
+		busy = false;
 		
 		/*
 		* Check for all letters if the number is satisfied in each row/column.
@@ -889,10 +889,10 @@ char *debug;
 if(solver_verbose)
 	printf("Solver: %c satisfied for Row %i \n", 'A'+c, y+1);
 #endif
-					busy = TRUE;
+					busy = true;
 					remaining[HOR_CLUE(y,c)] = NO_NUMBER;
 					for (x = 0; x < w; x++)
-						state->clues[CUBOID(x,y,c)] = FALSE;
+						state->clues[CUBOID(x,y,c)] = false;
 				}
 			
 			/* Check cols */
@@ -903,10 +903,10 @@ if(solver_verbose)
 if(solver_verbose)
 	printf("Solver: %c satisfied for Column %i \n", 'A'+c, x+1);
 #endif
-					busy = TRUE;
+					busy = true;
 					remaining[VER_CLUE(x,c)] = NO_NUMBER;
 					for (y = 0; y < h; y++)
-						state->clues[CUBOID(x,y,c)] = FALSE;
+						state->clues[CUBOID(x,y,c)] = false;
 				}
 		}
 		/* END CHECK */
@@ -938,7 +938,7 @@ if(solver_verbose)
 if(solver_verbose)
 	printf("Solver: Single possibility %c on %i,%i\n", 'A'+let, x+1,y+1);
 #endif
-					busy = TRUE;
+					busy = true;
 					abcd_place_letter(state, x, y, let, remaining);
 				}
 			}
@@ -957,10 +957,10 @@ if(solver_verbose)
 		for (c = 0; c < n; c++)
 		{
 			int action;
-			action = abcd_solver_runs(state, remaining, TRUE, c);
-			busy = (action ? TRUE : busy);
-			action = abcd_solver_runs(state, remaining, FALSE, c);
-			busy = (action ? TRUE : busy);
+			action = abcd_solver_runs(state, remaining, true, c);
+			busy = (action ? true : busy);
+			action = abcd_solver_runs(state, remaining, false, c);
+			busy = (action ? true : busy);
 		}
 		/* END CHECK */
 		
@@ -969,8 +969,8 @@ if(solver_verbose)
 #ifdef STANDALONE_SOLVER
 if(solver_verbose)
 {
-	debug = abcd_format_letters(state, FALSE);
-	printf("Solver letters: %s \n", abcd_format_letters(state, FALSE));
+	debug = abcd_format_letters(state, false);
+	printf("Solver letters: %s \n", abcd_format_letters(state, false));
 	sfree(debug);
 }
 #endif
@@ -1002,7 +1002,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	
 	game_state *solved = blank_state(state->w, state->h, state->n, state->diag);
 	int err = abcd_solve_game(state->numbers, solved);
-	char *ret = abcd_format_letters(solved, TRUE);
+	char *ret = abcd_format_letters(solved, true);
 	free_game(solved);
 	
 	if(err == -1)
@@ -1022,16 +1022,16 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	int w = params->w;
 	int h = params->h;
 	int n = params->n;
 	int l = w+h;
-	int diag = params->diag;
+	bool diag = params->diag;
 	int attempts = 0;
 	
-	int valid_puzzle = FALSE;
+	bool valid_puzzle = false;
 
 #ifdef STANDALONE_SOLVER
 char *debug;
@@ -1088,7 +1088,7 @@ char *debug;
 #ifdef STANDALONE_SOLVER
 if(solver_verbose)
 {
-	debug = abcd_format_letters(state, FALSE);
+	debug = abcd_format_letters(state, false);
 	printf("Letters: %s\n", debug);
 	sfree(debug);
 }
@@ -1114,7 +1114,7 @@ if(solver_verbose)
 	if (error == 0)
 	{
 		/* Puzzle is valid */
-		valid_puzzle = TRUE;
+		valid_puzzle = true;
 	}
 	
 	} /* while !valid_puzzle */
@@ -1163,7 +1163,7 @@ printf("Valid puzzle generated after %i attempt(s) \n", attempts);
 	}
 	
 	/* Save aux data */
-	*aux = abcd_format_letters(state, TRUE);
+	*aux = abcd_format_letters(state, true);
 	
 	*p++ = '\0';
 
@@ -1196,7 +1196,7 @@ static game_ui *new_ui(const game_state *state)
 	game_ui *ret = snew(game_ui);
 	
 	ret->hx = ret->hy = 0;
-	ret->hshow = ret->hcursor = ret->hpencil = FALSE;
+	ret->hshow = ret->hcursor = ret->hpencil = false;
 	
 	return ret;
 }
@@ -1227,11 +1227,11 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 	*/
 	if (ui->hshow && ui->hpencil && !ui->hcursor &&
 			newstate->grid[ui->hy * w + ui->hx] != EMPTY) {
-		ui->hshow = FALSE;
+		ui->hshow = false;
 	}
 	
 	if (!oldstate->completed && newstate->completed)
-		ui->hshow = FALSE;
+		ui->hshow = false;
 }
 
 #define FD_CURSOR		1
@@ -1251,7 +1251,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 
 struct game_drawstate {
 	int tilesize;
-	int diag;
+	bool diag;
 	int w,h,n;
 	char *grid;
 	int *cluefs;
@@ -1259,7 +1259,7 @@ struct game_drawstate {
 	int *gridfs;
 	int *oldgridfs;
 	unsigned char *clues;
-	char initial;
+	bool initial;
 	int flash;
 };
 
@@ -1290,16 +1290,16 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			{
 				ui->hx = gx;
 				ui->hy = gy;
-				ui->hpencil = FALSE;
-				ui->hshow = TRUE;
+				ui->hpencil = false;
+				ui->hshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->hshow = FALSE;
+				ui->hshow = false;
 			}
 			
-			ui->hcursor = FALSE;
+			ui->hcursor = false;
 			return UI_UPDATE;
 		}
 		/* Select square for marking */
@@ -1310,20 +1310,20 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			{
 				ui->hx = gx;
 				ui->hy = gy;
-				ui->hpencil = TRUE;
-				ui->hshow = TRUE;
+				ui->hpencil = true;
+				ui->hshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->hshow = FALSE;
+				ui->hshow = false;
 			}
 			
 			/* Remove the cursor again if the clicked square has a confirmed letter */
 			if(state->grid[gy*w+gx] != EMPTY)
-				ui->hshow = FALSE;
+				ui->hshow = false;
 			
-			ui->hcursor = FALSE;
+			ui->hcursor = false;
 			return UI_UPDATE;
 		}
 	}
@@ -1332,7 +1332,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if (IS_CURSOR_MOVE(button))
 	{
 		move_cursor(button, &ui->hx, &ui->hy, w, h, 0);
-		ui->hshow = ui->hcursor = TRUE;
+		ui->hshow = ui->hcursor = true;
 		return UI_UPDATE;
 	}
 	
@@ -1340,7 +1340,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if (ui->hshow && button == CURSOR_SELECT)
 	{
 		ui->hpencil = !ui->hpencil;
-		ui->hcursor = TRUE;
+		ui->hcursor = true;
 		return UI_UPDATE;
 	}
 	
@@ -1375,7 +1375,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		
 		/* When not in keyboard mode, hide cursor */
 		if (!ui->hcursor && !ui->hpencil)
-			ui->hshow = FALSE;
+			ui->hshow = false;
 		
 		return dupstr(buf);
 	}
@@ -1384,7 +1384,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if(button == 'M' || button == 'm')
 	{
 		int x, y, z;
-		char found = FALSE;
+		char found = false;
 		
 		for(y = 0; y < h; y++)
 		for(x = 0; x < w; x++)
@@ -1394,7 +1394,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				
 			for(z = 0; z < n; z++)
 				if(!state->clues[CUBOID(x,y,z)])
-					found = TRUE;
+					found = true;
 		}
 		
 		if(found)
@@ -1432,7 +1432,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 			p++;
 		}
 		
-		ret->completed = ret->cheated = TRUE;
+		ret->completed = ret->cheated = true;
 		return ret;
 	}
 	else if ((move[0] == 'P' || move[0] == 'R') &&
@@ -1446,7 +1446,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		if (c == '-')
 		{
 			ret->grid[y*w+x] = EMPTY;
-			memset(ret->clues + CUBOID(x,y,0), FALSE, n);
+			memset(ret->clues + CUBOID(x,y,0), false, n);
 			return ret;
 		}
 		else
@@ -1463,7 +1463,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 			
 			/* Check if the puzzle has been completed */
 			if (!ret->completed && abcd_validate_puzzle(ret) == 0)
-				ret->completed = TRUE;
+				ret->completed = true;
 			
 			return ret;
 		}
@@ -1475,7 +1475,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		for(y = 0; y < h; y++)
 		for(x = 0; x < w; x++)
 		for(z = 0; z < n; z++)
-			ret->clues[CUBOID(x,y,z)] = TRUE;
+			ret->clues[CUBOID(x,y,z)] = true;
 		
 		return ret;
 	}
@@ -1502,7 +1502,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 			  const game_params *params, int tilesize)
 {
 	ds->tilesize = tilesize;
-	ds->initial = FALSE;
+	ds->initial = false;
 }
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -1549,7 +1549,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	int n = ds->n = state->n;
 	int l = w + h;
 	
-	ds->initial = FALSE;
+	ds->initial = false;
 	ds->flash = -1;
 	
 	ds->cluefs = snewn(l*n, int);
@@ -1558,7 +1558,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	ds->oldcluefs = snewn(l*n, int);
 	ds->oldgridfs = snewn(w*h, int);
 	ds->clues = snewn(w * h * n, unsigned char);
-	memset(ds->clues, FALSE, w*h*n);
+	memset(ds->clues, false, w*h*n);
 	memset(ds->cluefs, 0, l*n*sizeof(int));
 	memset(ds->gridfs, 0, w*h*sizeof(int));
 	memset(ds->grid, ~0, w*h*sizeof(char));
@@ -1797,7 +1797,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int tx, ty, fs, bgcol;
 	char buf[80];
 	int flash = -1;
-	char dirty;
+	bool dirty;
 	
 	if (!ds->initial)
 	{
@@ -1811,18 +1811,18 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 		abcd_draw_borderletters(dr, ds, n, COL_BORDERLETTER);
 		draw_update(dr, 0, 0, rx, ry);
 		
-		ds->initial = TRUE;
+		ds->initial = true;
 	}
 	
 	if(flashtime > 0)
 		flash = (int)(flashtime / FLASH_FRAME) % 3;
 	
-	abcd_count_clues(state, ds->cluefs, TRUE);
-	abcd_count_clues(state, ds->cluefs, FALSE);
+	abcd_count_clues(state, ds->cluefs, true);
+	abcd_count_clues(state, ds->cluefs, false);
 	
 	/* Draw clues */
-	abcd_draw_clues(dr, ds, state, -1, TRUE);
-	abcd_draw_clues(dr, ds, state, -1, FALSE);
+	abcd_draw_clues(dr, ds, state, -1, true);
+	abcd_draw_clues(dr, ds, state, -1, false);
 	
 	/* Set cursor flag */
 	for(x = 0; x < w; x++)
@@ -1846,16 +1846,16 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 		for (y = 0; y < h; y++)
 		{
 			fs = ds->gridfs[y*w+x];
-			dirty = FALSE;
+			dirty = false;
 			
 			if(flash != ds->flash || fs != ds->oldgridfs[y*w+x] || 
 					state->grid[y*w+x] != ds->grid[y*w+x])
-				dirty = TRUE;
+				dirty = true;
 			
 			for(i = 0; i < n && !dirty; i++)
 			{
 				if(state->clues[CUBOID(x,y,i)] != ds->clues[CUBOID(x,y,i)])
-					dirty = TRUE;
+					dirty = true;
 			}
 			
 			if(!dirty)
@@ -1985,9 +1985,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -2018,8 +2018,8 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 	abcd_draw_borderletters(dr, ds, n, ink);
 	
 	/* Draw clues */
-	abcd_draw_clues(dr, ds, state, ink, TRUE);
-	abcd_draw_clues(dr, ds, state, ink, FALSE);
+	abcd_draw_clues(dr, ds, state, ink, true);
+	abcd_draw_clues(dr, ds, state, ink, false);
 	
 	/* Draw tiles */
 	for (x = 0; x < w; x++)
@@ -2072,15 +2072,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -2097,9 +2097,9 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	TRUE, FALSE, game_print_size, game_print,
-	FALSE, /* wants_statusbar */
-	FALSE, game_timing_state,
+	true, false, game_print_size, game_print,
+	false, /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON | REQUIRE_NUMPAD, /* flags */
 };
 
@@ -2146,7 +2146,7 @@ int main(int argc, char *argv[])
 			argc--;
 		}
 		else if(!strcmp(p, "-v"))
-			solver_verbose = TRUE;
+			solver_verbose = true;
 		else if (*p == '-')
 			usage_exit("unrecognised option");
 		else
@@ -2160,7 +2160,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err)
 		{
 			fprintf(stderr, "Parameters are invalid\n");
@@ -2174,8 +2174,8 @@ int main(int argc, char *argv[])
 		rs = random_new((void*)&seed, sizeof(time_t));
 		if(!params) params = default_params();
 		char *desc_gen, *aux;
-		printf("Generating puzzle with parameters %s\n", encode_params(params, TRUE));
-		desc_gen = new_game_desc(params, rs, &aux, FALSE);
+		printf("Generating puzzle with parameters %s\n", encode_params(params, true));
+		desc_gen = new_game_desc(params, rs, &aux, false);
 		printf("Game ID: %s",desc_gen);
 	}
 	else

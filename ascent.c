@@ -22,7 +22,7 @@
 #include "matching.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_verbose = FALSE;
+int solver_verbose = false;
 
 #define solver_printf if(!solver_verbose) {} else printf
 
@@ -85,9 +85,9 @@ struct game_params {
 	/* Difficulty and grid type */
 	int diff, mode;
 	/* Should the start and end point be removed? */
-	char removeends;
+	bool removeends;
 	/* Should all given numbers be in a rotationally symmetric pattern? */
-	char symmetrical;
+	bool symmetrical;
 };
 
 #define DIFFLIST(A)                             \
@@ -169,35 +169,35 @@ const static ascent_movement *ascent_movement_for_mode(int mode)
 }
 
 const static struct game_params ascent_presets[] = {
-	{ 7,  6, DIFF_EASY, MODE_RECT, FALSE, FALSE },
-	{ 7,  6, DIFF_NORMAL, MODE_RECT, FALSE, FALSE },
-	{ 7,  6, DIFF_TRICKY, MODE_RECT, FALSE, FALSE },
-	{ 7,  6, DIFF_HARD, MODE_RECT, FALSE, FALSE },
-	{ 10, 8, DIFF_EASY, MODE_RECT, FALSE, FALSE },
-	{ 10, 8, DIFF_NORMAL, MODE_RECT, FALSE, FALSE },
-	{ 10, 8, DIFF_TRICKY, MODE_RECT, FALSE, FALSE },
-	{ 10, 8, DIFF_HARD, MODE_RECT, FALSE, FALSE },
-	{ 5, 5, DIFF_NORMAL, MODE_EDGES, TRUE, FALSE },
-	{ 5, 5, DIFF_TRICKY, MODE_EDGES, TRUE, FALSE },
-	{ 5, 5, DIFF_HARD, MODE_EDGES, TRUE, FALSE },
+	{ 7,  6, DIFF_EASY, MODE_RECT, false, false },
+	{ 7,  6, DIFF_NORMAL, MODE_RECT, false, false },
+	{ 7,  6, DIFF_TRICKY, MODE_RECT, false, false },
+	{ 7,  6, DIFF_HARD, MODE_RECT, false, false },
+	{ 10, 8, DIFF_EASY, MODE_RECT, false, false },
+	{ 10, 8, DIFF_NORMAL, MODE_RECT, false, false },
+	{ 10, 8, DIFF_TRICKY, MODE_RECT, false, false },
+	{ 10, 8, DIFF_HARD, MODE_RECT, false, false },
+	{ 5, 5, DIFF_NORMAL, MODE_EDGES, true, false },
+	{ 5, 5, DIFF_TRICKY, MODE_EDGES, true, false },
+	{ 5, 5, DIFF_HARD, MODE_EDGES, true, false },
 };
 
 const static struct game_params ascent_honeycomb_presets[] = {
-	{ 7,  6, DIFF_NORMAL, MODE_HONEYCOMB, FALSE, FALSE },
-	{ 7,  6, DIFF_TRICKY, MODE_HONEYCOMB, FALSE, FALSE },
-	{ 7,  6, DIFF_HARD, MODE_HONEYCOMB, FALSE, FALSE },
-	{ 10, 8, DIFF_NORMAL, MODE_HONEYCOMB, FALSE, FALSE },
-	{ 10, 8, DIFF_TRICKY, MODE_HONEYCOMB, FALSE, FALSE },
-	{ 10, 8, DIFF_HARD, MODE_HONEYCOMB, FALSE, FALSE },
+	{ 7,  6, DIFF_NORMAL, MODE_HONEYCOMB, false, false },
+	{ 7,  6, DIFF_TRICKY, MODE_HONEYCOMB, false, false },
+	{ 7,  6, DIFF_HARD, MODE_HONEYCOMB, false, false },
+	{ 10, 8, DIFF_NORMAL, MODE_HONEYCOMB, false, false },
+	{ 10, 8, DIFF_TRICKY, MODE_HONEYCOMB, false, false },
+	{ 10, 8, DIFF_HARD, MODE_HONEYCOMB, false, false },
 };
 
 const static struct game_params ascent_hexagonal_presets[] = {
-	{ 7, 7, DIFF_NORMAL, MODE_HEXAGON, FALSE, FALSE },
-	{ 7, 7, DIFF_TRICKY, MODE_HEXAGON, FALSE, FALSE },
-	{ 7, 7, DIFF_HARD, MODE_HEXAGON, FALSE, FALSE },
-	{ 9, 9, DIFF_NORMAL, MODE_HEXAGON, FALSE, FALSE },
-	{ 9, 9, DIFF_TRICKY, MODE_HEXAGON, FALSE, FALSE },
-	{ 9, 9, DIFF_HARD, MODE_HEXAGON, FALSE, FALSE },
+	{ 7, 7, DIFF_NORMAL, MODE_HEXAGON, false, false },
+	{ 7, 7, DIFF_TRICKY, MODE_HEXAGON, false, false },
+	{ 7, 7, DIFF_HARD, MODE_HEXAGON, false, false },
+	{ 9, 9, DIFF_NORMAL, MODE_HEXAGON, false, false },
+	{ 9, 9, DIFF_TRICKY, MODE_HEXAGON, false, false },
+	{ 9, 9, DIFF_HARD, MODE_HEXAGON, false, false },
 };
 
 #define DEFAULT_PRESET 0
@@ -215,7 +215,7 @@ struct game_state {
 
 	number last;
 	
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 static game_params *default_params(void)
@@ -299,7 +299,7 @@ static void decode_params(game_params *params, char const *string)
 	}
 	if(*string == 'E')
 	{
-		params->removeends = TRUE;
+		params->removeends = true;
 		string++;
 	}
 	if (*string == 'd') {
@@ -319,14 +319,14 @@ static void decode_params(game_params *params, char const *string)
 
 	if (*string == 'S')
 	{
-		params->symmetrical = TRUE;
+		params->symmetrical = true;
 		string++;
 	}
 	else
-		params->symmetrical = FALSE;
+		params->symmetrical = false;
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char buf[256];
 	char *p = buf;
@@ -401,7 +401,7 @@ static game_params *custom_params(const config_item *cfg)
 }
 
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	int w = params->w;
 	int h = params->h;
@@ -432,7 +432,7 @@ static const char *validate_params(const game_params *params, int full)
  * Validation and Tools *
  * ******************** */
 
-static int is_near(cell a, cell b, int w, int mode)
+static bool is_near(cell a, cell b, int w, int mode)
 {
 	int dx = (a % w) - (b % w);
 	int dy = (a / w) - (b / w);
@@ -441,12 +441,12 @@ static int is_near(cell a, cell b, int w, int mode)
 		return (abs(dx) + abs(dy)) == 1;
 
 	if (IS_HEXAGONAL(mode) && dx == dy)
-		return FALSE;
+		return false;
 
 	return (abs(dx) | abs(dy)) == 1;
 }
 
-static char is_edge_valid(cell edge, cell i, int w, int h)
+static bool is_edge_valid(cell edge, cell i, int w, int h)
 {
 	/* Rows */
 	if ((edge / w) > 0 && (edge / w) < h - 1)
@@ -460,17 +460,17 @@ static char is_edge_valid(cell edge, cell i, int w, int h)
 	return abs((i % w) - edge % w) == abs((i / w) - edge / w);
 }
 
-static char check_completion(number *grid, int w, int h, int mode)
+static bool check_completion(number *grid, int w, int h, int mode)
 {
 	int x = -1, y = -1, x2 = -1, y2 = -1, i;
-	char found;
+	bool found;
 	number n, last = (w*h) - 1;
 	const ascent_movement *movement = ascent_movement_for_mode(mode);
 
 	/* Check for empty squares, and locate path start */
 	for(i = 0; i < w*h; i++)
 	{
-		if(grid[i] == NUMBER_EMPTY) return FALSE;
+		if(grid[i] == NUMBER_EMPTY) return false;
 		if(grid[i] == 0)
 		{
 			x = i%w;
@@ -480,7 +480,7 @@ static char check_completion(number *grid, int w, int h, int mode)
 			last--;
 	}
 	if(x == -1)
-		return FALSE;
+		return false;
 	
 	/* Keep selecting the next number in line */
 	while(grid[y*w+x] != last)
@@ -497,7 +497,7 @@ static char check_completion(number *grid, int w, int h, int mode)
 		}
 		
 		/* No neighbour found */
-		if(i == movement->dircount) return FALSE;
+		if(i == movement->dircount) return false;
 		x = x2;
 		y = y2;
 	}
@@ -510,18 +510,18 @@ static char check_completion(number *grid, int w, int h, int mode)
 			continue;
 		n = NUMBER_EDGE(grid[i]);
 
-		found = FALSE;
+		found = false;
 		for (y2 = 0; y2 < h; y2++)
 		for (x2 = 0; x2 < w; x2++)
 		{
 			if (is_edge_valid(i, y2*w+x2, w, h) && grid[y2*w + x2] == n)
-				found = TRUE;
+				found = true;
 		}
 
-		if (!found) return FALSE;
+		if (!found) return false;
 	}
 	
-	return TRUE;
+	return true;
 }
 
 static number ascent_follow_path(const game_state *state, cell i, cell prev, int *length)
@@ -809,7 +809,7 @@ struct solver_scratch {
 	
 	/* The possible path segments for each cell */
 	int *path;
-	char found_endpoints;
+	bool found_endpoints;
 
 	/* Scratch space for solver_overlap */
 	bitmap *overlap;
@@ -826,7 +826,7 @@ static struct solver_scratch *new_scratch(int w, int h, int mode, number last)
 	ret->positions = snewn(n, cell);
 	ret->grid = snewn(n, number);
 	ret->path = snewn(n, int);
-	ret->found_endpoints = FALSE;
+	ret->found_endpoints = false;
 	ret->movement = ascent_movement_for_mode(mode);
 	for(i = 0; i < n; i++)
 	{
@@ -913,7 +913,7 @@ static int solver_single_position(struct solver_scratch *scratch)
 	return ret;
 }
 
-static int solver_single_number(struct solver_scratch *scratch, char simple)
+static int solver_single_number(struct solver_scratch *scratch, bool simple)
 {
 	/* Find cells which have a single possible number */
 	
@@ -1130,7 +1130,7 @@ static int solver_update_path(struct solver_scratch *scratch)
 	ic = scratch->positions[end];
 	if (!scratch->found_endpoints && ib != CELL_NONE && ic != CELL_NONE)
 	{
-		scratch->found_endpoints = TRUE;
+		scratch->found_endpoints = true;
 		ret++;
 		for (i = 0; i < s; i++)
 		{
@@ -1494,7 +1494,7 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 	solver_initialize_path(scratch);
 	solver_remove_blocks(scratch);
 
-	while(TRUE)
+	while(true)
 	{
 		if(solver_single_position(scratch))
 			continue;
@@ -1524,12 +1524,12 @@ static void ascent_solve(const number *puzzle, int diff, struct solver_scratch *
 		
 		if(diff < DIFF_TRICKY) break;
 		
-		if(diff < DIFF_HARD && solver_single_number(scratch, TRUE))
+		if(diff < DIFF_HARD && solver_single_number(scratch, true))
 			continue;
 		
 		if(diff < DIFF_HARD) break;
 		
-		if(solver_single_number(scratch, FALSE))
+		if(solver_single_number(scratch, false))
 			continue;
 		
 		break;
@@ -1702,16 +1702,16 @@ static char ascent_remove_numbers(struct solver_scratch *scratch, number *grid,
 
 	sfree(spaces);
 
-	return TRUE;
+	return true;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-                           char **aux, int interactive)
+                           char **aux, bool interactive)
 {
 	int w, h;
 	ascent_grid_size(params, &w, &h);
 
-	char success;
+	bool success;
 	cell i;
 	struct solver_scratch *scratch = new_scratch(w, h, params->mode, (w*h)-1);
 	number n;
@@ -1846,7 +1846,7 @@ static game_state *new_game(midend *me, const game_params *params,
 	state->w = w;
 	state->h = h;
 	state->mode = params->mode;
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 	state->path = NULL;
 	state->grid = snewn(w*h, number);
 	state->immutable = snewn(BITMAP_SIZE(w*h), bitmap);
@@ -2015,7 +2015,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
 	return !IS_HEXAGONAL(params->mode);
 }
@@ -2080,7 +2080,7 @@ struct game_ui
 	int dragx, dragy;
 
 	/* User interface tweaks. Can be enabled from code. */
-	char move_with_numpad;
+	bool move_with_numpad;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -2098,7 +2098,7 @@ static game_ui *new_ui(const game_state *state)
 	ret->s = s;
 	ret->cshow = CSHOW_NONE;
 
-	ret->move_with_numpad = FALSE;
+	ret->move_with_numpad = false;
 
 	for (i = 0; i < s; i++)
 	{
@@ -2272,8 +2272,8 @@ static void ui_seek(game_ui *ui, const game_state *state)
 	else
 	{
 		number n = start;
-		char hasnext = n == state->last || ui->positions[n + 1] != CELL_NONE;
-		char hasprev = n == 0 || ui->positions[n - 1] != CELL_NONE;
+		bool hasnext = n == state->last || ui->positions[n + 1] != CELL_NONE;
+		bool hasprev = n == 0 || ui->positions[n - 1] != CELL_NONE;
 		ui->dir = n < 0 || (hasnext && hasprev) ? 0 : 
 			hasnext ? -1 : hasprev ? +1 : 0;
 		ui->select = start + ui->dir;
@@ -2400,7 +2400,7 @@ struct game_drawstate {
 	int offsetx, offsety;
 
 	int *colours;
-	char redraw;
+	bool redraw;
 	cell *oldpositions;
 	number *oldgrid;
 	cell oldheld;
@@ -2410,7 +2410,7 @@ struct game_drawstate {
 
 	/* Blitter for the background of the keyboard cursor */
 	blitter *bl;
-	char bl_on;
+	bool bl_on;
 	/* Position of the center of the blitter */
 	int blx, bly;
 	/* Radius of the keyboard cursor */
@@ -2459,17 +2459,17 @@ static int ascent_count_segments(const game_state *ret, cell i)
 	return segments;
 }
 
-static char ascent_validate_path_move(cell i, const game_state *state, const game_ui *ui)
+static bool ascent_validate_path_move(cell i, const game_state *state, const game_ui *ui)
 {
 	if (ui->held < 0 || ui->held == i)
-		return FALSE;
+		return false;
 
 	int w = state->w;
 	number start = ui->held >= 0 ? state->grid[ui->held] : NUMBER_EMPTY;
 	number n = state->grid[i];
 
 	if (!is_near(ui->held, i, w, state->mode))
-		return FALSE;
+		return false;
 
 	const ascent_movement *movement = ascent_movement_for_mode(state->mode);
 	int dir1 = ascent_find_direction(ui->held, i, w, movement);
@@ -2477,13 +2477,13 @@ static char ascent_validate_path_move(cell i, const game_state *state, const gam
 
 	/* Don't draw a line between two adjacent confirmed numbers */
 	if (state->grid[i] >= 0 && start >= 0)
-		return FALSE;
+		return false;
 
 	/* Don't connect to a cell with two confirmed path segments, except when erasing a line*/
 	if (ascent_count_segments(state, ui->held) == 2 && !(state->path && state->path[ui->held] & (1 << dir1)))
-		return FALSE;
+		return false;
 	if (ascent_count_segments(state, i) == 2 && !(state->path && state->path[i] & (1 << dir2)))
-		return FALSE;
+		return false;
 
 	if (state->path && !(state->path[i] & (1 << dir2)))
 	{
@@ -2491,27 +2491,27 @@ static char ascent_validate_path_move(cell i, const game_state *state, const gam
 		if (start >= 0 && ui->nexthints[i] != NUMBER_EMPTY &&
 			ui->nexthints[i] - start != -1 &&
 			ui->prevhints[i] - start != +1)
-			return FALSE;
+			return false;
 
 		if (n >= 0 && ui->nexthints[ui->held] != NUMBER_EMPTY &&
 			ui->nexthints[ui->held] - n != -1 &&
 			ui->prevhints[ui->held] - n != +1)
-			return FALSE;
+			return false;
 
 		/* Don't connect two line ends if both have hints, and they don't match */
 		if (ui->nexthints[i] != NUMBER_EMPTY && ui->nexthints[ui->held] != NUMBER_EMPTY &&
 			ui->nexthints[ui->held] - ui->prevhints[i] != -1 &&
 			ui->prevhints[ui->held] - ui->nexthints[i] != +1)
-			return FALSE;
+			return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
 #define DRAG_RADIUS 0.6F
 
 static char *ascent_mouse_click(const game_state *state, game_ui *ui,
-                                int gx, int gy, int button, char keyboard)
+                                int gx, int gy, int button, bool keyboard)
 {
 	/*
 	 * There are four ways to enter a number:
@@ -2715,7 +2715,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	number n;
 	char *ret = NULL;
 	ascent_step dir = {0,0};
-	char finish_typing = FALSE;
+	bool finish_typing = false;
 	
 	oy -= ds->offsety;
 	ox -= ds->offsetx;
@@ -2761,7 +2761,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (IS_MOUSE_DOWN(button))
 	{
 		ui->cshow = CSHOW_NONE;
-		finish_typing = TRUE;
+		finish_typing = true;
 	}
 
 	/* Parse keyboard cursor movement */
@@ -2826,7 +2826,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			ui->cx = max(ui->cx, ((h - ui->cy) / 2) - extra);
 		}
 
-		finish_typing = TRUE;
+		finish_typing = true;
 	}
 
 	/* Clicking outside the grid clears the selection. */
@@ -2839,14 +2839,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (IS_CURSOR_SELECT(button) && ui->cshow == CSHOW_KEYBOARD && ui->typing_cell == CELL_NONE)
 	{
 		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
-		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON, TRUE);
+		      button == CURSOR_SELECT ? LEFT_BUTTON : RIGHT_BUTTON, true);
 		if(!ret)
 		ret = ascent_mouse_click(state, ui, ui->cx, ui->cy,
-		      button == CURSOR_SELECT ? LEFT_RELEASE : RIGHT_RELEASE, TRUE);
+		      button == CURSOR_SELECT ? LEFT_RELEASE : RIGHT_RELEASE, true);
 	}
 	/* Press Enter to confirm typing */
 	if (IS_CURSOR_SELECT(button))
-		finish_typing = TRUE;
+		finish_typing = true;
 
 	/* Typing a number */
 	if (button >= '0' && button <= '9' && ui->cshow)
@@ -2889,8 +2889,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(abs(ox-hx) + abs(oy-hy) > DRAG_RADIUS*tilesize)
 				return NULL;
 		}
-		ret = ascent_mouse_click(state, ui, gx, gy, button, FALSE);
-		finish_typing = TRUE;
+		ret = ascent_mouse_click(state, ui, gx, gy, button, false);
+		finish_typing = true;
 	}
 	
 	/* Confirm typed number */
@@ -2924,13 +2924,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	return ret;
 }
 
-static char ascent_modify_path(game_state *ret, char move, cell i, cell i2)
+static bool ascent_modify_path(game_state *ret, char move, cell i, cell i2)
 {
 	const ascent_movement *movement = ascent_movement_for_mode(ret->mode);
 	int dir = ascent_find_direction(i, i2, ret->w, movement);
 
 	if (dir == -1)
-		return FALSE;
+		return false;
 
 	if (move == 'L' && !(ret->path[i] & (1 << dir)))
 		ret->path[i] |= (1 << dir);
@@ -2944,7 +2944,7 @@ static char ascent_modify_path(game_state *ret, char move, cell i, cell i2)
 	else
 		ret->path[i] &= ~FLAG_COMPLETE;
 
-	return TRUE;
+	return true;
 }
 
 static void ascent_clean_path(game_state *state)
@@ -2992,12 +2992,12 @@ static void ascent_clean_path(game_state *state)
 	}
 }
 
-static char ascent_apply_path(game_state *state, const cell *positions)
+static bool ascent_apply_path(game_state *state, const cell *positions)
 {
 	/* Check all numbers, and place an adjacent number when possible. */
 	int w = state->w;
 	cell i, i2; number n, n2, cn;
-	char ret = FALSE;
+	bool ret = false;
 	int dir;
 	const ascent_movement *movement = ascent_movement_for_mode(state->mode);
 
@@ -3027,7 +3027,7 @@ static char ascent_apply_path(game_state *state, const cell *positions)
 			if(cn != NUMBER_EMPTY && state->grid[i2] == NUMBER_EMPTY)
 			{
 				state->grid[i2] = cn;
-				ret = TRUE;
+				ret = true;
 			}
 			else
 			{
@@ -3035,7 +3035,7 @@ static char ascent_apply_path(game_state *state, const cell *positions)
 				if(n2 != NUMBER_EMPTY && abs(n-n2) > 1)
 				{
 					state->grid[i2] = n < n2 ? n + 1 : n - 1;
-					ret = TRUE;
+					ret = true;
 				}
 			}
 		}
@@ -3168,7 +3168,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 	}
 	
 	if (check_completion(ret->grid, w, h, ret->mode))
-		ret->completed = TRUE;
+		ret->completed = true;
 
 	return ret;
 }
@@ -3268,7 +3268,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	ds->oldheld = 0;
 	ds->old_next_target = 0;
 	ds->old_prev_target = 0;
-	ds->redraw = TRUE;
+	ds->redraw = true;
 	ds->colours = snewn(s, int);
 	ds->oldgrid = snewn(s, number);
 	ds->oldpositions = snewn(s, cell);
@@ -3286,7 +3286,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	memset(ds->prevhints, ~0, s*sizeof(number));
 
 	ds->bl = NULL;
-	ds->bl_on = FALSE;
+	ds->bl_on = false;
 	ds->blx = -1;
 	ds->bly = -1;
 	ds->blr = -1;
@@ -3452,7 +3452,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		draw_update(dr,
 			ds->blx - ds->blr, ds->bly - ds->blr,
 			tilesize, tilesize);
-		ds->bl_on = FALSE;
+		ds->bl_on = false;
 	}
 
 	if(ds->redraw)
@@ -3502,19 +3502,19 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	/* Invalidate squares */
 	for(i = 0; i < w*h; i++)
 	{
-		char dirty = FALSE;
+		bool dirty = false;
 
 		n = ascent_display_number(i, ds, ui, state, movement);
 
 		if(ds->oldgrid[i] != n)
 		{
-			dirty = TRUE;
+			dirty = true;
 			ds->oldgrid[i] = n;
 		}
 
 		if (ds->oldpath[i] != ds->path[i])
 		{
-			dirty = TRUE;
+			dirty = true;
 
 			/* Invalidate neighbours of adjacent cells */
 			for (i2 = max(0, i - (w+1)); i2 < w*h && i2 < i + w+1; i2++)
@@ -3528,14 +3528,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			
 		if (IS_NUMBER_EDGE(n) &&
 			positions[NUMBER_EDGE(n)] != ds->oldpositions[NUMBER_EDGE(n)])
-			dirty = TRUE;
+			dirty = true;
 
 		if (ds->prevhints[i] != ui->prevhints[i] ||
 			ds->nexthints[i] != ui->nexthints[i])
 		{
 			ds->prevhints[i] = ui->prevhints[i];
 			ds->nexthints[i] = ui->nexthints[i];
-			dirty = TRUE;
+			dirty = true;
 		}
 			
 		if(dirty)
@@ -3556,7 +3556,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		}
 	}
 
-	ds->redraw = FALSE;
+	ds->redraw = false;
 	ds->oldheld = ui->held;
 	ds->old_next_target = ui->next_target_mode & TARGET_SHOW ? ui->next_target : NUMBER_EMPTY;
 	ds->old_prev_target = ui->prev_target_mode & TARGET_SHOW ? ui->prev_target : NUMBER_EMPTY;
@@ -3748,7 +3748,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		else if (IS_NUMBER_EDGE(n))
 		{
 			i2 = positions[NUMBER_EDGE(n)];
-			char error = i2 >= 0 && !is_edge_valid(i, i2, w, h);
+			bool error = i2 >= 0 && !is_edge_valid(i, i2, w, h);
 			sprintf(buf, "%d", NUMBER_EDGE(n) + 1);
 
 			ascent_draw_arrow(dr, i, w, h, tx1, ty1, COL_ARROW, COL_BORDER, tilesize);
@@ -3788,7 +3788,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			ds->blx += ui->cy * tilesize / 2;
 
 		blitter_save(dr, ds->bl, ds->blx - ds->blr, ds->bly - ds->blr);
-		ds->bl_on = TRUE;
+		ds->bl_on = true;
 
 		draw_rect_corners(dr, ds->blx, ds->bly, ds->blr - 1, COL_CURSOR);
 		draw_update(dr, ds->blx - ds->blr, ds->bly - ds->blr, tilesize, tilesize);
@@ -3815,9 +3815,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 /* Using 9mm squares */
@@ -3935,15 +3935,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -3960,9 +3960,9 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	TRUE, FALSE, game_print_size, game_print,
-	FALSE, /* wants_statusbar */
-	FALSE, game_timing_state,
+	true, false, game_print_size, game_print,
+	false, /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };
 
@@ -4007,7 +4007,7 @@ int main(int argc, char *argv[])
 			seed = (time_t) atoi(*++argv);
 			argc--;
 		} else if (!strcmp(p, "-v"))
-			solver_verbose = TRUE;
+			solver_verbose = true;
 		else if (*p == '-')
 			usage_exit("unrecognised option");
 		else
@@ -4021,7 +4021,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err) {
 			fprintf(stderr, "Parameters are invalid\n");
 			fprintf(stderr, "%s: %s", argv[0], err);
@@ -4035,8 +4035,8 @@ int main(int argc, char *argv[])
 		if (!params)
 			params = default_params();
 		printf("Generating puzzle with parameters %s\n",
-			encode_params(params, TRUE));
-		desc_gen = new_game_desc(params, rs, &aux, FALSE);
+			encode_params(params, true));
+		desc_gen = new_game_desc(params, rs, &aux, false);
 
 		if (!solver_verbose) {
 			char *fmt = game_text_format(new_game(NULL, params, desc_gen));

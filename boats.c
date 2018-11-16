@@ -39,8 +39,8 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_verbose = FALSE;
-int solver_steps = FALSE;
+bool solver_verbose = false;
+bool solver_steps = false;
 
 #define solver_printf if(!solver_verbose) {} else printf
 
@@ -95,7 +95,7 @@ struct game_params {
 	
 	/* full */
 	int diff;
-	char strip;
+	bool strip;
 };
 
 struct game_state {
@@ -109,7 +109,7 @@ struct game_state {
 	
 	/* play data */
 	char *grid;
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 #define DIFFLIST(A)                             \
@@ -175,29 +175,29 @@ static char *boats_encode_fleet(const int *input, int fleet)
 }
 
 const static struct game_params boats_presets[] = {
-    { 6, 6, 3, NULL, DIFF_EASY, FALSE },
-    { 6, 6, 3, NULL, DIFF_NORMAL, FALSE },
-    { 6, 6, 3, NULL, DIFF_HARD, FALSE },
-    { 8, 8, 4, NULL, DIFF_EASY, FALSE },
-    { 8, 8, 4, NULL, DIFF_NORMAL, FALSE },
-    { 8, 8, 4, NULL, DIFF_HARD, FALSE },
-    { 10, 10, 4, NULL, DIFF_EASY, FALSE },
-    { 10, 10, 4, NULL, DIFF_NORMAL, FALSE },
-    { 10, 10, 4, NULL, DIFF_TRICKY, FALSE },
-    { 10, 10, 4, NULL, DIFF_HARD, FALSE },
-    { 10, 12, 5, NULL, DIFF_TRICKY, FALSE },
-    { 10, 12, 5, NULL, DIFF_HARD, FALSE },
+    { 6, 6, 3, NULL, DIFF_EASY, false },
+    { 6, 6, 3, NULL, DIFF_NORMAL, false },
+    { 6, 6, 3, NULL, DIFF_HARD, false },
+    { 8, 8, 4, NULL, DIFF_EASY, false },
+    { 8, 8, 4, NULL, DIFF_NORMAL, false },
+    { 8, 8, 4, NULL, DIFF_HARD, false },
+    { 10, 10, 4, NULL, DIFF_EASY, false },
+    { 10, 10, 4, NULL, DIFF_NORMAL, false },
+    { 10, 10, 4, NULL, DIFF_TRICKY, false },
+    { 10, 10, 4, NULL, DIFF_HARD, false },
+    { 10, 12, 5, NULL, DIFF_TRICKY, false },
+    { 10, 12, 5, NULL, DIFF_HARD, false },
 };
 
 #define DEFAULT_PRESET 7
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	game_params *ret = snew(game_params);
 	char buf[80];
 	
 	if(i < 0 || i >= lenof(boats_presets))
-		return FALSE;
+		return false;
 	
 	*ret = boats_presets[i];
 	ret->fleetdata = boats_default_fleet(ret->fleet);
@@ -208,7 +208,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 	if(name)
 		*name = dupstr(buf);
 	
-	return TRUE;
+	return true;
 }
 
 static game_params *default_params(void)
@@ -242,7 +242,7 @@ static void decode_params(game_params *params, char const *string)
 {
 	char const *p = string;
 	params->fleet = 4;
-	params->strip = FALSE;
+	params->strip = false;
 	
 	/* Find width */
 	params->w = params->h = atoi(p);
@@ -280,7 +280,7 @@ static void decode_params(game_params *params, char const *string)
 	
 	if(*p == 'S')
 	{
-		params->strip = TRUE;
+		params->strip = true;
 		p++;
 	}
 	
@@ -293,7 +293,7 @@ static void decode_params(game_params *params, char const *string)
 		params->fleetdata = boats_default_fleet(params->fleet);
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char data[256];
 	char *p = data;
@@ -393,7 +393,7 @@ static game_state *blank_game(int w, int h, int f, int *fleetdata)
 	ret->fleetdata = snewn(f, int);
 	memcpy(ret->fleetdata, fleetdata, f * sizeof(int));
 	
-	ret->completed = ret->cheated = FALSE;
+	ret->completed = ret->cheated = false;
 	
 	return ret;
 }
@@ -564,7 +564,7 @@ static void free_game(game_state *state)
 	sfree(state);
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
 	return params->w <= 10 && params->h <= 10;
 }
@@ -670,7 +670,7 @@ struct boats_run
 	int start;
 	int len;
 	int ships;
-	char horizontal;
+	bool horizontal;
 };
  
 static int boats_count_ships(const game_state *state, int *blankcounts, int *shipcounts, int *errs)
@@ -780,7 +780,7 @@ static int boats_adjust_ships(game_state *state)
 	int watersum = 0;
 	int ret = STATUS_COMPLETE;
 	char sleft, sright, sup, sdown;
-	char edge;
+	bool edge;
 	
 	/* Count the current and required amount of ships */
 	for(i = 0; i < state->fleet; i++)
@@ -850,7 +850,7 @@ static int boats_adjust_ships(game_state *state)
 	return ret;
 }
 
-static char boats_check_collision(const game_state *state, int *grid)
+static bool boats_check_collision(const game_state *state, int *grid)
 {
 	/*
 	 * Check if a collision occurs.
@@ -860,7 +860,7 @@ static char boats_check_collision(const game_state *state, int *grid)
 	int w = state->w;
 	int h = state->h;
 	int x, y;
-	char ret = FALSE;
+	bool ret = false;
 	
 	for(x = 0; x < w-1; x++)
 	for(y = 0; y < h-1; y++)
@@ -872,7 +872,7 @@ static char boats_check_collision(const game_state *state, int *grid)
 		{
 			if(grid)
 				grid[y*w+x] |= FE_COLLISION;
-			ret = TRUE;
+			ret = true;
 		}
 		else if(grid)
 			grid[y*w+x] &= ~FE_COLLISION;
@@ -895,7 +895,7 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 	int x, y, i, len;
 	char hasfleetcount = fleetcount != NULL;
 	char ret = STATUS_COMPLETE;
-	char inship, iserror;
+	bool inship, iserror;
 	
 	if(!hasfleetcount)
 		fleetcount = snewn(fleet, int);
@@ -925,29 +925,29 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 	for(x = 0; x < w; x++)
 	{
 		len = 0;
-		inship = FALSE;
+		inship = false;
 		for(y = 0; y < h; y++)
 		{
-			iserror = FALSE;
+			iserror = false;
 			if(state->grid[y*w+x] == SHIP_TOP)
-				inship = TRUE;
+				inship = true;
 			
 			if(inship)
 				len++;
 			
 			if(inship && state->grid[y*w+x] == SHIP_BOTTOM)
 			{
-				inship = FALSE;
+				inship = false;
 				if(len > fleet)
 				{
 					ret = STATUS_INVALID;
-					iserror = TRUE;
+					iserror = true;
 				}
 				else if (len > 0)
 				{
 					fleetcount[len - 1]++;
 					if(state->fleetdata[len - 1] == 0)
-						iserror = TRUE;
+						iserror = true;
 				}
 				
 				if(errs && iserror)
@@ -959,7 +959,7 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 			}
 			else if(state->grid[y*w+x] == SHIP_VAGUE)
 			{
-				inship = FALSE;
+				inship = false;
 				len = 0;
 			}
 		}
@@ -969,29 +969,29 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 	for(y = 0; y < h; y++)
 	{
 		len = 0;
-		inship = FALSE;
+		inship = false;
 		for(x = 0; x < w; x++)
 		{
-			iserror = FALSE;
+			iserror = false;
 			if(state->grid[y*w+x] == SHIP_LEFT)
-				inship = TRUE;
+				inship = true;
 			
 			if(inship)
 				len++;
 			
 			if(inship && state->grid[y*w+x] == SHIP_RIGHT)
 			{
-				inship = FALSE;
+				inship = false;
 				if(len > fleet)
 				{
 					ret = STATUS_INVALID;
-					iserror = TRUE;
+					iserror = true;
 				}
 				else if (len > 0)
 				{
 					fleetcount[len - 1]++;
 					if(state->fleetdata[len - 1] == 0)
-						iserror = TRUE;
+						iserror = true;
 				}
 				if(errs && iserror)
 				{
@@ -1002,7 +1002,7 @@ static char boats_check_fleet(const game_state *state, int *fleetcount, int *err
 			}
 			else if(state->grid[y*w+x] == SHIP_VAGUE)
 			{
-				inship = FALSE;
+				inship = false;
 				len = 0;
 			}
 		}
@@ -1034,17 +1034,17 @@ static int boats_collect_runs(game_state *state, struct boats_run *runs)
 	int w = state->w;
 	int h = state->h;
 	int x, y;
-	char inrun = FALSE;
+	bool inrun = false;
 	
 	/* Horizontal */
 	for(y = 0; y < h; y++)
 	{
-		inrun = FALSE;
+		inrun = false;
 		for(x = 0; x <= w; x++)
 		{
 			if(inrun && (x == w || state->grid[y*w+x] == WATER))
 			{
-				inrun = FALSE;
+				inrun = false;
 				i++;
 				continue;
 			}
@@ -1055,11 +1055,11 @@ static int boats_collect_runs(game_state *state, struct boats_run *runs)
 				continue;
 			else if(!inrun && state->grid[y*w+x] != WATER)
 			{
-				inrun = TRUE;
+				inrun = true;
 				runs[i].row = y;
 				runs[i].start = x;
 				runs[i].len = 0;
-				runs[i].horizontal = TRUE;
+				runs[i].horizontal = true;
 				runs[i].ships = 0;
 			}
 			
@@ -1075,12 +1075,12 @@ static int boats_collect_runs(game_state *state, struct boats_run *runs)
 	/* Vertical */
 	for(x = 0; x < w; x++)
 	{
-		inrun = FALSE;
+		inrun = false;
 		for(y = 0; y <= h; y++)
 		{
 			if(inrun && (y == h || state->grid[y*w+x] == WATER))
 			{
-				inrun = FALSE;
+				inrun = false;
 				i++;
 				continue;
 			}
@@ -1091,11 +1091,11 @@ static int boats_collect_runs(game_state *state, struct boats_run *runs)
 				continue;
 			else if(!inrun && state->grid[y*w+x] != WATER)
 			{
-				inrun = TRUE;
+				inrun = true;
 				runs[i].row = x;
 				runs[i].start = y;
 				runs[i].len = 0;
-				runs[i].horizontal = FALSE;
+				runs[i].horizontal = false;
 				runs[i].ships = 0;
 			}
 			
@@ -1135,7 +1135,7 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 	int x, y;
 	char ret = STATUS_COMPLETE;
 	char sleft, sright, sup, sdown;
-	char error;
+	bool error;
 	
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
@@ -1150,11 +1150,11 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 			continue;
 		}
 		
-		error = FALSE;
+		error = false;
 		if(state->gridclues[y*w+x] != SHIP_VAGUE && state->grid[y*w+x] != SHIP_VAGUE 
 			&& state->gridclues[y*w+x] != state->grid[y*w+x])
 		{
-			error = TRUE;
+			error = true;
 		}
 		else
 		{
@@ -1168,17 +1168,17 @@ static char boats_validate_gridclues(const game_state *state, int *errs)
 				: state->grid[(y+1)*w+x];
 			
 			if(state->gridclues[y*w+x] == SHIP_LEFT && sright == WATER)
-				error = TRUE;
+				error = true;
 			else if(state->gridclues[y*w+x] == SHIP_RIGHT && sleft == WATER)
-				error = TRUE;
+				error = true;
 			else if(state->gridclues[y*w+x] == SHIP_TOP && sdown == WATER)
-				error = TRUE;
+				error = true;
 			else if(state->gridclues[y*w+x] == SHIP_BOTTOM && sup == WATER)
-				error = TRUE;
+				error = true;
 			else if(state->gridclues[y*w+x] == SHIP_CENTER &&
 				(sleft == WATER || sright == WATER) &&
 				(sup == WATER || sdown == WATER))
-				error = TRUE;
+				error = true;
 		}
 		
 		if(error)
@@ -1611,7 +1611,7 @@ static int boats_solver_remove_singles(game_state *state, int *fleetcount)
 	return ret;
 }
 
-static int boats_solver_centers_trivial(game_state *state, char *hascenters)
+static int boats_solver_centers_trivial(game_state *state, bool *hascenters)
 {
 	/*
 	 * Check for each center clue if one of the horizontally/vertically
@@ -1626,7 +1626,7 @@ static int boats_solver_centers_trivial(game_state *state, char *hascenters)
 	int x, y;
 	
 	char sleft, sright, sup, sdown;
-	char hc = FALSE;
+	bool hc = false;
 	
 	for(x = 0; x < w; x++)
 	for(y = 0; y < h; y++)
@@ -1643,7 +1643,7 @@ static int boats_solver_centers_trivial(game_state *state, char *hascenters)
 		if((IS_SHIP(sleft) && IS_SHIP(sright)) || (IS_SHIP(sup) && IS_SHIP(sdown)))
 			continue;
 		
-		hc = TRUE;
+		hc = true;
 		
 		if(sleft == WATER || sright == WATER)
 		{
@@ -1865,12 +1865,12 @@ static int boats_solver_max_expand_dsf(game_state *state, int *fleetcount, int *
 }
 
 static int boats_solver_find_max_fleet(game_state *state, int *shipcounts, 
-	int *fleetcount, struct boats_run *runs, int runcount, char simple)
+	int *fleetcount, struct boats_run *runs, int runcount, bool simple)
 {	
 	/*
 	 * Check if the largest boat/boats need to be placed in a certain run.
-	 * If 'simple' is FALSE, the boats can also be placed partially.
-	 * If 'simple' is TRUE, this function will return 0 if there is more
+	 * If 'simple' is false, the boats can also be placed partially.
+	 * If 'simple' is true, this function will return 0 if there is more
 	 * than one boat to be placed.
 	 */
 	
@@ -2119,8 +2119,8 @@ static int boats_solver_attempt_ship_rows(game_state *state, char *tmpgrid, int 
 	int x = 0, y = 0;
 	
 #ifdef STANDALONE_SOLVER
-	int temp_verbose = solver_verbose;
-	solver_verbose = FALSE;
+	bool temp_verbose = solver_verbose;
+	solver_verbose = false;
 #endif
 	
 	memcpy(tmpgrid, state->grid, w*h*sizeof(char));
@@ -2218,8 +2218,8 @@ static int boats_solver_attempt_water_rows(game_state *state, char *tmpgrid, int
 	int x = 0, y = 0;
 	
 #ifdef STANDALONE_SOLVER
-	int temp_verbose = solver_verbose;
-	solver_verbose = FALSE;
+	bool temp_verbose = solver_verbose;
+	solver_verbose = false;
 #endif
 	
 	memcpy(tmpgrid, state->grid, w*h*sizeof(char));
@@ -2316,8 +2316,8 @@ static int boats_solver_centers_attempt(game_state *state, char *tmpgrid)
 	char sleft, sright, sup, sdown;
 
 #ifdef STANDALONE_SOLVER
-	int temp_verbose = solver_verbose;
-	solver_verbose = FALSE;
+	bool temp_verbose = solver_verbose;
+	solver_verbose = false;
 #endif
 	
 	memcpy(tmpgrid, state->grid, w*h*sizeof(char));
@@ -2386,7 +2386,7 @@ static int boats_solver_centers_attempt(game_state *state, char *tmpgrid)
 	return ret;
 }
 
-static char boats_solver_borderclues_fill(game_state *state, int *blankcounts, int *shipcounts)
+static bool boats_solver_borderclues_fill(game_state *state, int *blankcounts, int *shipcounts)
 {
 	/*
 	 * When a row or column is filled completely, add the corresponding clue.
@@ -2394,14 +2394,14 @@ static char boats_solver_borderclues_fill(game_state *state, int *blankcounts, i
 	int w = state->w;
 	int h = state->h;
 	int i;
-	char found = FALSE;
+	bool found = false;
 	
 	for(i = 0; i < w; i++)
 	{
 		if(state->borderclues[i] != NO_CLUE)
 			continue;
 		
-		found = TRUE;
+		found = true;
 		if(shipcounts[i] + blankcounts[i] == h)
 		{
 			solver_printf("Column %d is finished, add clue %d\n", i, shipcounts[i]);
@@ -2414,7 +2414,7 @@ static char boats_solver_borderclues_fill(game_state *state, int *blankcounts, i
 		if(state->borderclues[i+w] != NO_CLUE)
 			continue;
 		
-		found = TRUE;
+		found = true;
 		if(shipcounts[i+w] + blankcounts[i+w] == w)
 		{
 			solver_printf("Row %d is finished, add clue %d\n", i, shipcounts[i+w]);
@@ -2506,11 +2506,11 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	 * This flag is for solver optimization. If all CENTER clues are satisfied,
 	 * don't try techniques which only relate to CENTER clues.
 	 */
-	char hascenters = TRUE;
+	bool hascenters = true;
 	/*
 	 * This optimization flag is for finding missing border numbers.
 	 */
-	char hasnoclue = FALSE;
+	bool hasnoclue = false;
 	int status;
 	
 	int *blankcounts = snewn(w+h, int);
@@ -2527,7 +2527,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 	for(i = 0; i < w+h && !hasnoclue; i++)
 	{
 		if(state->borderclues[i] == NO_CLUE)
-			hasnoclue = TRUE;
+			hasnoclue = true;
 	}
 	
 	if(maxdiff >= DIFF_TRICKY && hasnoclue)
@@ -2544,7 +2544,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		tmpgrid = snewn(w*h, char);
 	boats_solver_initial(state);
 	
-	while(TRUE)
+	while(true)
 	{
 		/* Validation */
 		if(boats_validate_full_state(state, blankcounts, shipcounts, fleetcount, dsf) != STATUS_INCOMPLETE)
@@ -2594,7 +2594,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 		/* Don't run this function twice per cycle on DIFF_TRICKY and up */
 		if(diff < DIFF_TRICKY &&
 			boats_solver_find_max_fleet(state, shipcounts, fleetcount,
-			runs, runcount, TRUE))
+			runs, runcount, true))
 			continue;
 		
 		if(boats_solver_split_runs(state, fleetcount, runs, runcount))
@@ -2616,7 +2616,7 @@ static int boats_solve_game(game_state *state, int maxdiff)
 			continue;
 		
 		if(boats_solver_find_max_fleet(state, shipcounts, fleetcount,
-			runs, runcount, FALSE))
+			runs, runcount, false))
 			continue;
 		
 		/* Hard techniques */
@@ -2702,7 +2702,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 /* ********* *
  * Generator *
  * ********* */
-static char boats_generate_fleet(game_state *state, random_state *rs, struct boats_run *runs, int *spaces)
+static bool boats_generate_fleet(game_state *state, random_state *rs, struct boats_run *runs, int *spaces)
 {
 	/*
 	 * Attempt to place each boat in the grid. If no random_state is given,
@@ -2786,7 +2786,7 @@ static char boats_generate_fleet(game_state *state, random_state *rs, struct boa
 			
 			/* Failed to fit all ships */
 			if(i == runcount)
-				return FALSE;
+				return false;
 		}
 	}
 	
@@ -2796,10 +2796,10 @@ static char boats_generate_fleet(game_state *state, random_state *rs, struct boa
 			state->grid[i] = WATER;
 	}
 	
-	return TRUE;
+	return true;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	int w = params->w;
 	int h = params->h;
@@ -2842,10 +2842,10 @@ static const char *validate_params(const game_params *params, int full)
 	memset(state->grid, EMPTY, w*h*sizeof(char));
 
 #ifdef STANDALONE_SOLVER
-	int temp_steps = solver_steps;
-	int temp_verbose = solver_verbose;
-	solver_verbose = FALSE;
-	solver_steps = FALSE;
+	bool temp_steps = solver_steps;
+	bool temp_verbose = solver_verbose;
+	solver_verbose = false;
+	solver_steps = false;
 #endif
 	
 	if(!boats_generate_fleet(state, NULL, runs, spaces))
@@ -2883,11 +2883,11 @@ static void boats_create_borderclues(game_state *state)
 #define MAX_ATTEMPTS 1000
  
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	game_state *state;
 	int diff = params->diff;
-	char strip = params->strip;
+	bool strip = params->strip;
 	char *ret = NULL, *p;
 	char *grid;
 	char tempg;
@@ -2910,7 +2910,7 @@ restart:
 	{
 		attempts = 0;
 		if(strip)
-			strip = FALSE;
+			strip = false;
 		else
 			diff--;
 		assert(diff >= 0);
@@ -2938,7 +2938,7 @@ restart:
 	for(i = 0; i < w*h; i++)
 		spaces[i] = i;
 	shuffle(spaces, w*h, sizeof(*spaces), rs);
-	while(TRUE)
+	while(true)
 	{
 		if(boats_solve_game(state, DIFF_EASY) != -1)
 			break;
@@ -3081,10 +3081,10 @@ restart:
  * ************** */
 struct game_ui {
 	int cx, cy;
-	char cursor;
+	bool cursor;
 	
 	char drag_from, drag_to;
-	char drag_ok;
+	bool drag_ok;
 	int dsx, dex, dsy, dey;
 };
 
@@ -3096,8 +3096,8 @@ static game_ui *new_ui(const game_state *state)
 	ret->drag_to = 0;
 	ret->dsx = ret->dex = ret->dsy = ret->dey = -1;
 	ret->cx = ret->cy = 0;
-	ret->cursor = FALSE;
-	ret->drag_ok = FALSE;
+	ret->cursor = false;
+	ret->drag_ok = false;
 	
 	return ret;
 }
@@ -3128,7 +3128,7 @@ struct game_drawstate {
 	int *fleetcount;
 	int *gridfs;
 	
-	char redraw;
+	bool redraw;
 
 	char oldflash;
 	int *oldgridfs;
@@ -3139,7 +3139,7 @@ struct game_drawstate {
 
 #define FROMCOORD(x) ( ((x)-(ds->tilesize/2)) / ds->tilesize ) 
 
-static char boats_validate_move(const game_state *state, int sx, int sy, int ex, int ey, char from, char to)
+static bool boats_validate_move(const game_state *state, int sx, int sy, int ex, int ey, char from, char to)
 {
 	/*
 	 * Check if the given move will actually make a change to the grid.
@@ -3149,7 +3149,7 @@ static char boats_validate_move(const game_state *state, int sx, int sy, int ex,
 	int w = state->w;
 	
 	if(from == to)
-		return FALSE;
+		return false;
 	
 	for(x = sx; x <= ex; x++)
 	for(y = sy; y <= ey; y++)
@@ -3175,10 +3175,10 @@ static char boats_validate_move(const game_state *state, int sx, int sy, int ex,
 		if(to == '-' && state->grid[y*w+x] == EMPTY)
 			continue;
 		
-		return TRUE;
+		return true;
 	}
 	
-	return FALSE;
+	return false;
 }
 
 static char *interpret_move(const game_state *state, game_ui *ui, const game_drawstate *ds,
@@ -3218,10 +3218,10 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			
 			ui->drag_from = from;
 			ui->drag_to = to;
-			ui->drag_ok = TRUE;
+			ui->drag_ok = true;
 			ui->dsx = ui->dex = gx;
 			ui->dsy = ui->dey = gy;
-			ui->cursor = FALSE;
+			ui->cursor = false;
 			
 			return UI_UPDATE;
 		}
@@ -3231,7 +3231,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		ui->drag_to != 0)
 	{
 		if (gx < 0 || gy < 0 || gx >= w || gy >= h)
-            ui->drag_ok = FALSE;
+            ui->drag_ok = false;
 		else
 		{
 			/*
@@ -3247,7 +3247,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
             ui->dex = gx;
             ui->dey = gy;
 
-            ui->drag_ok = TRUE;
+            ui->drag_ok = true;
 		}
 		
 		if(IS_MOUSE_RELEASE(button) && ui->drag_ok)
@@ -3262,7 +3262,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			ymin = min(ui->dsy, ui->dey);
 			ymax = max(ui->dsy, ui->dey);
 			
-			ui->drag_ok = FALSE;
+			ui->drag_ok = false;
 			
 			if(boats_validate_move(state, xmin, ymin, xmax, ymax, from, to))
 			{
@@ -3278,7 +3278,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	{
 		int cx = ui->cx, cy = ui->cy;
 		move_cursor(button & ~MOD_MASK, &ui->cx, &ui->cy, w, h, 0);
-		ui->cursor = TRUE;
+		ui->cursor = true;
 		
 		/* Place boats or water by holding Shift or Ctrl while moving */
 		if(button & (MOD_CTRL|MOD_SHFT))
@@ -3356,7 +3356,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		
 		boats_adjust_ships(ret);
 		if(boats_validate_state(ret) == STATUS_COMPLETE)
-			ret->completed = TRUE;
+			ret->completed = true;
 		
 		return ret;
 	}
@@ -3383,7 +3383,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 		boats_adjust_ships(ret);
 		
 		if(boats_validate_state(ret) == STATUS_COMPLETE)
-			ret->completed = TRUE;
+			ret->completed = true;
 		
 		/* 
 		 * If the solve move did not actually finish the grid,
@@ -3484,8 +3484,8 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	ds->oldborder = snewn(w + h, int);
 	ds->grid = snewn(w * h, int);
 	
-	ds->redraw = TRUE;
-	ds->oldflash = FALSE;
+	ds->redraw = true;
+	ds->oldflash = false;
 	
 	memset(ds->grid, 0, w*h * sizeof(int));
 	memset(ds->gridfs, 0, w*h * sizeof(int));
@@ -3621,7 +3621,7 @@ static void boats_draw_collision(drawing *dr, int tilesize, int x, int y)
 #define FLEET_MARGIN (0.25F)
 
 static int boats_draw_fleet(drawing *dr, int w, int y, int fleet, 
-	int *fleetdata, int *fleetcount, int *oldfc, char redraw, double tilesize, int print)
+	int *fleetdata, int *fleetcount, int *oldfc, bool redraw, double tilesize, int print)
 {
 	/*
 	 * This function can draw the fleet data, or measure the height needed
@@ -3724,8 +3724,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int ymin = min(ui->dsy, ui->dey);
 	int ymax = max(ui->dsy, ui->dey);
 	char ship;
-	char redraw = ds->redraw;
-	char flash = FALSE;
+	bool redraw = ds->redraw;
+	bool flash = false;
 	
 	if(flashtime > 0)
 		flash = (int)(flashtime/FLASH_FRAME) & 1;
@@ -3891,7 +3891,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	boats_draw_fleet(dr, w, h+2, state->fleet, state->fleetdata, 
 		ds->fleetcount, ds->oldfleetcount, redraw, tilesize, -1);
 	
-	ds->redraw = FALSE;
+	ds->redraw = false;
 	ds->oldflash = flash;
 }
 
@@ -3900,8 +3900,8 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 {
 	ds->tilesize = tilesize;
 	ds->fleeth = boats_draw_fleet(NULL, params->w, 0, params->fleet,
-		params->fleetdata, NULL, NULL, FALSE, tilesize, -1) * tilesize;
-	ds->redraw = TRUE;
+		params->fleetdata, NULL, NULL, false, tilesize, -1) * tilesize;
+	ds->redraw = true;
 }
 
 static void game_compute_size(const game_params *params, int tilesize,
@@ -3911,7 +3911,7 @@ static void game_compute_size(const game_params *params, int tilesize,
 	*x = (params->w+2) * tilesize;
 	
 	fh = boats_draw_fleet(NULL, params->w, 0, params->fleet, params->fleetdata,
-		NULL, NULL, FALSE, tilesize, -1);
+		NULL, NULL, false, tilesize, -1);
 	
 	*y = (params->h+2+fh) * tilesize;
 }
@@ -3936,9 +3936,9 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -3959,7 +3959,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 	int tx, ty;
 	char ship;
 	char buf[80];
-	char solution = FALSE;
+	bool solution = false;
 	
 	int ink = print_mono_colour(dr, 0);
 	
@@ -3991,7 +3991,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 		}
 		
 		if(state->gridclues[y*w+x] == EMPTY && IS_SHIP(state->grid[y*w+x]))
-			solution = TRUE;
+			solution = true;
 	}
 	
 	/* Row numbers */
@@ -4027,7 +4027,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 	if(!solution)
 	{
 		boats_draw_fleet(dr, w, h+2, state->fleet, state->fleetdata, NULL,
-			NULL, FALSE, tilesize, ink);
+			NULL, false, tilesize, ink);
 	}
 }
 
@@ -4043,15 +4043,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -4068,9 +4068,9 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	TRUE, FALSE, game_print_size, game_print,
-	FALSE,			       /* wants_statusbar */
-	FALSE, game_timing_state,
+	true, false, game_print_size, game_print,
+	false,			       /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };
 
@@ -4116,11 +4116,11 @@ int main(int argc, char *argv[])
 			seed = (time_t) atoi(*++argv);
 			argc--;
 		} else if (!strcmp(p, "-v"))
-			solver_verbose = TRUE;
+			solver_verbose = true;
 		else if (!strcmp(p, "-s"))
 		{
-			solver_verbose = TRUE;
-			solver_steps = TRUE;
+			solver_verbose = true;
+			solver_steps = true;
 		}
 		else if (*p == '-')
 			usage_exit("unrecognised option");
@@ -4135,7 +4135,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err) {
 			fprintf(stderr, "Parameters are invalid\n");
 			fprintf(stderr, "%s: %s", argv[0], err);
@@ -4145,13 +4145,13 @@ int main(int argc, char *argv[])
 
 	if (!desc) {
 		char *desc_gen, *aux, *fmt;
-		solver_steps = FALSE;
+		solver_steps = false;
 		rs = random_new((void *) &seed, sizeof(time_t));
 		if (!params)
 			params = default_params();
 		printf("Generating puzzle with parameters %s\n",
-			   encode_params(params, TRUE));
-		desc_gen = new_game_desc(params, rs, &aux, FALSE);
+			   encode_params(params, true));
+		desc_gen = new_game_desc(params, rs, &aux, false);
 
 		fmt = game_text_format(new_game(NULL, params, desc_gen));
 		fputs(fmt, stdout);

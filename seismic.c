@@ -36,7 +36,7 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_verbose = FALSE;
+bool solver_verbose = false;
 #endif
 
 #define DIFFLIST(A)                             \
@@ -103,13 +103,13 @@ static game_params *default_params(void)
 	return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	game_params *ret;
 	char buf[80];
 
 	if (i < 0 || i >= lenof(seismic_presets))
-		return FALSE;
+		return false;
 
 	ret = snew(game_params);
 	*ret = seismic_presets[i];     /* structure copy */
@@ -119,7 +119,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 
 	*name = dupstr(buf);
 	*params = ret;
-	return TRUE;
+	return true;
 }
 
 static void free_params(game_params *params)
@@ -168,7 +168,7 @@ static void decode_params(game_params *params, char const *string)
 	}
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char buf[80];
 	char *p = buf;
@@ -227,7 +227,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	if (params->w < 4 || params->h < 4)
 		return "Width and height must be at least 4";
@@ -250,7 +250,7 @@ struct game_state {
 	int *marks;
 	int *dsf;
 	
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 static game_state *blank_state(int w, int h, int mode)
@@ -266,7 +266,7 @@ static game_state *blank_state(int w, int h, int mode)
 	state->marks = snewn(s, int);
 	state->dsf = snewn(s, int);
 	
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 
 	memset(state->grid, 0, s*sizeof(char));
 	memset(state->flags, 0, s*sizeof(char));
@@ -482,7 +482,8 @@ static int seismic_solver_attempt(game_state *state)
 	int ret = 0;
 	int w = state->w;
 	int s = w * state->h;
-	int i, j, n, valid;
+	int i, j, n;
+	bool valid;
 	
 	char *grid = snewn(s, char);
 	int *marks = snewn(s, int);
@@ -502,7 +503,7 @@ static int seismic_solver_attempt(game_state *state)
 			memcpy(marks, state->marks, s*sizeof(int));
 			memset(areas, 0, s*sizeof(int));
 			
-			valid = TRUE;
+			valid = true;
 			seismic_place_number(state, i%w, i/w, n);
 			
 			/* Get all marks for each region */
@@ -518,7 +519,7 @@ static int seismic_solver_attempt(game_state *state)
 				if(j != dsf_canonify(state->dsf, j)) continue;
 				
 				if(areas[j] != AREA_BITS(dsf_size(state->dsf, j)))
-					valid = FALSE;
+					valid = false;
 			}
 			
 			memcpy(state->grid, grid, s*sizeof(char));
@@ -645,7 +646,7 @@ static int seismic_solve_game(game_state *state, int maxdiff)
 	
 	seismic_solver_init(state);
 	
-	while(TRUE)
+	while(true)
 	{
 		if(seismic_validate_game(state) != STATUS_UNFINISHED)
 			break;
@@ -672,7 +673,7 @@ static int seismic_solve_game(game_state *state, int maxdiff)
 	return diff;
 }
 
-static int seismic_gen_numbers(game_state *state, random_state *rs)
+static bool seismic_gen_numbers(game_state *state, random_state *rs)
 {
 	/* Fill a grid with numbers by randomly picking squares, then
 	 * placing the lowest possible number. */
@@ -703,15 +704,15 @@ static int seismic_gen_numbers(game_state *state, random_state *rs)
 			}
 		}
 		if (k > 9)
-			return FALSE;
+			return false;
 	}
 	
 	sfree(spaces);
 	
-	return TRUE;
+	return true;
 }
 
-static int tectonic_gen_numbers(game_state *state, random_state *rs)
+static bool tectonic_gen_numbers(game_state *state, random_state *rs)
 {
 	int w = state->w;
 	int h = state->h;
@@ -765,14 +766,14 @@ static int tectonic_gen_numbers(game_state *state, random_state *rs)
 	for (i = 0; i < s; i++)
 		state->grid[i] = spaces[state->grid[i] - 1];
 
-	return TRUE;
+	return true;
 }
 
-static int seismic_gen_areas(game_state *state, random_state *rs)
+static bool seismic_gen_areas(game_state *state, random_state *rs)
 {
 	/* Examine borders between two areas in a random order,
 	 * and attempt to merge the areas whenever possible.
-	 * Returns FALSE if an area turns out to miss a number. */
+	 * Returns false if an area turns out to miss a number. */
 	 
 	/* TODO: This is a dumb way of generating a region layout.
 	 * Think of a replacement for this algorithm */
@@ -782,7 +783,7 @@ static int seismic_gen_areas(game_state *state, random_state *rs)
 	int x, y, i, i1, i2;
 	int hs = ((w-1)*h);
 	int ws = hs + (w*(h-1));
-	int ret = TRUE;
+	bool ret = true;
 	
 	int *cells = snewn(w*h, int);
 	int c, c1, c2;
@@ -834,7 +835,7 @@ static int seismic_gen_areas(game_state *state, random_state *rs)
 	for(i = 0; i < w*h; i++)
 	{
 		if(cells[dsf_canonify(state->dsf, i)] != AREA_BITS(dsf_size(state->dsf, i)))
-			ret = FALSE;
+			ret = false;
 	}
 	
 	sfree(spaces);
@@ -843,7 +844,7 @@ static int seismic_gen_areas(game_state *state, random_state *rs)
 	return ret;
 }
 
-static int seismic_gen_clues(game_state *state, random_state *rs, int diff)
+static bool seismic_gen_clues(game_state *state, random_state *rs, int diff)
 {
 	/* Randomly remove numbers to create a puzzle */
 	
@@ -879,20 +880,20 @@ static int seismic_gen_clues(game_state *state, random_state *rs, int diff)
 	sfree(spaces);
 	sfree(grid);
 	
-	return TRUE;
+	return true;
 }
 
-static int seismic_gen_diff(game_state *state, int diff)
+static bool seismic_gen_diff(game_state *state, int diff)
 {
 	/* Verify the difficulty of the puzzle */
 	
 	game_state *solved;
-	int ret = TRUE;
+	bool ret = true;
 	
 	/* Check if puzzle is solvable */
 	solved = dup_game(state);
 	if(seismic_solve_game(solved, diff) == -1)
-		ret = FALSE;
+		ret = false;
 	free_game(solved);
 	
 	if(diff <= 0 || !ret)
@@ -901,30 +902,30 @@ static int seismic_gen_diff(game_state *state, int diff)
 	/* Check if puzzle is not solvable on lower difficulty */
 	solved = dup_game(state);
 	if(seismic_solve_game(solved, diff-1) != -1)
-		ret = FALSE;
+		ret = false;
 	free_game(solved);
 	
 	return ret;
 }
 
-static int seismic_gen_puzzle(game_state *state, random_state *rs, int diff)
+static bool seismic_gen_puzzle(game_state *state, random_state *rs, int diff)
 {
 	if (state->mode == MODE_TECTONIC && !tectonic_gen_numbers(state, rs))
-		return FALSE;
+		return false;
 	if(state->mode == MODE_SEISMIC && !seismic_gen_numbers(state, rs))
-		return FALSE;
+		return false;
 	if(!seismic_gen_areas(state, rs))
-		return FALSE;
+		return false;
 	if(!seismic_gen_clues(state, rs, diff))
-		return FALSE;
+		return false;
 	if(!seismic_gen_diff(state, diff))
-		return FALSE;
+		return false;
 	
-	return TRUE;
+	return true;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	int w = params->w;
 	int h = params->h;
@@ -949,18 +950,18 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	for(x = 0; x < w-1; x++)
 	{
 		if(dsf_canonify(state->dsf, y*w+x) != dsf_canonify(state->dsf, y*w+x+1))
-			walls[i] = TRUE;
+			walls[i] = true;
 		else
-			walls[i] = FALSE;
+			walls[i] = false;
 		i++;
 	}
 	for(y = 0; y < h-1; y++)
 	for(x = 0; x < w; x++)
 	{
 		if(dsf_canonify(state->dsf, y*w+x) != dsf_canonify(state->dsf, (y+1)*w+x))
-			walls[i] = TRUE;
+			walls[i] = true;
 		else
-			walls[i] = FALSE;
+			walls[i] = false;
 		i++;
 	}
 	
@@ -1048,7 +1049,7 @@ static int seismic_read_desc(const game_params *params, const char *desc, game_s
 	
 	dsf_init(state->dsf, w*h);
 	
-	memset(walls, FALSE, ws*sizeof(char));
+	memset(walls, false, ws*sizeof(char));
 	
 	/* Read list of walls */
 	erun = wrun = 0;
@@ -1078,12 +1079,12 @@ static int seismic_read_desc(const game_params *params, const char *desc, game_s
 		}
 		if(erun > 0)
 		{
-			walls[i] = FALSE;
+			walls[i] = false;
 			erun--;
 		}
 		else if(erun == 0 && wrun > 0)
 		{
-			walls[i] = TRUE;
+			walls[i] = true;
 			wrun--;
 		}
 	}
@@ -1234,9 +1235,9 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-	return TRUE;
+	return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -1292,7 +1293,7 @@ static char *game_text_format(const game_state *state)
 struct game_ui
 {
 	int hx, hy;
-	char cshow, ckey, cpencil;
+	bool cshow, ckey, cpencil;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1300,9 +1301,9 @@ static game_ui *new_ui(const game_state *state)
 	game_ui *ret = snew(game_ui);
 	ret->hx = 0;
 	ret->hy = 0;
-	ret->cshow = FALSE;
-	ret->ckey = FALSE;
-	ret->cpencil = FALSE;
+	ret->cshow = false;
+	ret->ckey = false;
+	ret->cpencil = false;
 	
 	return ret;
 }
@@ -1360,19 +1361,19 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			{
 				ui->hx = gx;
 				ui->hy = gy;
-				ui->cpencil = FALSE;
-				ui->cshow = TRUE;
+				ui->cpencil = false;
+				ui->cshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			}
 			
 			if(state->flags[gy*w+gx] & FM_FIXED)
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			
-			ui->ckey = FALSE;
+			ui->ckey = false;
 			return UI_UPDATE;
 		}
 		/* Select square for marking */
@@ -1383,20 +1384,20 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			{
 				ui->hx = gx;
 				ui->hy = gy;
-				ui->cpencil = TRUE;
-				ui->cshow = TRUE;
+				ui->cpencil = true;
+				ui->cshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			}
 			
 			/* Remove the cursor again if the clicked square has a confirmed number */
 			if(state->grid[gy*w+gx] != 0)
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			
-			ui->ckey = FALSE;
+			ui->ckey = false;
 			return UI_UPDATE;
 		}
 	}
@@ -1405,7 +1406,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if (IS_CURSOR_MOVE(button))
 	{
 		move_cursor(button, &ui->hx, &ui->hy, w, h, 0);
-		ui->cshow = ui->ckey = TRUE;
+		ui->cshow = ui->ckey = true;
 		return UI_UPDATE;
 	}
 	
@@ -1413,7 +1414,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if (ui->cshow && button == CURSOR_SELECT)
 	{
 		ui->cpencil = !ui->cpencil;
-		ui->ckey = TRUE;
+		ui->ckey = true;
 		return UI_UPDATE;
 	}
 	
@@ -1450,7 +1451,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		
 		/* When not in keyboard mode, hide cursor */
 		if (!ui->ckey && !ui->cpencil)
-			ui->cshow = FALSE;
+			ui->cshow = false;
 		
 		return dupstr(buf);
 	}
@@ -1458,13 +1459,13 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if(button == 'M' || button == 'm')
 	{
 		int i;
-		char found = FALSE;
+		bool found = false;
 		
 		for(i = 0; i < w*h; i++)
 		{
 			if(state->grid[i] == 0 &&
 				state->marks[i] != AREA_BITS(dsf_size(state->dsf, i)))
-				found = TRUE;
+				found = true;
 		}
 		
 		if(found)
@@ -1509,7 +1510,7 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
 		}
 		
 		if(seismic_validate_game(state) == STATUS_COMPLETE)
-			state->completed = TRUE;
+			state->completed = true;
 		return state;
 	}
 	
@@ -1638,14 +1639,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int color;
 	char c, p;
 	char buf[2];
-	int cshow = ui->cshow;
+	bool cshow = ui->cshow;
 	buf[1] = '\0';
 	
 	int flash = -1;
 	if(flashtime > 0)
 	{
 		flash = (int)(flashtime / FLASH_FRAME) % 3;
-		cshow = FALSE;
+		cshow = false;
 	}
 	
 	/*
@@ -1802,9 +1803,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 /* Using 9mm squares */
@@ -1889,15 +1890,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -1914,9 +1915,9 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	TRUE, FALSE, game_print_size, game_print,
-	FALSE,			       /* wants_statusbar */
-	FALSE, game_timing_state,
+	true, false, game_print_size, game_print,
+	false,			       /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };
 
@@ -1962,7 +1963,7 @@ int main(int argc, char *argv[])
 			seed = (time_t) atoi(*++argv);
 			argc--;
 		} else if (!strcmp(p, "-v"))
-			solver_verbose = TRUE;
+			solver_verbose = true;
 		else if (*p == '-')
 			usage_exit("unrecognised option");
 		else
@@ -1976,7 +1977,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err) {
 			fprintf(stderr, "Parameters are invalid\n");
 			fprintf(stderr, "%s: %s", argv[0], err);
@@ -1990,8 +1991,8 @@ int main(int argc, char *argv[])
 		if (!params)
 			params = default_params();
 		printf("Generating puzzle with parameters %s\n",
-			   encode_params(params, TRUE));
-		desc_gen = new_game_desc(params, rs, &aux, FALSE);
+			   encode_params(params, true));
+		desc_gen = new_game_desc(params, rs, &aux, false);
 
 		if (!solver_verbose) {
 			char *fmt = game_text_format(new_game(NULL, params, desc_gen));

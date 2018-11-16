@@ -38,7 +38,7 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_verbose = FALSE;
+bool solver_verbose = false;
 #endif
 
 enum {
@@ -60,13 +60,13 @@ enum {
 
 struct game_params {
 	int w, h;
-	char sym;
+	bool sym;
 };
 
 const struct game_params crossing_presets[] = {
-	{5, 5, FALSE},
-	{7, 7, FALSE},
-	{9, 9, FALSE},
+	{5, 5, false},
+	{7, 7, false},
+	{9, 9, false},
 };
 
 #define NUM_BIT(i) (1 << ((i) - 1))
@@ -103,7 +103,7 @@ struct game_state {
 	char *grid;
 	int *marks;
 	
-	char completed, cheated;
+	bool completed, cheated;
 };
 
 static game_params *default_params(void)
@@ -114,10 +114,10 @@ static game_params *default_params(void)
 	return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
 	if (i < 0 || i >= lenof(crossing_presets))
-		return FALSE;
+		return false;
 		
 	game_params *ret = snew(game_params);
 	*ret = crossing_presets[i]; /* struct copy */
@@ -127,7 +127,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 	sprintf(buf, "%dx%d", ret->w, ret->h);
 	*name = dupstr(buf);
 	
-	return TRUE;
+	return true;
 }
 
 static void free_params(game_params *params)
@@ -145,7 +145,7 @@ static game_params *dup_params(const game_params *params)
 static void decode_params(game_params *params, char const *string)
 {
 	char const *p = string;
-	params->sym = FALSE;
+	params->sym = false;
 	
 	params->w = atoi(p);
 	while (*p && isdigit((unsigned char)*p)) p++;
@@ -157,11 +157,11 @@ static void decode_params(game_params *params, char const *string)
 		params->h = params->w;
 	}
 	if (*p == 'S') {
-		params->sym = TRUE;
+		params->sym = true;
 	}
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
 	char buf[80];
 	sprintf(buf, "%dx%d", params->w, params->h);
@@ -209,7 +209,7 @@ static game_params *custom_params(const config_item *cfg)
 	return ret;
 }
 
-static const char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
 	if(params->w < 4 && params->h < 4)
 		return "The width or height must be at least 4";
@@ -228,7 +228,7 @@ static struct crossing_puzzle *blank_puzzle(int w, int h)
 	puzzle->h = h;
 	
 	puzzle->walls = snewn(w*h, char);
-	memset(puzzle->walls, FALSE, w*h*sizeof(char));
+	memset(puzzle->walls, false, w*h*sizeof(char));
 	
 	puzzle->maxrow = 0;
 	puzzle->numbers = snewn(w*h, char*);
@@ -271,7 +271,7 @@ static game_state *blank_game(int w, int h, struct crossing_puzzle *puzzle)
 	state->marks = snewn(w*h, int);
 	memset(state->marks, 0, w*h*sizeof(int));
 	
-	state->completed = state->cheated = FALSE;
+	state->completed = state->cheated = false;
 	
 	return state;
 }
@@ -339,12 +339,12 @@ static int crossing_read_desc(const game_params *params,
 		}
 		if(erun > 0)
 		{
-			walls[i] = TRUE;
+			walls[i] = true;
 			erun--;
 		}
 		else if(erun == 0 && wrun > 0)
 		{
-			walls[i] = FALSE;
+			walls[i] = false;
 			wrun--;
 		}
 	}
@@ -467,9 +467,9 @@ static game_state *dup_game(const game_state *state)
 	return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-	return TRUE;
+	return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -531,7 +531,7 @@ static char *game_text_format(const game_state *state)
 /* SOLVER */
 struct crossing_run {
 	int row, start, len;
-	char horizontal;
+	bool horizontal;
 };
 
 struct crossing_solver {
@@ -545,18 +545,18 @@ static int crossing_collect_runs(struct crossing_puzzle *puzzle, struct crossing
 	int w = puzzle->w;
 	int h = puzzle->h;
 	int i, x, y;
-	char inrun;
+	bool inrun;
 	
 	i = 0;
 	/* Horizontal */
 	for(y = 0; y < h; y++)
 	{
-		inrun = FALSE;
+		inrun = false;
 		for(x = 0; x <= w; x++)
 		{
 			if(inrun && (x == w || puzzle->walls[y*w+x]))
 			{
-				inrun = FALSE;
+				inrun = false;
 				i++;
 				continue;
 			}
@@ -567,11 +567,11 @@ static int crossing_collect_runs(struct crossing_puzzle *puzzle, struct crossing
 				continue;
 			else if(!inrun && !puzzle->walls[y*w+x] && x < w-1 && !puzzle->walls[y*w+x+1])
 			{
-				inrun = TRUE;
+				inrun = true;
 				runs[i].row = y;
 				runs[i].start = x;
 				runs[i].len = 0;
-				runs[i].horizontal = TRUE;
+				runs[i].horizontal = true;
 			}
 			
 			if(inrun && !puzzle->walls[y*w+x])
@@ -583,12 +583,12 @@ static int crossing_collect_runs(struct crossing_puzzle *puzzle, struct crossing
 	/* Vertical */
 	for(x = 0; x < w; x++)
 	{
-		inrun = FALSE;
+		inrun = false;
 		for(y = 0; y <= h; y++)
 		{
 			if(inrun && (y == h || puzzle->walls[y*w+x]))
 			{
-				inrun = FALSE;
+				inrun = false;
 				i++;
 				continue;
 			}
@@ -599,11 +599,11 @@ static int crossing_collect_runs(struct crossing_puzzle *puzzle, struct crossing
 				continue;
 			else if(!inrun && !puzzle->walls[y*w+x] && y < h-1 && !puzzle->walls[(y+1)*w+x])
 			{
-				inrun = TRUE;
+				inrun = true;
 				runs[i].row = x;
 				runs[i].start = y;
 				runs[i].len = 0;
-				runs[i].horizontal = FALSE;
+				runs[i].horizontal = false;
 			}
 			
 			if(inrun && !puzzle->walls[y*w+x])
@@ -682,12 +682,12 @@ static int crossing_validate(const game_state *state, int runcount, struct cross
 	int h = state->puzzle->h;
 	int i, j, k, l;
 	int len;
-	char any, match, full;
+	bool any, match, full;
 	char *num;
 	int s, e, d;
 	int status = STATUS_VALID;
-	char hasruns = runs != NULL;
-	char hasdone = done != NULL;
+	bool hasruns = runs != NULL;
+	bool hasdone = done != NULL;
 	
 	if(!hasruns)
 	{
@@ -704,14 +704,14 @@ static int crossing_validate(const game_state *state, int runcount, struct cross
 	if(done)
 		memset(done, 0, runcount*sizeof(int));
 	if(runerrs)
-		memset(runerrs, FALSE, runcount*sizeof(char));
+		memset(runerrs, false, runcount*sizeof(char));
 	
 	for(i = 0; i < runcount; i++)
 	{
 		crossing_iterate(&runs[i], w, &s, &e, &d);
 		len = runs[i].len;
-		any = FALSE;
-		full = TRUE;
+		any = false;
+		full = true;
 		
 		for (l = 0; l < state->puzzle->numcount; l++)
 		{
@@ -719,17 +719,17 @@ static int crossing_validate(const game_state *state, int runcount, struct cross
 			if(strlen(num) != len)
 				continue;
 			
-			match = TRUE;
+			match = true;
 			for(j = s, k = 0; j < e; j += d, k++)
 			{
 				if(state->grid[j] == 0)
-					full = FALSE;
+					full = false;
 				if(state->grid[j] != (num[k] - '0'))
-					match = FALSE;
+					match = false;
 			}
 			
 			if(match)
-				any = TRUE;
+				any = true;
 			if(done && match)
 				done[l]++;
 				
@@ -741,7 +741,7 @@ static int crossing_validate(const game_state *state, int runcount, struct cross
 		{
 			status = STATUS_INVALID;
 			if(runerrs)
-				runerrs[i] = TRUE;
+				runerrs[i] = true;
 		}
 		//printf("\n");
 	}
@@ -776,7 +776,7 @@ static int crossing_solver_marks(game_state *state, struct crossing_solver *solv
 	int w = state->puzzle->w;
 	int s, e, d;
 	char n;
-	char match;
+	bool match;
 	char *num;
 	
 	for(i = 0; i < solver->runcount; i++)
@@ -792,12 +792,12 @@ static int crossing_solver_marks(game_state *state, struct crossing_solver *solv
 			if(solver->done[l]) continue;
 			if(strlen(num) != len) continue;
 			
-			match = TRUE;
+			match = true;
 			for(j = s, k = 0; j < e; j += d, k++)
 			{
 				n = num[k] - '0';
 				if(!(state->marks[j] & NUM_BIT(n)))
-					match = FALSE;
+					match = false;
 			}
 			
 			if(!match) continue;
@@ -856,7 +856,7 @@ static int crossing_solve_game(game_state *state)
 	int status;
 	int done = 0;
 	
-	while(TRUE)
+	while(true)
 	{
 		done = 0;
 		status = crossing_validate(state, solver->runcount, solver->runs, solver->done, NULL);
@@ -878,11 +878,11 @@ static int crossing_solve_game(game_state *state)
 }
 
 enum { GEN_BLANK, GEN_WALL, GEN_CELL };
-static char crossing_gen_walls_checkpool(int w, int h, char *walls)
+static bool crossing_gen_walls_checkpool(int w, int h, char *walls)
 {
 	/* Find a 2x2 area without GEN_CELL */
 	/* Also ensure no 2x2 area of GEN_CELL exists */
-	char ret = TRUE;
+	bool ret = true;
 	int x, y;
 	
 	for(y = 0; y < h-1; y++)
@@ -894,7 +894,7 @@ static char crossing_gen_walls_checkpool(int w, int h, char *walls)
 				walls[(y+1)*w+x] != GEN_CELL &&
 				walls[(y+1)*w+x+1] != GEN_CELL)
 		{
-			ret = FALSE;
+			ret = false;
 		}
 		
 		/* Wall on top-left */
@@ -932,7 +932,7 @@ static char crossing_gen_walls_checkpool(int w, int h, char *walls)
 	return ret;
 }
 
-static char crossing_gen_walls_checkdsf(int w, int h, char *walls)
+static bool crossing_gen_walls_checkdsf(int w, int h, char *walls)
 {
 	int *dsf = snew_dsf(w*h);
 	int i, s, i1, i2, x, y;
@@ -982,7 +982,7 @@ static char crossing_gen_walls_checkdsf(int w, int h, char *walls)
 	return maxsize == total;
 }
 
-static char crossing_gen_walls(struct crossing_puzzle *puzzle, random_state *rs, char sym)
+static bool crossing_gen_walls(struct crossing_puzzle *puzzle, random_state *rs, bool sym)
 {
 	int w = puzzle->w;
 	int h = puzzle->h;
@@ -1017,7 +1017,7 @@ static char crossing_gen_walls(struct crossing_puzzle *puzzle, random_state *rs,
 	sfree(spaces);
 	sfree(walls);
 	
-	return TRUE;
+	return true;
 }
 
 static char *crossing_gen_grid(struct crossing_puzzle *puzzle, random_state *rs)
@@ -1037,7 +1037,7 @@ static char *crossing_gen_grid(struct crossing_puzzle *puzzle, random_state *rs)
 }
 
 #define MAXIMUM_ROW 9
-static char crossing_gen_numbers(struct crossing_puzzle *puzzle, char *grid)
+static bool crossing_gen_numbers(struct crossing_puzzle *puzzle, char *grid)
 {
 	int w = puzzle->w;
 	int i, j, k, s, e, d, runcount;
@@ -1045,7 +1045,7 @@ static char crossing_gen_numbers(struct crossing_puzzle *puzzle, char *grid)
 	runcount = crossing_collect_runs(puzzle, runs);
 	char buf[MAXIMUM_ROW+1];
 	char *num;
-	char ret = TRUE;
+	bool ret = true;
 	
 	for(i = 0; i < runcount; i++)
 	{
@@ -1058,7 +1058,7 @@ static char crossing_gen_numbers(struct crossing_puzzle *puzzle, char *grid)
 		/* Check if this row is too long */
 		if(k > MAXIMUM_ROW)
 		{
-			ret = FALSE;
+			ret = false;
 			break;
 		}
 		
@@ -1073,14 +1073,14 @@ static char crossing_gen_numbers(struct crossing_puzzle *puzzle, char *grid)
 	for (i = 0; i < puzzle->numcount - 1; i++)
 	{
 		if (!strcmp(puzzle->numbers[i], puzzle->numbers[i + 1]))
-			ret = FALSE;
+			ret = false;
 	}
 
 	sfree(runs);
 	return ret;
 }
 
-static char crossing_gen_solve(struct crossing_puzzle *puzzle)
+static bool crossing_gen_solve(struct crossing_puzzle *puzzle)
 {
 	int status;
 	game_state *state = blank_game(puzzle->w, puzzle->h, puzzle);
@@ -1092,13 +1092,13 @@ static char crossing_gen_solve(struct crossing_puzzle *puzzle)
 	return status == STATUS_VALID;
 }
 
-static char crossing_generate(struct crossing_puzzle *puzzle, random_state *rs, const game_params *params)
+static bool crossing_generate(struct crossing_puzzle *puzzle, random_state *rs, const game_params *params)
 {
 	char *grid;
-	char ret = TRUE;
+	bool ret = true;
 	
 	if(!crossing_gen_walls(puzzle, rs, params->sym))
-		return FALSE;
+		return false;
 	
 	grid = crossing_gen_grid(puzzle, rs);
 	/*
@@ -1114,18 +1114,18 @@ static char crossing_generate(struct crossing_puzzle *puzzle, random_state *rs, 
 	ret = crossing_gen_numbers(puzzle, grid);
 	sfree(grid);
 	
-	if(!ret) return FALSE;
+	if(!ret) return false;
 	
 	return crossing_gen_solve(puzzle);
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
 	int w = params->w;
 	int h = params->h;
 	int i, erun, wrun;
-	char success;
+	bool success;
 	char *buf, *p;
 	
 	struct crossing_puzzle *puzzle = blank_puzzle(w, h);
@@ -1210,7 +1210,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 struct game_ui
 {
 	int cx, cy;
-	char cshow, cpencil, ckey;
+	bool cshow, cpencil, ckey;
 	
 	int runcount;
 	struct crossing_run *runs;
@@ -1222,7 +1222,7 @@ static game_ui *new_ui(const game_state *state)
 	
 	ui->cx = 0;
 	ui->cy = 0;
-	ui->cshow = ui->cpencil = ui->ckey = FALSE;
+	ui->cshow = ui->cpencil = ui->ckey = false;
 	
 	/* Generate runs */
 	ui->runs = snewn(state->puzzle->w * state->puzzle->h, struct crossing_run);
@@ -1294,19 +1294,19 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			{
 				ui->cx = gx;
 				ui->cy = gy;
-				ui->cpencil = FALSE;
-				ui->cshow = TRUE;
+				ui->cpencil = false;
+				ui->cshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			}
 			
 			if(state->puzzle->walls[gy*w+gx])
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			
-			ui->ckey = FALSE;
+			ui->ckey = false;
 			return UI_UPDATE;
 		}
 		/* Select square for marking */
@@ -1317,22 +1317,22 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			{
 				ui->cx = gx;
 				ui->cy = gy;
-				ui->cpencil = TRUE;
-				ui->cshow = TRUE;
+				ui->cpencil = true;
+				ui->cshow = true;
 			}
 			/* Deselect */
 			else
 			{
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			}
 			
 			/* Remove the cursor again if the clicked square has a confirmed number */
 			if(state->grid[gy*w+gx] != 0)
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			if(state->puzzle->walls[gy*w+gx])
-				ui->cshow = FALSE;
+				ui->cshow = false;
 			
-			ui->ckey = FALSE;
+			ui->ckey = false;
 			return UI_UPDATE;
 		}
 	}
@@ -1340,14 +1340,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (IS_CURSOR_MOVE(button))
 	{
 		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
-		ui->cshow = ui->ckey = TRUE;
+		ui->cshow = ui->ckey = true;
 		return UI_UPDATE;
 	}
 	/* Keyboard change pencil cursor */
 	if (ui->cshow && button == CURSOR_SELECT)
 	{
 		ui->cpencil = !ui->cpencil;
-		ui->ckey = TRUE;
+		ui->ckey = true;
 		return UI_UPDATE;
 	}
 	
@@ -1381,7 +1381,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		
 		/* When not in keyboard mode, hide cursor */
 		if (!ui->ckey && !ui->cpencil)
-			ui->cshow = FALSE;
+			ui->cshow = false;
 		
 		return dupstr(buf);
 	}
@@ -1424,7 +1424,7 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
 		}
 		
 		if(crossing_validate(state, 0, NULL, NULL, NULL) == STATUS_VALID)
-			state->completed = TRUE;
+			state->completed = true;
 		
 		return state;
 	}
@@ -1527,7 +1527,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 	ds->gridfs = snewn(s, int);
 	memset(ds->gridfs, 0, s*sizeof(int));
 	ds->runerrs = snewn(s, char);
-	memset(ds->runerrs, FALSE, s*sizeof(char));
+	memset(ds->runerrs, false, s*sizeof(char));
 	ds->done = snewn(s, int);
 	memset(ds->done, 0, s*sizeof(int));
 
@@ -1645,8 +1645,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	int h = puzzle->h;
 	int i,x,y,n,c, tx, ty, color;
 	char buf[2];
-	char cshow = ui->cshow && flashtime == 0;
-	char flash = FALSE;
+	bool cshow = ui->cshow && flashtime == 0;
+	bool flash = false;
 	buf[1] = '\0';
 	
 	if(flashtime > 0)
@@ -1662,7 +1662,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	for(i = 0; i < ui->runcount; i++)
 	{
 		int j, s, e, d;
-		char horizontal = ui->runs[i].horizontal;
+		bool horizontal = ui->runs[i].horizontal;
 		if(!ds->runerrs[i]) continue;
 		
 		crossing_iterate(&ui->runs[i], w, &s, &e, &d);
@@ -1812,9 +1812,9 @@ static int game_status(const game_state *state)
 	return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-	return TRUE;
+	return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -1837,15 +1837,15 @@ const struct game thegame = {
 	encode_params,
 	free_params,
 	dup_params,
-	TRUE, game_configure, custom_params,
+	true, game_configure, custom_params,
 	validate_params,
 	new_game_desc,
 	validate_desc,
 	new_game,
 	dup_game,
 	free_game,
-	TRUE, solve_game,
-	TRUE, game_can_format_as_text_now, game_text_format,
+	true, solve_game,
+	true, game_can_format_as_text_now, game_text_format,
 	new_ui,
 	free_ui,
 	encode_ui,
@@ -1862,9 +1862,9 @@ const struct game thegame = {
 	game_anim_length,
 	game_flash_length,
 	game_status,
-	FALSE, FALSE, game_print_size, game_print,
-	FALSE,                 /* wants_statusbar */
-	FALSE, game_timing_state,
+	false, false, game_print_size, game_print,
+	false,                 /* wants_statusbar */
+	false, game_timing_state,
 	REQUIRE_RBUTTON, /* flags */
 };
 
@@ -1910,7 +1910,7 @@ int main(int argc, char *argv[])
 			seed = (time_t) atoi(*++argv);
 			argc--;
 		} else if (!strcmp(p, "-v"))
-			solver_verbose = TRUE;
+			solver_verbose = true;
 		else if (*p == '-')
 			usage_exit("unrecognised option");
 		else
@@ -1924,7 +1924,7 @@ int main(int argc, char *argv[])
 
 		params = default_params();
 		decode_params(params, id);
-		err = validate_params(params, TRUE);
+		err = validate_params(params, true);
 		if (err) {
 			fprintf(stderr, "Parameters are invalid\n");
 			fprintf(stderr, "%s: %s", argv[0], err);
@@ -1938,8 +1938,8 @@ int main(int argc, char *argv[])
 		if (!params)
 			params = default_params();
 		printf("Generating puzzle with parameters %s\n",
-			   encode_params(params, TRUE));
-		desc_gen = new_game_desc(params, rs, &aux, FALSE);
+			   encode_params(params, true));
+		desc_gen = new_game_desc(params, rs, &aux, false);
 
 		if (!solver_verbose) {
 			char *fmt = game_text_format(new_game(NULL, params, desc_gen));
