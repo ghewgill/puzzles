@@ -1539,7 +1539,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         sprintf(buf, "%c%d,%d,%d",
                 (char)(ui->hpencil && n > 0 ? 'P' : 'R'), ui->hx, ui->hy, n);
 
-        if (!ui->hcursor) ui->hshow = false;
+        if (!ui->hcursor && !ui->hpencil) ui->hshow = false;
 
         return dupstr(buf);
     }

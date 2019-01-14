@@ -1449,7 +1449,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         }
         movebuf = sresize(movebuf, buflen+1, char);
 
-        if (!ui->hcursor) ui->hshow = false;
+        if (!ui->hcursor && !ui->hpencil) ui->hshow = false;
 
 	return movebuf;
     }
