@@ -86,8 +86,8 @@ enum {
   /* Pocket PC devices have small, portrait screen that requires more vivid colours */
   #define SMALL_SCREEN
   #define PORTRAIT_SCREEN
-  #define VIVID_COLOURS
 #endif
+#define VIVID_COLOURS
 #define STYLUS_BASED
 
 #define IGNOREARG(x) ( (x) = (x) )
