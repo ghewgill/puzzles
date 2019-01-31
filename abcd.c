@@ -1285,16 +1285,21 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		/* Select square for letter placement */
 		if (button == LEFT_BUTTON)
 		{
-			/* Select */
-			if(!ui->hshow || ui->hpencil || hx != gx || hy != gy)
+			if(hx != gx || hy != gy)
 			{
 				ui->hx = gx;
 				ui->hy = gy;
 				ui->hpencil = false;
 				ui->hshow = true;
 			}
-			/* Deselect */
-			else
+			else if (!ui->hshow) {
+				ui->hpencil = false;
+				ui->hshow = true;
+			}
+			else if (!ui->hpencil && state->grid[gy*w+gx] == EMPTY) {
+				ui->hpencil = true;
+			}
+			else 
 			{
 				ui->hshow = false;
 			}

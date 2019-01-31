@@ -1357,12 +1357,21 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		if (button == LEFT_BUTTON)
 		{
 			/* Select */
-			if(!ui->cshow || ui->cpencil || hx != gx || hy != gy)
+			if(hx != gx || hy != gy)
 			{
 				ui->hx = gx;
 				ui->hy = gy;
 				ui->cpencil = false;
 				ui->cshow = true;
+			}
+			else if(!ui->cshow)
+			{
+				ui->cpencil = false;
+				ui->cshow = true;
+			}
+			else if(!ui->cpencil && state->grid[gy*w+gx] == 0)
+			{
+				ui->cpencil = true;
 			}
 			/* Deselect */
 			else
