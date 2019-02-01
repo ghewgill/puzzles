@@ -1501,15 +1501,29 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		{
 			int newpencil = button == RIGHT_BUTTON;
 			
-			if((state->gridclues[(gy*o)+gx] == 0 || state->gridclues[(gy*o)+gx] == LATINH_CIRCLE)
-				&& (!ui->hshow || (newpencil ? !ui->hpencil : ui->hpencil)
-				|| ui->hx != gx || ui->hy != gy))
+			if((state->gridclues[(gy*o)+gx] == 0 || state->gridclues[(gy*o)+gx] == LATINH_CIRCLE))
 			{
-				ui->hx = gx;
-				ui->hy = gy;
-				ui->hpencil = newpencil;
-				ui->hcursor = false;
-				ui->hshow = true;
+				if (ui->hx != gx || ui->hy != gy)
+				{
+					ui->hx = gx;
+					ui->hy = gy;
+					ui->hpencil = newpencil;
+					ui->hcursor = false;
+					ui->hshow = true;
+				}
+				else if (!ui->hshow)
+				{
+					ui->hshow = true;
+					ui->hpencil = newpencil;
+				}
+				else if (newpencil == ui->hpencil)
+				{
+					ui->hpencil = !newpencil;
+				}
+				else
+				{
+					ui->hshow = false;
+				}
 			}
 			/* Deselect */
 			else

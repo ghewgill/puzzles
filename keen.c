@@ -1630,8 +1630,18 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
     if (tx >= 0 && tx < w && ty >= 0 && ty < w) {
         if (button == LEFT_BUTTON) {
+#ifdef STYLUS_BASED
+            if (tx == ui->hx && ty == ui->hy) {
+                if (!ui->hshow) {
+                    ui->hshow = true;
+                    ui->hpencil = false;
+                } else if (!ui->hpencil && state->grid[ty*w+tx] == 0) {
+                    ui->hpencil = true;
+                } else
+#else
 	    if (tx == ui->hx && ty == ui->hy &&
 		ui->hshow && !ui->hpencil) {
+#endif
                 ui->hshow = false;
             } else {
                 ui->hx = tx;

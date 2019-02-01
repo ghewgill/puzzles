@@ -4624,6 +4624,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 ui->hshow = false;
             } else if (tx == ui->hx && ty == ui->hy &&
                        ui->hshow && !ui->hpencil) {
+#ifdef STYLUS_BASED
+                ui->hshow = state->grid[ty*cr+tx] == 0;
+                ui->hpencil = true;
+            } else if (tx == ui->hx && ty == ui->hy &&
+                       ui->hshow && ui->hpencil) {
+#endif
                 ui->hshow = false;
             } else {
                 ui->hx = tx;

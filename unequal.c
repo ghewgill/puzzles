@@ -1450,8 +1450,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             /* normal highlighting for non-immutable squares */
             if (GRID(state, flags, x, y) & F_IMMUTABLE)
                 ui->hshow = false;
+#ifdef STYLUS_BASED
+            else if (x == ui->hx && y == ui->hy &&
+                     ui->hshow && !ui->hpencil) {
+                ui->hpencil = true;
+                ui->hshow = GRID(state, nums, x, y) == 0;
+            } else if (x == ui->hx && y == ui->hy &&
+                     ui->hshow && ui->hpencil)
+#else
             else if (x == ui->hx && y == ui->hy &&
                      ui->hshow && !ui->hpencil)
+#endif
                 ui->hshow = false;
             else {
                 ui->hx = x; ui->hy = y; ui->hpencil = false;
