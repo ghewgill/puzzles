@@ -20,6 +20,7 @@ Each puzzle source file contains a TODO list.
 ### Playable
 
 * [Clusters](http://www.inabapuzzle.com/honkaku/kura.html): Fill in the grid with red and blue clusters. Tiles with a dot are adjacent to exactly 1 other tile of the same color. All other tiles are adjacent to at least 2 tiles of the same color.
+* [Mathrax](http://www.janko.at/Raetsel/Mathrax/index.htm): Fill the latin square with numbers. Some grid intersections contain clues, which indicate the result of the operation applied to the topleft and bottomright numbers, and the result of the operation applied to the topright and bottomleft numbers.
 * Salad: Place each character once in every row and column. Some squares remain empty. Contains two modes.
    * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
    * [Number Ball](http://www.janko.at/Raetsel/Nanbaboru/index.htm) mode: Squares with a ball must contain a number.
