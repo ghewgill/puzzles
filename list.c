@@ -8,11 +8,13 @@
  */
 #include "puzzles.h"
 #define GAMELIST(A) \
+    A(abcd) \
     A(ascent) \
     A(blackbox) \
     A(boats) \
     A(bridges) \
     A(clusters) \
+    A(crossing) \
     A(cube) \
     A(dominosa) \
     A(fifteen) \
@@ -27,6 +29,7 @@
     A(loopy) \
     A(magnets) \
     A(map) \
+    A(mathrax) \
     A(mines) \
     A(net) \
     A(netslide) \
@@ -39,6 +42,7 @@
     A(rome) \
     A(salad) \
     A(samegame) \
+    A(seismic) \
     A(signpost) \
     A(singles) \
     A(sixteen) \

@@ -33,6 +33,10 @@ extern const game keen;
 extern const game map;
 extern const game net;
 extern const game pattern;
+extern const game abcd;
+extern const game crossing;
+extern const game mathrax;
+extern const game seismic;
 extern const game salad;
 extern const game solo;
 extern const game towers;
@@ -255,6 +259,10 @@ static void saveGameWrite(void *ctx, void *buf, int len)
      || ourgame == &map
      || ourgame == &net
      || ourgame == &salad
+     || ourgame == &abcd
+     || ourgame == &crossing
+     || ourgame == &mathrax
+     || ourgame == &seismic
      || ourgame == &solo
      || ourgame == &towers
      || ourgame == &undead
@@ -266,15 +274,18 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         const char **labels = NULL;
         const char **extra_labels = NULL;
         const BOOL *toggle_extra = NULL;
-        if (ourgame == &filling) {
+        if (ourgame == &filling || ourgame == &crossing || ourgame == &mathrax || ourgame == &seismic) {
             static const char *FillingLabels[] = {"0"};
             extra_labels = FillingLabels;
             extra_button_count = 1;
+            if (ourgame == &mathrax || ourgame == &seismic) {
+                main_button_count = atoi(midend_get_game_id(me));
+            }
         } else if (ourgame == &keen) {
-            static const char *KeenLabels[] = {"Marks"};
+            static const char *KeenLabels[] = {"0", "Marks"};
             main_button_count = atoi(midend_get_game_id(me));
             extra_labels = KeenLabels;
-            extra_button_count = 1;
+            extra_button_count = 2;
         } else if (ourgame == &map) {
             static const char *MapLabels[] = {"Labels"};
             main_button_count = 1;
@@ -290,6 +301,30 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             if (strstr(midend_get_game_id(me), "w:")) {
                 extra_button_count = 3;
             }
+        } else if (ourgame == &abcd) {
+            static const char *AbcdLabels[] = {"0"};
+            char *p = midend_get_game_id(me);
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p != 'x') {
+                return;
+            }
+            ++p;
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p != 'n') {
+                return;
+            }
+            ++p;
+            if (!*p) {
+                return;
+            }
+            main_button_count = atoi(p);
+            letters_not_numbers = true;
+            extra_labels = AbcdLabels;
+            extra_button_count = 1;
         } else if (ourgame == &salad) {
             static const char *SaladLabels[] = {"X", "0", "Marks"};
             char *p = midend_get_game_id(me);
