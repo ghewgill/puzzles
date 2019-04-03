@@ -3238,6 +3238,37 @@ to avoid long straight boring segments of track and make the games
 more twiddly and interesting. If you want to restore the possibility,
 turn this option off.
 
+\C{abc} \i{ABC}
+
+\cfg{winhelp-topic}{games.abc}
+
+Place As, Bs and Cs so that
+
+\b every row and column contains each letter exactly once
+
+\b the closest letter to an edge cell is defined by that cell's letter.
+
+Credit for this puzzle goes to Tetsuya Nishio & Naoki Inaba \k{inaba-abc}.
+
+\B{inaba-abc}
+\W{http://inabapuzzle.com/honkaku/puzabc.html}\cw{http://inabapuzzle.com/honkaku/puzabc.html}
+(in Japanese)
+
+\H{abc-controls} \I{controls, for ABC}ABC controls
+
+ABC shares much of its control system with Solo, Keen and Unequal
+(see \k{keen-controls} for example).
+
+An extra pencil mark is available in ABC. If you press 'X' it will put 
+a cross inside a higlighted cell. This could be used for showing that 
+a cell has to remain empty.
+
+\H{abc-parameters} \I{parameters, for ABC}ABC parameters
+
+Only a single parameter in this game.
+\e{Square size} is available from the \q{Custom...} option 
+on the \q{Type} menu.
+
 
 \A{licence} \I{MIT licence}\ii{Licence}
 
@@ -3245,7 +3276,8 @@ This software is \i{copyright} 2004-2014 Simon Tatham.
 
 Portions copyright Richard Boulton, James Harvey, Mike Pinna, Jonas
 K\u00F6{oe}lker, Dariusz Olszewski, Michael Schierl, Lambros Lambrou,
-Bernd Schmidt, Steffen Bauer, Lennard Sprong and Rogier Goossens.
+Bernd Schmidt, Steffen Bauer, Lennard Sprong, Rogier Goossens and Andrii
+Lastivka.
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation files
