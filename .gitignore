@@ -1,5 +1,7 @@
 *.o
 /Makefile*
+/abc
+/abcsolver
 /blackbox
 /bridges
 /cube
