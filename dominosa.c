@@ -7,30 +7,25 @@
 /*
  * Further possible deduction types in the solver:
  *
- *  * rule out a domino placement if it would divide an unfilled
- *    region such that at least one resulting region had an odd area
- *     + Tarjan's bridge-finding algorithm would be a way to find
- *       domino placements that split a connected region in two: form
- *       the graph whose vertices are unpaired squares and whose edges
- *       are potential (not placed but also not ruled out) dominoes
- *       covering two of them, and any bridge in that graph is a
- *       candidate.
- *     + Then, finding any old spanning forest of the unfilled squares
- *       should be sufficient to determine the area parity of the
- *       region that any such placement would cut off.
- *     + A more advanced form of this: if you have a region with _two_
- *       ways in and out of it, then you can at least decide on the
- *       relative parity of the two (either 'these two edges both
- *       bisect dominoes or neither do', or 'exactly one of these
- *       edges bisects a domino'). And occasionally that can be enough
- *       to let you rule out one of the two remaining choices.
- *        - For example, maybe if both edges bisect a domino then
- *          those two dominoes would also be both the same.
- *        - Or perhaps between them they rule out all possibilities
- *          for some other square.
- *        - Or perhaps, on purely geometric grounds, they would box in
- *          a square to the point where it ended up having to be an
- *          isolated singleton.
+ *  * possibly an advanced form of deduce_parity via 2-connectedness.
+ *    We currently deal with areas of the graph with exactly one way
+ *    in and out; but if you have an area with exactly _two_ routes in
+ *    and out of it, then you can at least decide on the _relative_
+ *    parity of the two (either 'these two edges both bisect dominoes
+ *    or neither do', or 'exactly one of these edges bisects a
+ *    domino'). And occasionally that can be enough to let you rule
+ *    out one of the two remaining choices.
+ *     + For example, if both those edges bisect a domino, then those
+ *       two dominoes would also be both the same.
+ *     + Or perhaps between them they rule out all possibilities for
+ *       some other square.
+ *     + Or perhaps they themselves would be duplicates!
+ *     + Or perhaps, on purely geometric grounds, they would box in a
+ *       square to the point where it ended up having to be an
+ *       isolated singleton.
+ *     + The tricky part of this is how you do the graph theory.
+ *       Perhaps a modified form of Tarjan's bridge-finding algorithm
+ *       would work, but I haven't thought through the details.
  *
  *  * possibly an advanced version of set analysis which doesn't have
  *    to start from squares all having the same number? For example,
@@ -344,6 +339,7 @@ struct solver_scratch {
     struct solver_square *squares;
     struct solver_placement **domino_placement_lists;
     struct solver_square **squares_by_number;
+    struct findloopstate *fls;
     bool squares_by_number_initialised;
     int *wh_scratch, *pc_scratch, *pc_scratch2, *dc_scratch;
 };
@@ -366,6 +362,7 @@ static struct solver_scratch *solver_make_scratch(int n)
     sc->placements = snewn(pc, struct solver_placement);
     sc->squares = snewn(wh, struct solver_square);
     sc->domino_placement_lists = snewn(pc, struct solver_placement *);
+    sc->fls = findloop_new_state(wh);
 
     for (di = hi = 0; hi <= n; hi++) {
         for (lo = 0; lo <= hi; lo++) {
@@ -498,6 +495,7 @@ static void solver_free_scratch(struct solver_scratch *sc)
     sfree(sc->squares);
     sfree(sc->domino_placement_lists);
     sfree(sc->squares_by_number);
+    findloop_free_state(sc->fls);
     sfree(sc->wh_scratch);
     sfree(sc->pc_scratch);
     sfree(sc->pc_scratch2);
@@ -821,12 +819,201 @@ static bool deduce_local_duplicate(struct solver_scratch *sc, int pi)
 }
 
 /*
+ * If placement P overlaps one placement for each of two squares S,T
+ * such that all the remaining placements for both S and T are the
+ * same domino D (and none of those placements joins S and T to each
+ * other), then P can't be placed, because it would leave S,T each
+ * having to be a copy of D, i.e. duplicates.
+ */
+static bool deduce_local_duplicate_2(struct solver_scratch *sc, int pi)
+{
+    struct solver_placement *p = &sc->placements[pi];
+    int i, j, k;
+
+    if (!p->active)
+        return false;
+
+    /*
+     * Iterate over pairs of placements qi,qj overlapping p.
+     */
+    for (i = 0; i < p->noverlaps; i++) {
+        struct solver_placement *qi = p->overlaps[i];
+        struct solver_square *sqi;
+        struct solver_domino *di = NULL;
+
+        if (!qi->active)
+            continue;
+
+        /* Find the square of qi that _isn't_ part of p */
+        sqi = qi->squares[1 - common_square_index(qi, p)];
+
+        /*
+         * Identify the unique domino involved in all possible
+         * placements of sqi other than qi. If there isn't a unique
+         * one (either too many or too few), move on and try the next
+         * qi.
+         */
+        for (k = 0; k < sqi->nplacements; k++) {
+            struct solver_placement *pk = sqi->placements[k];
+            if (sqi->placements[k] == qi)
+                continue;              /* not counting qi itself */
+            if (!di)
+                di = pk->domino;
+            else if (di != pk->domino)
+                goto done_qi;
+        }
+        if (!di)
+            goto done_qi;
+
+        /*
+         * Now find an appropriate qj != qi.
+         */
+        for (j = 0; j < p->noverlaps; j++) {
+            struct solver_placement *qj = p->overlaps[j];
+            struct solver_square *sqj;
+            bool found_di = false;
+
+            if (j == i || !qj->active)
+                continue;
+
+            sqj = qj->squares[1 - common_square_index(qj, p)];
+
+            /*
+             * As above, we want the same domino di to be the only one
+             * sqj can be if placement qj is ruled out. But also we
+             * need no placement of sqj to overlap sqi.
+             */
+            for (k = 0; k < sqj->nplacements; k++) {
+                struct solver_placement *pk = sqj->placements[k];
+                if (pk == qj)
+                    continue;          /* not counting qj itself */
+                if (pk->domino != di)
+                    goto done_qj;      /* found a different domino */
+                if (pk->squares[0] == sqi || pk->squares[1] == sqi)
+                    goto done_qj; /* sqi,sqj can be joined to each other */
+                found_di = true;
+            }
+            if (!found_di)
+                goto done_qj;
+
+            /* If we get here, then every placement for either of sqi
+             * and sqj is a copy of di, except for the ones that
+             * overlap p. Success! We can rule out p. */
+#ifdef SOLVER_DIAGNOSTICS
+            if (solver_diagnostics) {
+                printf("placement %s of domino %s would force squares "
+                       "%s and %s to both be domino %s\n",
+                       p->name, p->domino->name,
+                       sqi->name, sqj->name, di->name);
+            }
+#endif
+            rule_out_placement(sc, p);
+            return true;
+
+          done_qj:;
+        }
+
+      done_qi:;
+    }
+
+    return false;
+}
+
+struct parity_findloop_ctx {
+    struct solver_scratch *sc;
+    struct solver_square *sq;
+    int i;
+};
+
+int parity_neighbour(int vertex, void *vctx)
+{
+    struct parity_findloop_ctx *ctx = (struct parity_findloop_ctx *)vctx;
+    struct solver_placement *p;
+
+    if (vertex >= 0) {
+        ctx->sq = &ctx->sc->squares[vertex];
+        ctx->i = 0;
+    } else {
+        assert(ctx->sq);
+    }
+
+    if (ctx->i >= ctx->sq->nplacements) {
+        ctx->sq = NULL;
+        return -1;
+    }
+
+    p = ctx->sq->placements[ctx->i++];
+    return p->squares[0]->index + p->squares[1]->index - ctx->sq->index;
+}
+
+/*
+ * Look for dominoes whose placement would disconnect the unfilled
+ * area of the grid into pieces with odd area. Such a domino can't be
+ * placed, because then the area on each side of it would be
+ * untileable.
+ */
+static bool deduce_parity(struct solver_scratch *sc)
+{
+    struct parity_findloop_ctx pflctx;
+    bool done_something = false;
+    int pi;
+
+    /*
+     * Run findloop, aka Tarjan's bridge-finding algorithm, on the
+     * graph whose vertices are squares, with two vertices separated
+     * by an edge iff some not-yet-ruled-out domino placement covers
+     * them both. (So each edge itself corresponds to a domino
+     * placement.)
+     *
+     * The effect is that any bridge in this graph is a domino whose
+     * placement would separate two previously connected areas of the
+     * unfilled squares of the grid.
+     *
+     * Placing that domino would not just disconnect those areas from
+     * each other, but also use up one square of each. So if we want
+     * to avoid leaving two odd areas after placing the domino, it
+     * follows that we want to avoid the bridge having an _even_
+     * number of vertices on each side.
+     */
+    pflctx.sc = sc;
+    findloop_run(sc->fls, sc->wh, parity_neighbour, &pflctx);
+
+    for (pi = 0; pi < sc->pc; pi++) {
+        struct solver_placement *p = &sc->placements[pi];
+        int size0, size1;
+
+        if (!p->active)
+            continue;
+        if (!findloop_is_bridge(
+                sc->fls, p->squares[0]->index, p->squares[1]->index,
+                &size0, &size1))
+            continue;
+        /* To make a deduction, size0 and size1 must both be even,
+         * i.e. after placing this domino decrements each by 1 they
+         * would both become odd and untileable areas. */
+        if ((size0 | size1) & 1)
+            continue;
+
+#ifdef SOLVER_DIAGNOSTICS
+        if (solver_diagnostics) {
+            printf("placement %s of domino %s would create two odd-sized "
+                   "areas\n", p->name, p->domino->name);
+        }
+#endif
+        rule_out_placement(sc, p);
+        done_something = true;
+    }
+
+    return done_something;
+}
+
+/*
  * Try to find a set of squares all containing the same number, such
  * that the set of possible dominoes for all the squares in that set
  * is small enough to let us rule out placements of those dominoes
  * elsewhere.
  */
-static bool deduce_set_simple(struct solver_scratch *sc)
+static bool deduce_set(struct solver_scratch *sc, bool doubles)
 {
     struct solver_square **sqs, **sqp, **sqe;
     int num, nsq, i, j;
@@ -1008,6 +1195,9 @@ static bool deduce_set_simple(struct solver_scratch *sc)
                 rule_out_text = "all of them elsewhere";
 #endif
             } else {
+                if (!doubles)
+                    continue;          /* not at this difficulty level */
+
                 /*
                  * But in Dominosa, there's a special case if _two_
                  * squares in this set can possibly both be covered by
@@ -1246,6 +1436,10 @@ static bool deduce_forcing_chain(struct solver_scratch *sc)
      * Now read out the whole dsf into pc_scratch, flattening its
      * structured data into a simple integer id per chain of dominoes
      * that must occur together.
+     *
+     * The integer ids have the property that any two that differ only
+     * in the lowest bit (i.e. of the form {2n,2n+1}) represent
+     * complementary chains, each of which rules out the other.
      */
     for (pi = 0; pi < sc->pc; pi++) {
         bool inv;
@@ -1417,6 +1611,64 @@ static bool deduce_forcing_chain(struct solver_scratch *sc)
         }
     }
 
+    /*
+     * Another thing you can do with forcing chains, besides ruling
+     * out a whole one at a time, is to look at each pair of chains
+     * that overlap each other. Each such pair gives you two sets of
+     * domino placements, such that if either set is not placed, then
+     * the other one must be.
+     *
+     * This means that any domino which has a placement in _both_
+     * chains of a pair must occupy one of those two placements, i.e.
+     * we can rule that domino out anywhere else it might appear.
+     */
+    for (di = 0; di < sc->dc; di++) {
+        struct solver_domino *d = &sc->dominoes[di];
+
+        if (d->nplacements <= 2)
+            continue;      /* not enough placements to rule one out */
+
+        for (j = 0; j+1 < d->nplacements; j++) {
+            int ij = d->placements[j]->index;
+            int cj = sc->pc_scratch[ij];
+            for (k = j+1; k < d->nplacements; k++) {
+                int ik = d->placements[k]->index;
+                int ck = sc->pc_scratch[ik];
+                if ((cj ^ ck) == 1) {
+                    /*
+                     * Placements j,k of domino d are in complementary
+                     * chains, so we can rule out all the others.
+                     */
+                    int i;
+
+#ifdef SOLVER_DIAGNOSTICS
+                    if (solver_diagnostics) {
+                        printf("domino %s occurs in both complementary "
+                               "forced chains:", d->name);
+                        for (i = 0; i < sc->pc; i++)
+                            if (sc->pc_scratch[i] == cj)
+                                printf(" %s", sc->placements[i].name);
+                        printf(" and");
+                        for (i = 0; i < sc->pc; i++)
+                            if (sc->pc_scratch[i] == ck)
+                                printf(" %s", sc->placements[i].name);
+                        printf("\n");
+                    }
+#endif
+
+                    for (i = d->nplacements; i-- > 0 ;)
+                        if (i != j && i != k)
+                            rule_out_placement(sc, d->placements[i]);
+
+                    done_something = true;
+                    goto done_this_domino;
+                }
+            }
+        }
+
+      done_this_domino:;
+    }
+
     return done_something;
 }
 
@@ -1494,10 +1746,25 @@ static int run_solver(struct solver_scratch *sc, int max_diff_allowed)
             continue;
         }
 
+        for (pi = 0; pi < sc->pc; pi++)
+            if (deduce_local_duplicate_2(sc, pi))
+                done_something = true;
+        if (done_something) {
+            sc->max_diff_used = max(sc->max_diff_used, DIFF_BASIC);
+            continue;
+        }
+
+        if (deduce_parity(sc))
+            done_something = true;
+        if (done_something) {
+            sc->max_diff_used = max(sc->max_diff_used, DIFF_BASIC);
+            continue;
+        }
+
         if (max_diff_allowed <= DIFF_BASIC)
             continue;
 
-        if (deduce_set_simple(sc))
+        if (deduce_set(sc, false))
             done_something = true;
         if (done_something) {
             sc->max_diff_used = max(sc->max_diff_used, DIFF_HARD);
@@ -1506,6 +1773,13 @@ static int run_solver(struct solver_scratch *sc, int max_diff_allowed)
 
         if (max_diff_allowed <= DIFF_HARD)
             continue;
+
+        if (deduce_set(sc, true))
+            done_something = true;
+        if (done_something) {
+            sc->max_diff_used = max(sc->max_diff_used, DIFF_EXTREME);
+            continue;
+        }
 
         if (deduce_forcing_chain(sc))
             done_something = true;
@@ -2048,8 +2322,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         }
 
         if (diff != DIFF_AMBIGUOUS) {
+            int solver_result;
             solver_setup_grid(sc, as->numbers);
-            int solver_result = run_solver(sc, diff);
+            solver_result = run_solver(sc, diff);
             if (solver_result > 1)
                 continue; /* puzzle couldn't be solved at this difficulty */
             if (sc->max_diff_used < diff)
