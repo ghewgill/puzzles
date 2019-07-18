@@ -680,6 +680,7 @@ static unsigned char *generate_soluble(random_state *rs, int w, int h)
          * made for rows/columns that are under 3 squares,
          * otherwise nothing will ever be successfully generated.
          */
+/* I disagree :)
         ok = true;
         if (w > 2) {
             for (i = 0; i < h; i++) {
@@ -701,6 +702,7 @@ static unsigned char *generate_soluble(random_state *rs, int w, int h)
         }
         if (!ok)
             continue;
+*/
 
 	ok = solve_puzzle(NULL, grid, w, h, matrix, workspace,
 			  changed_h, changed_w, rowdata, 0);
