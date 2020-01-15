@@ -280,6 +280,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             extra_button_count = 1;
             if (ourgame == &mathrax || ourgame == &seismic) {
                 main_button_count = atoi(midend_get_game_id(me));
+                if (ourgame == &seismic && main_button_count < 5) {
+                    main_button_count = 5;
+                }
             }
         } else if (ourgame == &keen) {
             static const char *KeenLabels[] = {"0", "Marks"};
