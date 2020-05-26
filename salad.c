@@ -987,6 +987,11 @@ static bool salad_checkborders(game_state *state)
 #define SOLVER(upper,title,func,lower) func,
 static usersolver_t const salad_solvers[] = { DIFFLIST(SOLVER) };
 
+static bool salad_valid(struct latin_solver *solver, void *ctx)
+{
+    return true;                       /* FIXME */
+}
+
 static int salad_solve(game_state *state, int maxdiff)
 {
 	int o = state->params->order;
@@ -1033,7 +1038,7 @@ static int salad_solve(game_state *state, int maxdiff)
 		latin_solver_main(solver, maxdiff,
 			DIFF_EASY, DIFF_HARD, DIFF_HARD,
 			DIFF_HARD, DIFF_IMPOSSIBLE,
-			salad_solvers, ctx, clone_ctx, free_ctx);
+			salad_solvers, salad_valid, ctx, clone_ctx, free_ctx);
 		
 		diff = latinholes_check(state);
 	}

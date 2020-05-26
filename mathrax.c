@@ -651,6 +651,11 @@ static int mathrax_solver_tricky(struct latin_solver *solver, void *vctx)
 
 static usersolver_t const mathrax_solvers[] = { mathrax_solver_easy, mathrax_solver_normal, mathrax_solver_tricky, NULL, NULL };
 
+static bool mathrax_valid(struct latin_solver *solver, void *ctx)
+{
+    return true;                       /* FIXME */
+}
+
 static int mathrax_solve(game_state *state, int maxdiff)
 {
 	int o = state->o;
@@ -663,7 +668,7 @@ static int mathrax_solve(game_state *state, int maxdiff)
 	diff = latin_solver_main(solver, maxdiff,
 		DIFF_EASY, DIFF_NORMAL, DIFF_TRICKY,
 		DIFF_TRICKY, DIFF_RECURSIVE,
-		mathrax_solvers, ctx, clone_ctx, free_ctx);
+		mathrax_solvers, mathrax_valid, ctx, clone_ctx, free_ctx);
 	
 	free_ctx(ctx);
 
