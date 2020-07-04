@@ -20,7 +20,7 @@ NSMutableSet *g_InProgress;
 
 static NSString *CellIdentifier = @"Cell";
 
-@interface GameListViewCell: PSUICollectionViewCell
+@interface GameListViewCell: UICollectionViewCell
 @end
 
 @implementation GameListViewCell
@@ -92,7 +92,7 @@ static NSString *CellIdentifier = @"Cell";
 
 - (id)init
 {
-    PSUICollectionViewFlowLayout *layout = [[PSUICollectionViewFlowLayout alloc] init];
+    UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
         layout.itemSize = CGSizeMake(246, 31+96+50);
     } else {
