@@ -29,9 +29,12 @@ static NSString *CellIdentifier = @"Cell";
 {
     self = [super initWithFrame:frame];
     if (self) {
-        if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        if (@available(iOS 13.0, *)) {
+            self.contentView.backgroundColor = [UIColor tertiarySystemBackgroundColor];
+        } else {
             self.contentView.backgroundColor = [UIColor whiteColor];
-            
+        }
+        if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
             UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.contentView.frame.size.width, 31)];
             label.tag = 1;
             label.font = [UIFont boldSystemFontOfSize:16];
@@ -53,8 +56,6 @@ static NSString *CellIdentifier = @"Cell";
             inprogress.image = [UIImage imageNamed:@"inprogress.png"];
             [self.contentView addSubview:inprogress];
         } else {
-            self.contentView.backgroundColor = [UIColor whiteColor];
-            
             UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(100, 0, self.contentView.frame.size.width-100, 26)];
             label.tag = 1;
             label.font = [UIFont boldSystemFontOfSize:20];
