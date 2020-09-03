@@ -240,6 +240,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             [statusbar setFrame:r];
         } else {
             statusbar = [[UILabel alloc] initWithFrame:r];
+            statusbar.textColor = [UIColor blackColor];
             [self addSubview:statusbar];
         }
     } else {
