@@ -819,6 +819,11 @@
 			attributes = {
 				LastUpgradeCheck = 1170;
 				ORGANIZATIONNAME = "Greg Hewgill";
+				TargetAttributes = {
+					3701DC0416E730ED00896D7D = {
+						DevelopmentTeam = M55PJ83885;
+					};
+				};
 			};
 			buildConfigurationList = 3701DC0016E730ED00896D7D /* Build configuration list for PBXProject "Puzzles" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -1201,6 +1206,7 @@
 		3701DC2C16E730ED00896D7D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEVELOPMENT_TEAM = M55PJ83885;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Puzzles-Prefix.pch";
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -1219,6 +1225,7 @@
 		3701DC2D16E730ED00896D7D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEVELOPMENT_TEAM = M55PJ83885;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Puzzles-Prefix.pch";
 				GCC_PREPROCESSOR_DEFINITIONS = COMBINED;
