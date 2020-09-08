@@ -1158,6 +1158,7 @@
 		3701DC2C16E730ED00896D7D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1.3.1;
 				DEVELOPMENT_TEAM = M55PJ83885;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Puzzles-Prefix.pch";
@@ -1168,6 +1169,7 @@
 				);
 				INFOPLIST_FILE = "Puzzles-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				MARKETING_VERSION = 1.3.1;
 				OTHER_CFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.hewgill.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)-dev";
@@ -1178,12 +1180,14 @@
 		3701DC2D16E730ED00896D7D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1.3.1;
 				DEVELOPMENT_TEAM = M55PJ83885;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Puzzles-Prefix.pch";
 				GCC_PREPROCESSOR_DEFINITIONS = COMBINED;
 				INFOPLIST_FILE = "Puzzles-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.hewgill.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = app;
