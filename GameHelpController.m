@@ -16,7 +16,7 @@
 
 @implementation GameHelpController {
     NSString *file;
-    UIWebView *webview;
+    WKWebView *webview;
     UIBarButtonItem *backButton;
     UIBarButtonItem *forwardButton;
 }
@@ -33,8 +33,8 @@
 
 - (void)loadView
 {
-    self.view = webview = [[UIWebView alloc] init];
-    webview.delegate = self;
+    self.view = webview = [[WKWebView alloc] init];
+    webview.navigationDelegate = self;
 }
 
 - (void)viewDidLoad
@@ -62,13 +62,13 @@
     return YES;
 }
 
-- (void)webViewDidFinishLoad:(UIWebView *)webView
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation
 {
     backButton.enabled = webview.canGoBack;
     forwardButton.enabled = webview.canGoForward;
-    if ([webView.request.URL.scheme isEqualToString:@"file"] && [webView.request.URL.lastPathComponent isEqualToString:@"help.html"]) {
-        [webView stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.getElementById('version').innerHTML = '%@';", [NSBundle mainBundle].infoDictionary[@"CFBundleVersion"]]];
-        [webView stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.getElementById('orig_version').innerHTML = '%s';", ver]];
+    if ([webView.URL.scheme isEqualToString:@"file"] && [webView.URL.lastPathComponent isEqualToString:@"help.html"]) {
+        [webView evaluateJavaScript:[NSString stringWithFormat:@"document.getElementById('version').innerHTML = '%@';", [NSBundle mainBundle].infoDictionary[@"CFBundleVersion"]] completionHandler:NULL];
+        [webView evaluateJavaScript:[NSString stringWithFormat:@"document.getElementById('orig_version').innerHTML = '%s';", ver] completionHandler:NULL];
     }
 }
 
