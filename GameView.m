@@ -297,8 +297,8 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             extra_labels = TowersLabels;
             extra_button_count = 1;
         } else if (ourgame == &undead) {
-            static const char *UndeadLabels[] = {"Ghost", "Vampire", "Zombie"};
-            main_button_count = 3;
+            static const char *UndeadLabels[] = {"Ghost", "Vampire", "Zombie", "Erase"};
+            main_button_count = 4;
             labels = UndeadLabels;
         } else if (ourgame == &unequal) {
             static const char *UnequalLabels[] = {"Marks", "Hints"};
