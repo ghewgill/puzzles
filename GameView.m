@@ -210,10 +210,20 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone && UIInterfaceOrientationIsLandscape([UIDevice currentDevice].orientation)) {
         toolbar_height = 32;
     }
-    int top_margin = IOS7() ? (20+44) : 0;
+    int top_margin;
+    int bottom_margin;
+    if (@available(iOS 11, *)) {
+        UIEdgeInsets safeAreaInsets = self.safeAreaInsets;
+        top_margin = safeAreaInsets.top;
+        bottom_margin = safeAreaInsets.bottom;
+    } else {
+        top_margin = 20+44;
+        bottom_margin = 0;
+    }
     int usable_height = self.frame.size.height;
     usable_height -= top_margin;
     usable_height -= toolbar_height;
+    usable_height -= bottom_margin;
     CGRect r = CGRectMake(0, top_margin+usable_height, self.frame.size.width, toolbar_height);
     if (toolbar) {
         [toolbar setFrame:r];
