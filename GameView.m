@@ -215,10 +215,20 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone && UIInterfaceOrientationIsLandscape([UIDevice currentDevice].orientation)) {
         toolbar_height = 32;
     }
-    int top_margin = IOS7() ? (20+44) : 0;
+    int top_margin;
+    int bottom_margin;
+    if (@available(iOS 11, *)) {
+        UIEdgeInsets safeAreaInsets = self.safeAreaInsets;
+        top_margin = safeAreaInsets.top;
+        bottom_margin = safeAreaInsets.bottom;
+    } else {
+        top_margin = 20+44;
+        bottom_margin = 0;
+    }
     int usable_height = self.frame.size.height;
     usable_height -= top_margin;
     usable_height -= toolbar_height;
+    usable_height -= bottom_margin;
     CGRect r = CGRectMake(0, top_margin+usable_height, self.frame.size.width, toolbar_height);
     if (toolbar) {
         [toolbar setFrame:r];
@@ -245,6 +255,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             [statusbar setFrame:r];
         } else {
             statusbar = [[UILabel alloc] initWithFrame:r];
+            statusbar.textColor = [UIColor blackColor];
             [self addSubview:statusbar];
         }
     } else {
@@ -362,8 +373,8 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             extra_labels = TowersLabels;
             extra_button_count = 1;
         } else if (ourgame == &undead) {
-            static const char *UndeadLabels[] = {"Ghost", "Vampire", "Zombie"};
-            main_button_count = 3;
+            static const char *UndeadLabels[] = {"Ghost", "Vampire", "Zombie", "Erase"};
+            main_button_count = 4;
             labels = UndeadLabels;
         } else if (ourgame == &unequal) {
             static const char *UnequalLabels[] = {"Marks", "Hints"};
