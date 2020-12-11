@@ -630,6 +630,10 @@ static int mathrax_solver_apply_options(struct latin_solver *solver, struct solv
 	return ret;
 }
 
+static bool mathrax_valid(struct latin_solver *solver, void *vctx) {
+	return true;
+}
+
 static int mathrax_solver_easy(struct latin_solver *solver, void *vctx)
 {
 	struct solver_ctx *ctx = (struct solver_ctx *)vctx;
@@ -663,7 +667,7 @@ static int mathrax_solve(game_state *state, int maxdiff)
 	diff = latin_solver_main(solver, maxdiff,
 		DIFF_EASY, DIFF_NORMAL, DIFF_TRICKY,
 		DIFF_TRICKY, DIFF_RECURSIVE,
-		mathrax_solvers, ctx, clone_ctx, free_ctx);
+		mathrax_solvers, mathrax_valid, ctx, clone_ctx, free_ctx);
 	
 	free_ctx(ctx);
 
@@ -1364,6 +1368,14 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
  * Drawing routines *
  * **************** */
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+}
+
 static void game_compute_size(const game_params *params, int tilesize,
 							  int *x, int *y)
 {
@@ -1754,6 +1766,7 @@ const struct game thegame = {
 	game_redraw,
 	game_anim_length,
 	game_flash_length,
+	game_get_cursor_location,
 	game_status,
 	true, false, game_print_size, game_print,
 	false,			       /* wants_statusbar */
