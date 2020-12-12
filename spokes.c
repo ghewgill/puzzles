@@ -1276,6 +1276,13 @@ static void game_get_cursor_location(const game_ui *ui,
                                      const game_params *params,
                                      int *x, int *y, int *w, int *h)
 {
+	int cx = (ui->cx + 1)/3;
+	int cy = (ui->cy + 1)/3;
+	if(ui->cshow) {
+		*x = cx * ds->tilesize;
+		*y = cy * ds->tilesize;
+		*w = *h = ds->tilesize;
+	}
 }
 
 static void game_compute_size(const game_params *params, int tilesize,

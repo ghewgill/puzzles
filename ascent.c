@@ -3183,6 +3183,17 @@ static void game_get_cursor_location(const game_ui *ui,
                                      const game_params *params,
                                      int *x, int *y, int *w, int *h)
 {
+	int cx = ui->cx, cy = ui->cy;
+	if(ui->cshow) {
+		*x = cx * ds->tilesize + ds->offsetx;
+		*y = cy * ds->tilesize + ds->offsety;
+
+		if (IS_HEXAGONAL(state->mode))
+		{
+			*x += cx * ds->tilesize / 2;
+		}
+		*w = *h = ds->tilesize;
+	}
 }
 
 static void game_compute_size(const game_params *params, int tilesize,

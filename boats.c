@@ -3901,6 +3901,11 @@ static void game_get_cursor_location(const game_ui *ui,
                                      const game_params *params,
                                      int *x, int *y, int *w, int *h)
 {
+	if(ui->cursor) {
+		*x = (ui->cx+0.5) * ds->tilesize;
+		*y = (ui->cy+0.5) * ds->tilesize;
+		*w = *h = ds->tilesize;
+	}
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
