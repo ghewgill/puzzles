@@ -984,6 +984,10 @@ static bool salad_checkborders(game_state *state)
 	return true;
 }
 
+static bool salad_valid(struct latin_solver *solver, void *vctx) {
+	return true;
+}
+
 #define SOLVER(upper,title,func,lower) func,
 static usersolver_t const salad_solvers[] = { DIFFLIST(SOLVER) };
 
@@ -1788,7 +1792,20 @@ static game_state *execute_move(const game_state *state, const char *move)
 	
 	return NULL;
 }
- 
+
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+	if(ui->hshow) {
+		*x = (ui->hx+1) * TILE_SIZE;
+		*y = (ui->hy+1) * TILE_SIZE;
+		*w = *h = TILE_SIZE;
+	}
+}
+
 static void game_compute_size(const game_params *params, int tilesize,
 				  int *x, int *y)
 {
@@ -2499,6 +2516,7 @@ const struct game thegame = {
 	game_redraw,
 	game_anim_length,
 	game_flash_length,
+	game_get_cursor_location,
 	game_status,
 	true, false, game_print_size, game_print,
 #ifndef STYLUS_BASED

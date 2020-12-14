@@ -1470,6 +1470,19 @@ static game_state *execute_move(const game_state *oldstate, const char *move)
  * Drawing routines.
  */
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+	if(ui->cshow) {
+		*x = (ui->cx+0.5) * ds->tilesize;
+		*y = (ui->cy+0.5) * ds->tilesize;
+		*w = *h = ds->tilesize;
+	}
+}
+
 static void game_compute_size(const game_params *params, int tilesize,
 							  int *x, int *y)
 {
@@ -1870,6 +1883,7 @@ const struct game thegame = {
 	game_redraw,
 	game_anim_length,
 	game_flash_length,
+	game_get_cursor_location,
 	game_status,
 	false, false, game_print_size, game_print,
 	false,                 /* wants_statusbar */

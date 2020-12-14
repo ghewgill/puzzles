@@ -3177,6 +3177,25 @@ static game_state *execute_move(const game_state *state, const char *move)
  * Drawing routines *
  * **************** */
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+	int cx = ui->cx, cy = ui->cy;
+	if(ui->cshow) {
+		*x = cx * ds->tilesize + ds->offsetx;
+		*y = cy * ds->tilesize + ds->offsety;
+
+		if (IS_HEXAGONAL(state->mode))
+		{
+			*x += cx * ds->tilesize / 2;
+		}
+		*w = *h = ds->tilesize;
+	}
+}
+
 static void game_compute_size(const game_params *params, int tilesize,
                               int *x, int *y)
 {
@@ -3959,6 +3978,7 @@ const struct game thegame = {
 	game_redraw,
 	game_anim_length,
 	game_flash_length,
+	game_get_cursor_location,
 	game_status,
 	true, false, game_print_size, game_print,
 	false, /* wants_statusbar */
