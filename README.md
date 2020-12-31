@@ -25,6 +25,7 @@ Each puzzle source file contains a TODO list.
    * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
    * [Number Ball](http://www.janko.at/Raetsel/Nanbaboru/index.htm) mode: Squares with a ball must contain a number.
 * [Spokes](http://puzzlepicnic.com/genre?id=12): Connect all hubs using horizontal, vertical and diagonal lines.
+* [Sticks](https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm): Fill in the grid with horizontal and vertical line segments.
    
 ### Abandoned
 
@@ -43,6 +44,6 @@ Any bugfixes/contributions/suggestions welcome!
 
 ## LICENCE
 
-Copyright (c) 2011-2019 Lennard Sprong
+Copyright (c) 2011-2020 Lennard Sprong
 
 Based on Simon Tatham's Portable Puzzle Collection. [MIT Licence](./LICENCE)
