@@ -40,6 +40,7 @@ NSString *GameDescriptions[][2] = {
     {@"Slant", @"Draw a maze of slanting lines that matches the clues."},
     {@"Solo", @"Fill in the grid so that each row, column and square block contains one of every digit."},
     {@"Spokes", @"Connect all hubs using horizontal, vertical and diagonal lines."},
+    {@"Sticks", @"Fill in the grid with horizontal and vertical line segments."},
     {@"Tents", @"Place a tent next to each tree."},
     {@"Towers", @"Complete the latin square of towers in accordance with the clues."},
     {@"Tracks", @"Fill in the railway track according to the clues."},
