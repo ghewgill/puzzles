@@ -991,11 +991,6 @@ static bool salad_valid(struct latin_solver *solver, void *vctx) {
 #define SOLVER(upper,title,func,lower) func,
 static usersolver_t const salad_solvers[] = { DIFFLIST(SOLVER) };
 
-static bool salad_valid(struct latin_solver *solver, void *ctx)
-{
-    return true;                       /* FIXME */
-}
-
 static int salad_solve(game_state *state, int maxdiff)
 {
 	int o = state->params->order;
