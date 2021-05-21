@@ -83,12 +83,6 @@ enum {
 #define REQUIRE_NUMPAD ( 1 << 11 )
 /* end of `flags' word definitions */
 
-#ifdef _WIN32_WCE
-  /* Pocket PC devices have small, portrait screen that requires more vivid colours */
-  #define SMALL_SCREEN
-  #define PORTRAIT_SCREEN
-  #define VIVID_COLOURS
-#endif
 #define STYLUS_BASED
 
 #define IGNOREARG(x) ( (x) = (x) )
