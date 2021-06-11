@@ -341,4 +341,3 @@ cliprogram(tree234-test tree234.c COMPILE_DEFINITIONS TEST)
 
 build_platform_extras()
 
-export_variables_to_parent_scope()
