@@ -25,7 +25,7 @@ Each puzzle source file contains a TODO list.
    * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
    * [Number Ball](http://www.janko.at/Raetsel/Nanbaboru/index.htm) mode: Squares with a ball must contain a number.
 * [Spokes](http://puzzlepicnic.com/genre?id=12): Connect all hubs using horizontal, vertical and diagonal lines.
-* [Sticks](https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm): Fill in the grid with horizontal and vertical line segments.
+* Sticks (based on [Tatebo-Yokoko](https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm)): Fill in the grid with horizontal and vertical line segments.
    
 ### Abandoned
 
@@ -34,9 +34,17 @@ Each puzzle source file contains a TODO list.
    * Tectonic: Two equal numbers cannot be horizontally, vertically or diagonally adjacent. 
 * Crossing (based on [Nansuke](http://www.nikoli.co.jp/en/puzzles/number_skeleton.html)): Place each number from the list into the crossword.
 
-## Building
+## Building with CMake
 
-Get the source code for the SGT Portable Puzzle Collection from [the official site](https://www.chiark.greenend.org.uk/~sgtatham/puzzles/). Copy these source files into the folder, run `mkfiles.pl`, then use one of the generated makefiles.
+* Get the source code for the SGT Portable Puzzle Collection from [the official site](https://www.chiark.greenend.org.uk/~sgtatham/puzzles/).
+* Copy this folder into the above source folder as a subdirectory. Alternatively, add this repository as a submodule of the main repository.
+* In the main repository's `CMakeLists.txt`, go to the line with `add_subdirectory(unfinished)` and add the following line below it:
+```cmake
+add_subdirectory(puzzles-unreleased) # or whatever this folder is called
+```
+* Run CMake in the main folder.
+
+---
 
 More information can be found in the original collection's `README`.
 
@@ -44,6 +52,6 @@ Any bugfixes/contributions/suggestions welcome!
 
 ## LICENCE
 
-Copyright (c) 2011-2020 Lennard Sprong
+Copyright (c) 2011-2021 Lennard Sprong
 
 Based on Simon Tatham's Portable Puzzle Collection. [MIT Licence](./LICENCE)
