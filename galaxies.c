@@ -49,7 +49,7 @@
 #ifdef DEBUGGING
 #define solvep debug
 #else
-int solver_show_working;
+static bool solver_show_working;
 #define solvep(x) do { if (solver_show_working) { printf x; } } while(0)
 #endif
 
@@ -139,7 +139,7 @@ struct game_state {
     int w, h;           /* size from params */
     int sx, sy;         /* allocated size, (2x-1)*(2y-1) */
     space *grid;
-    int completed, used_solve;
+    bool completed, used_solve;
     int ndots;
     space **dots;
 
@@ -147,6 +147,14 @@ struct game_state {
     int cdiff;          /* difficulty of current puzzle (for status bar),
                            or -1 if stale. */
 };
+
+static bool check_complete(const game_state *state, int *dsf, int *colours);
+static int solver_state(game_state *state, int maxdiff);
+static int solver_obvious(game_state *state);
+static int solver_obvious_dot(game_state *state, space *dot);
+static space *space_opposite_dot(const game_state *state, const space *sp,
+                                 const space *dot);
+static space *tile_opposite(const game_state *state, const space *sp);
 
 /* ----------------------------------------------------------
  * Game parameters and presets
@@ -163,13 +171,13 @@ static const game_params galaxies_presets[] = {
     { 15, 15, DIFF_NORMAL },
 };
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char buf[80];
 
     if (i < 0 || i >= lenof(galaxies_presets))
-        return FALSE;
+        return false;
 
     ret = snew(game_params);
     *ret = galaxies_presets[i]; /* structure copy */
@@ -179,7 +187,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 
     if (name) *name = dupstr(buf);
     *params = ret;
-    return TRUE;
+    return true;
 }
 
 static game_params *default_params(void)
@@ -221,7 +229,7 @@ static void decode_params(game_params *params, char const *string)
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char str[80];
     sprintf(str, "%dx%d", params->w, params->h);
@@ -240,24 +248,20 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Difficulty";
     ret[2].type = C_CHOICES;
-    ret[2].sval = DIFFCONFIG;
-    ret[2].ival = params->diff;
+    ret[2].u.choices.choicenames = DIFFCONFIG;
+    ret[2].u.choices.selected = params->diff;
 
     ret[3].name = NULL;
     ret[3].type = C_END;
-    ret[3].sval = NULL;
-    ret[3].ival = 0;
 
     return ret;
 }
@@ -266,14 +270,14 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->diff = cfg[2].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->diff = cfg[2].u.choices.selected;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->w < 3 || params->h < 3)
         return "Width and height must both be at least 3";
@@ -311,6 +315,21 @@ static void remove_assoc(const game_state *state, space *tile) {
     }
 }
 
+static void remove_assoc_with_opposite(game_state *state, space *tile) {
+    space *opposite;
+
+    if (!(tile->flags & F_TILE_ASSOC)) {
+        return;
+    }
+
+    opposite = tile_opposite(state, tile);
+    remove_assoc(state, tile);
+
+    if (opposite != NULL && opposite != tile) {
+        remove_assoc(state, opposite);
+    }
+}
+
 static void add_assoc(const game_state *state, space *tile, space *dot) {
     remove_assoc(state, tile);
 
@@ -327,22 +346,88 @@ static void add_assoc(const game_state *state, space *tile, space *dot) {
            tile->x, tile->y, dot->x, dot->y, dot->nassoc));*/
 }
 
-static struct space *sp2dot(const game_state *state, int x, int y)
+static bool ok_to_add_assoc_with_opposite_internal(
+    const game_state *state, space *tile, space *opposite)
 {
-    struct space *sp = &SPACE(state, x, y);
+    int *colors;
+    bool toret;
+
+    if (tile->flags & F_DOT)
+        return false;
+    if (opposite == NULL)
+        return false;
+    if (opposite->flags & F_DOT)
+        return false;
+
+    toret = true;
+    colors = snewn(state->w * state->h, int);
+    check_complete(state, NULL, colors);
+
+    if (colors[(tile->y - 1)/2 * state->w + (tile->x - 1)/2])
+        toret = false;
+    if (colors[(opposite->y - 1)/2 * state->w + (opposite->x - 1)/2])
+        toret = false;
+
+    sfree(colors);
+    return toret;
+}
+
+#ifndef EDITOR
+static bool ok_to_add_assoc_with_opposite(
+    const game_state *state, space *tile, space *dot)
+{
+    space *opposite = space_opposite_dot(state, tile, dot);
+    return ok_to_add_assoc_with_opposite_internal(state, tile, opposite);
+}
+#endif
+
+static void add_assoc_with_opposite(game_state *state, space *tile, space *dot) {
+    space *opposite = space_opposite_dot(state, tile, dot);
+
+    if(opposite && ok_to_add_assoc_with_opposite_internal(
+           state, tile, opposite))
+    {
+        remove_assoc_with_opposite(state, tile);
+        add_assoc(state, tile, dot);
+        remove_assoc_with_opposite(state, opposite);
+        add_assoc(state, opposite, dot);
+    }
+}
+
+#ifndef EDITOR
+static space *sp2dot(const game_state *state, int x, int y)
+{
+    space *sp = &SPACE(state, x, y);
     if (!(sp->flags & F_TILE_ASSOC)) return NULL;
     return &SPACE(state, sp->dotx, sp->doty);
 }
+#endif
 
 #define IS_VERTICAL_EDGE(x) ((x % 2) == 0)
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
+
+static char *encode_game(const game_state *state);
 
 static char *game_text_format(const game_state *state)
 {
+#ifdef EDITOR
+    game_params par;
+    char *params, *desc, *ret;
+    par.w = state->w;
+    par.h = state->h;
+    par.diff = DIFF_MAX;               /* shouldn't be used */
+    params = encode_params(&par, false);
+    desc = encode_game(state);
+    ret = snewn(strlen(params) + strlen(desc) + 2, char);
+    sprintf(ret, "%s:%s", params, desc);
+    sfree(params);
+    sfree(desc);
+    return ret;
+#else
     int maxlen = (state->sx+1)*state->sy, x, y;
     char *ret, *p;
     space *sp;
@@ -396,6 +481,7 @@ static char *game_text_format(const game_state *state)
     *p = '\0';
 
     return ret;
+#endif
 }
 
 static void dbg_state(const game_state *state)
@@ -416,7 +502,8 @@ typedef int (*space_cb)(game_state *state, space *sp, void *ctx);
 static int foreach_sub(game_state *state, space_cb cb, unsigned int f,
                        void *ctx, int startx, int starty)
 {
-    int x, y, progress = 0, impossible = 0, ret;
+    int x, y, ret;
+    bool progress = false, impossible = false;
     space *sp;
 
     for (y = starty; y < state->sy; y += 2) {
@@ -425,14 +512,14 @@ static int foreach_sub(game_state *state, space_cb cb, unsigned int f,
             ret = cb(state, sp, ctx);
             if (ret == -1) {
                 if (f & IMPOSSIBLE_QUITS) return -1;
-                impossible = -1;
+                impossible = true;
             } else if (ret == 1) {
-                progress = 1;
+                progress = true;
             }
             sp += 2;
         }
     }
-    return impossible ? -1 : progress;
+    return impossible ? -1 : progress ? 1 : 0;
 }
 
 static int foreach_tile(game_state *state, space_cb cb, unsigned int f,
@@ -465,7 +552,7 @@ static int foreach_vertex(game_state *state, space_cb cb, unsigned int f,
 static int is_same_assoc(game_state *state,
                          int x1, int y1, int x2, int y2)
 {
-    struct space *s1, *s2;
+    space *s1, *s2;
 
     if (!INGRID(state, x1, y1) || !INGRID(state, x2, y2))
         return 0;
@@ -503,8 +590,8 @@ static int edges_into_vertex(game_state *state,
 }
 #endif
 
-static struct space *space_opposite_dot(struct game_state *state,
-                                        struct space *sp, struct space *dot)
+static space *space_opposite_dot(const game_state *state, const space *sp,
+                                 const space *dot)
 {
     int dx, dy, tx, ty;
     space *sp2;
@@ -520,28 +607,27 @@ static struct space *space_opposite_dot(struct game_state *state,
     return sp2;
 }
 
-static struct space *tile_opposite(struct game_state *state, struct space *sp)
+static space *tile_opposite(const game_state *state, const space *sp)
 {
-    struct space *dot;
+    space *dot;
 
     assert(sp->flags & F_TILE_ASSOC);
     dot = &SPACE(state, sp->dotx, sp->doty);
     return space_opposite_dot(state, sp, dot);
 }
 
-static int dotfortile(game_state *state, space *tile, space *dot)
+static bool dotfortile(game_state *state, space *tile, space *dot)
 {
     space *tile_opp = space_opposite_dot(state, tile, dot);
 
-    if (!tile_opp) return 0; /* opposite would be off grid */
+    if (!tile_opp) return false; /* opposite would be off grid */
     if (tile_opp->flags & F_TILE_ASSOC &&
             (tile_opp->dotx != dot->x || tile_opp->doty != dot->y))
-            return 0; /* opposite already associated with diff. dot */
-    return 1;
+            return false; /* opposite already associated with diff. dot */
+    return true;
 }
 
-static void adjacencies(struct game_state *state, struct space *sp,
-                        struct space **a1s, struct space **a2s)
+static void adjacencies(game_state *state, space *sp, space **a1s, space **a2s)
 {
     int dxs[4] = {-1, 1, 0, 0}, dys[4] = {0, 0, -1, 1};
     int n, x, y;
@@ -567,40 +653,40 @@ static void adjacencies(struct game_state *state, struct space *sp,
     }
 }
 
-static int outline_tile_fordot(game_state *state, space *tile, int mark)
+static bool outline_tile_fordot(game_state *state, space *tile, bool mark)
 {
-    struct space *tadj[4], *eadj[4];
-    int i, didsth = 0, edge, same;
+    space *tadj[4], *eadj[4];
+    int i;
+    bool didsth = false, edge, same;
 
     assert(tile->type == s_tile);
     adjacencies(state, tile, eadj, tadj);
     for (i = 0; i < 4; i++) {
         if (!eadj[i]) continue;
 
-        edge = (eadj[i]->flags & F_EDGE_SET) ? 1 : 0;
+        edge = eadj[i]->flags & F_EDGE_SET;
         if (tadj[i]) {
             if (!(tile->flags & F_TILE_ASSOC))
-                same = (tadj[i]->flags & F_TILE_ASSOC) ? 0 : 1;
+                same = !(tadj[i]->flags & F_TILE_ASSOC);
             else
                 same = ((tadj[i]->flags & F_TILE_ASSOC) &&
                     tile->dotx == tadj[i]->dotx &&
-                    tile->doty == tadj[i]->doty) ? 1 : 0;
+                    tile->doty == tadj[i]->doty);
         } else
-            same = 0;
+            same = false;
 
         if (!edge && !same) {
             if (mark) eadj[i]->flags |= F_EDGE_SET;
-            didsth = 1;
+            didsth = true;
         } else if (edge && same) {
             if (mark) eadj[i]->flags &= ~F_EDGE_SET;
-            didsth = 1;
+            didsth = true;
         }
     }
     return didsth;
 }
 
-static void tiles_from_edge(struct game_state *state,
-                            struct space *sp, struct space **ts)
+static void tiles_from_edge(game_state *state, space *sp, space **ts)
 {
     int xs[2], ys[2];
 
@@ -618,10 +704,11 @@ static void tiles_from_edge(struct game_state *state,
 /* Returns a move string for use by 'solve', including the initial
  * 'S' if issolve is true. */
 static char *diff_game(const game_state *src, const game_state *dest,
-                       int issolve)
+                       bool issolve, int set_cdiff)
 {
     int movelen = 0, movesize = 256, x, y, len;
-    char *move = snewn(movesize, char), buf[80], *sep = "";
+    char *move = snewn(movesize, char), buf[80];
+    const char *sep = "";
     char achar = issolve ? 'a' : 'A';
     space *sps, *spd;
 
@@ -631,6 +718,26 @@ static char *diff_game(const game_state *src, const game_state *dest,
         move[movelen++] = 'S';
         sep = ";";
     }
+#ifdef EDITOR
+    if (set_cdiff >= 0) {
+        switch (set_cdiff) {
+          case DIFF_IMPOSSIBLE:
+            movelen += sprintf(move+movelen, "%sII", sep);
+            break;
+          case DIFF_AMBIGUOUS:
+            movelen += sprintf(move+movelen, "%sIA", sep);
+            break;
+          case DIFF_UNFINISHED:
+            movelen += sprintf(move+movelen, "%sIU", sep);
+            break;
+          default:
+            movelen += sprintf(move+movelen, "%si%c",
+                               sep, galaxies_diffchars[set_cdiff]);
+            break;
+        }
+        sep = ";";
+    }
+#endif
     move[movelen] = '\0';
     for (x = 0; x < src->sx; x++) {
         for (y = 0; y < src->sy; y++) {
@@ -678,9 +785,10 @@ static char *diff_game(const game_state *src, const game_state *dest,
     return move;
 }
 
-/* Returns 1 if a dot here would not be too close to any other dots
+/* Returns true if a dot here would not be too close to any other dots
  * (and would avoid other game furniture). */
-static int dot_is_possible(game_state *state, space *sp, int allow_assoc)
+static bool dot_is_possible(const game_state *state, space *sp,
+                            bool allow_assoc)
 {
     int bx = 0, by = 0, dx, dy;
     space *adj;
@@ -719,28 +827,28 @@ static int dot_is_possible(game_state *state, space *sp, int allow_assoc)
 		    if (col < 0)
 			col = c;
 		    if (c != col)
-			return 0;          /* colour mismatch */
+			return false;          /* colour mismatch */
 		}
 	    }
 #endif
 
 	    if (!allow_assoc && (adj->flags & F_TILE_ASSOC))
-		return 0;
+		return false;
 
             if (dx != 0 || dy != 0) {
                 /* Other than our own square, no dots nearby. */
                 if (adj->flags & (F_DOT))
-                    return 0;
+                    return false;
             }
 
             /* We don't want edges within our rectangle
              * (but don't care about edges on the edge) */
             if (abs(dx) < bx && abs(dy) < by &&
                 adj->flags & F_EDGE_SET)
-                return 0;
+                return false;
         }
     }
-    return 1;
+    return true;
 }
 
 /* ----------------------------------------------------------
@@ -757,13 +865,14 @@ static game_state *blank_game(int w, int h)
 
     state->sx = (w*2)+1;
     state->sy = (h*2)+1;
-    state->grid = snewn(state->sx * state->sy, struct space);
-    state->completed = state->used_solve = 0;
+    state->grid = snewn(state->sx * state->sy, space);
+    state->completed = false;
+    state->used_solve = false;
 
     for (x = 0; x < state->sx; x++) {
         for (y = 0; y < state->sy; y++) {
-            struct space *sp = &SPACE(state, x, y);
-            memset(sp, 0, sizeof(struct space));
+            space *sp = &SPACE(state, x, y);
+            memset(sp, 0, sizeof(space));
             sp->x = x;
             sp->y = y;
             if ((x % 2) == 0 && (y % 2) == 0)
@@ -804,7 +913,7 @@ static void game_update_dots(game_state *state)
     }
 }
 
-static void clear_game(game_state *state, int cleardots)
+static void clear_game(game_state *state, bool cleardots)
 {
     int x, y;
 
@@ -828,7 +937,7 @@ static game_state *dup_game(const game_state *state)
     ret->used_solve = state->used_solve;
 
     memcpy(ret->grid, state->grid,
-           ret->sx*ret->sy*sizeof(struct space));
+           ret->sx*ret->sy*sizeof(space));
 
     game_update_dots(ret);
 
@@ -853,7 +962,7 @@ static void free_game(game_state *state)
  * an edit mode.
  */
 
-static char *encode_game(game_state *state)
+static char *encode_game(const game_state *state)
 {
     char *desc, *p;
     int run, x, y, area;
@@ -957,8 +1066,8 @@ static int movedot_cb(game_state *state, space *tile, void *vctx)
  * extra spaces (by checking for empty spaces on the far side), and then
  * see if we can move the dot to shift the CoG to include the new spaces.
  */
-static int dot_expand_or_move(game_state *state, space *dot,
-                              space **toadd, int nadd)
+static bool dot_expand_or_move(game_state *state, space *dot,
+                               space **toadd, int nadd)
 {
     space *tileopp;
     int i, ret, nnew, cx, cy;
@@ -980,7 +1089,7 @@ static int dot_expand_or_move(game_state *state, space *dot,
 	for (i = 0; i < nadd; i++) {
 	    if (!(picture[(toadd[i]->y/2) * state->w + (toadd[i]->x/2)]) ^
 		!(dot->flags & F_DOT_BLACK))
-		return 0;
+		return false;
 	}
     }
 #endif
@@ -1014,7 +1123,7 @@ static int dot_expand_or_move(game_state *state, space *dot,
                dot->x, dot->y));
         dbg_state(state);
     }
-    return 1;
+    return true;
 
 noexpand:
     /* Otherwise, try to move dot so as to encompass given spaces: */
@@ -1030,7 +1139,7 @@ noexpand:
     if ((cx % nnew) != 0 || (cy % nnew) != 0) {
         debug(("Unable to move dot %d,%d, CoG not whole number.\n",
                dot->x, dot->y));
-        return 0;
+        return false;
     }
     cx /= nnew; cy /= nnew;
 
@@ -1043,7 +1152,7 @@ noexpand:
     if (ret == -1) {
         debug(("Unable to move dot %d,%d, new dot not symmetrical.\n",
                dot->x, dot->y));
-        return 0;
+        return false;
     }
     /* Also check whether all spaces we're adding would have a good
      * opposite wrt the new dot. */
@@ -1056,13 +1165,13 @@ noexpand:
         if (!tileopp) {
             debug(("Unable to move dot %d,%d, new dot not symmetrical.\n",
                dot->x, dot->y));
-            return 0;
+            return false;
         }
 #ifdef STANDALONE_PICTURE_GENERATOR
 	if (picture) {
 	    if (!(picture[(tileopp->y/2) * state->w + (tileopp->x/2)]) ^
 		!(dot->flags & F_DOT_BLACK))
-		return 0;
+		return false;
 	}
 #endif
     }
@@ -1095,7 +1204,7 @@ noexpand:
     assert(ret == 1);
     dbg_state(state);
 
-    return 1;
+    return true;
 }
 
 /* Hard-code to a max. of 2x2 squares, for speed (less malloc) */
@@ -1104,13 +1213,13 @@ noexpand:
 
 #define MAX_TILE_PERC 20
 
-static int generate_try_block(game_state *state, random_state *rs,
-                              int x1, int y1, int x2, int y2)
+static bool generate_try_block(game_state *state, random_state *rs,
+                               int x1, int y1, int x2, int y2)
 {
     int x, y, nadd = 0, nout = 0, i, maxsz;
     space *sp, *toadd[MAX_TOADD], *outside[MAX_OUTSIDE], *dot;
 
-    if (!INGRID(state, x1, y1) || !INGRID(state, x2, y2)) return 0;
+    if (!INGRID(state, x1, y1) || !INGRID(state, x2, y2)) return false;
 
     /* We limit the maximum size of tiles to be ~2*sqrt(area); so,
      * a 5x5 grid shouldn't have anything >10 tiles, a 20x20 grid
@@ -1125,7 +1234,7 @@ static int generate_try_block(game_state *state, random_state *rs,
             assert(nadd < MAX_TOADD);
             sp = &SPACE(state, x, y);
             assert(sp->type == s_tile);
-            if (sp->flags & F_TILE_ASSOC) return 0;
+            if (sp->flags & F_TILE_ASSOC) return false;
             toadd[nadd++] = sp;
         }
     }
@@ -1155,9 +1264,9 @@ static int generate_try_block(game_state *state, random_state *rs,
                    dot->x, dot->y, dot->nassoc));
             continue;
         }
-        if (dot_expand_or_move(state, dot, toadd, nadd)) return 1;
+        if (dot_expand_or_move(state, dot, toadd, nadd)) return true;
     }
-    return 0;
+    return false;
 }
 
 #ifdef STANDALONE_SOLVER
@@ -1166,8 +1275,6 @@ int maxtries;
 #else
 #define MAXTRIES 50
 #endif
-
-static int solver_obvious_dot(game_state *state,space *dot);
 
 #define GP_DOTS   1
 
@@ -1213,7 +1320,7 @@ static void generate_pass(game_state *state, random_state *rs, int *scratch,
 
         /* If we've got here we might want to put a dot down. Check
          * if we can, and add one if so. */
-        if (dot_is_possible(state, sp, 0)) {
+        if (dot_is_possible(state, sp, false)) {
             add_dot(sp);
 #ifdef STANDALONE_PICTURE_GENERATOR
 	    if (picture) {
@@ -1231,23 +1338,21 @@ static void generate_pass(game_state *state, random_state *rs, int *scratch,
     dbg_state(state);
 }
 
-static int check_complete(const game_state *state, int *dsf, int *colours);
-static int solver_state(game_state *state, int maxdiff);
-
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     game_state *state = blank_game(params->w, params->h), *copy;
     char *desc;
     int *scratch, sz = state->sx*state->sy, i;
-    int diff, ntries = 0, cc;
+    int diff, ntries = 0;
+    bool cc;
 
     /* Random list of squares to try and process, one-by-one. */
     scratch = snewn(sz, int);
     for (i = 0; i < sz; i++) scratch[i] = i;
 
 generate:
-    clear_game(state, 1);
+    clear_game(state, true);
     ntries++;
 
     /* generate_pass(state, rs, scratch, 10, GP_DOTS); */
@@ -1255,6 +1360,8 @@ generate:
     generate_pass(state, rs, scratch, 100, GP_DOTS);
 
     game_update_dots(state);
+
+    if (state->ndots == 1) goto generate;
 
 #ifdef DEBUGGING
     {
@@ -1266,12 +1373,12 @@ generate:
 
     for (i = 0; i < state->sx*state->sy; i++)
         if (state->grid[i].type == s_tile)
-            outline_tile_fordot(state, &state->grid[i], TRUE);
+            outline_tile_fordot(state, &state->grid[i], true);
     cc = check_complete(state, NULL, NULL);
     assert(cc);
 
     copy = dup_game(state);
-    clear_game(copy, 0);
+    clear_game(copy, false);
     dbg_state(copy);
     diff = solver_state(copy, params->diff);
     free_game(copy);
@@ -1319,7 +1426,7 @@ generate:
 	for (i = 0; i < nposns; i++) {
 	    int x, y, x0, y0, x1, y1, cx, cy, cn, cx0, cy0, cx1, cy1, tx, ty;
 	    space *s0, *s1, *ts, *d0, *d1, *dn;
-	    int ok;
+	    bool ok;
 
 	    /* Coordinates of edge space */
 	    x = posns[i] % state->sx;
@@ -1368,14 +1475,14 @@ generate:
 	    cy0 = ((cy+1) & ~1) - 1;
 	    cx1 = 2*cx-cx0;	       /* and reflect about cx to get cx1 */
 	    cy1 = 2*cy-cy0;
-	    ok = TRUE;
+	    ok = true;
 	    for (ty = cy0; ty <= cy1; ty += 2)
 		for (tx = cx0; tx <= cx1; tx += 2) {
 		    ts = &SPACE(state, tx, ty);
 		    assert(ts->type == s_tile);
 		    if ((ts->dotx != d0->x || ts->doty != d0->y) &&
 			(ts->dotx != d1->x || ts->doty != d1->y))
-			ok = FALSE;
+			ok = false;
 		}
 	    if (!ok)
 		continue;
@@ -1397,13 +1504,13 @@ generate:
 		    tx1 = 2*cx-tx;
 		    ty1 = 2*cy-ty;
 		    if (!INGRID(state, tx1, ty1)) {
-			ok = FALSE;
+			ok = false;
 			break;
 		    }
 		    ts = &SPACE(state, cx+cx-tx, cy+cy-ty);
 		    if ((ts->dotx != d0->x || ts->doty != d0->y) &&
 			(ts->dotx != d1->x || ts->doty != d1->y)) {
-			ok = FALSE;
+			ok = false;
 			break;
 		    }
 		}
@@ -1438,7 +1545,7 @@ generate:
 	    }
 
 	    copy = dup_game(state);
-	    clear_game(copy, 0);
+	    clear_game(copy, false);
 	    dbg_state(copy);
 	    newdiff = solver_state(copy, params->diff);
 	    free_game(copy);
@@ -1467,9 +1574,7 @@ generate:
     return desc;
 }
 
-static int solver_obvious(game_state *state);
-
-static int dots_too_close(game_state *state)
+static bool dots_too_close(game_state *state)
 {
     /* Quick-and-dirty check, using half the solver:
      * solver_obvious will only fail if the dots are
@@ -1478,14 +1583,14 @@ static int dots_too_close(game_state *state)
     game_state *tmp = dup_game(state);
     int ret = solver_obvious(tmp);
     free_game(tmp);
-    return (ret == -1) ? 1 : 0;
+    return ret == -1;
 }
 
 static game_state *load_game(const game_params *params, const char *desc,
-                             char **why_r)
+                             const char **why_r)
 {
     game_state *state = blank_game(params->w, params->h);
-    char *why = NULL;
+    const char *why = NULL;
     int i, x, y, n;
     unsigned int df;
 
@@ -1529,9 +1634,9 @@ fail:
     return NULL;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
-    char *why = NULL;
+    const char *why = NULL;
     game_state *dummy = load_game(params, desc, &why);
     if (dummy) {
         free_game(dummy);
@@ -1559,7 +1664,7 @@ static game_state *new_game(midend *me, const game_params *params,
  * Solver and all its little wizards.
  */
 
-int solver_recurse_depth;
+static int solver_recurse_depth;
 
 typedef struct solver_ctx {
     game_state *state;
@@ -1751,7 +1856,7 @@ static int solver_lines_opposite_cb(game_state *state, space *edge, void *ctx)
 static int solver_spaces_oneposs_cb(game_state *state, space *tile, void *ctx)
 {
     int n, eset, ret;
-    struct space *edgeadj[4], *tileadj[4];
+    space *edgeadj[4], *tileadj[4];
     int dotx, doty;
 
     assert(tile->type == s_tile);
@@ -1877,13 +1982,13 @@ static int solver_spaces_oneposs_cb(game_state *state, space *tile, void *ctx)
  *
  */
 
-/* Returns 1 if this tile is either already associated with this dot,
+/* Returns true if this tile is either already associated with this dot,
  * or blank. */
-static int solver_expand_checkdot(space *tile, space *dot)
+static bool solver_expand_checkdot(space *tile, space *dot)
 {
-    if (!(tile->flags & F_TILE_ASSOC)) return 1;
-    if (tile->dotx == dot->x && tile->doty == dot->y) return 1;
-    return 0;
+    if (!(tile->flags & F_TILE_ASSOC)) return true;
+    if (tile->dotx == dot->x && tile->doty == dot->y) return true;
+    return false;
 }
 
 static void solver_expand_fromdot(game_state *state, space *dot, solver_ctx *sctx)
@@ -2058,8 +2163,6 @@ static int solver_recurse_cb(game_state *state, space *tile, void *ctx)
     return 0;
 }
 
-static int solver_state(game_state *state, int maxdiff);
-
 #define MAXRECURSE 5
 
 static int solver_recurse(game_state *state, int maxdiff)
@@ -2091,11 +2194,11 @@ static int solver_recurse(game_state *state, int maxdiff)
     solver_recurse_depth++;
 #endif
 
-    ingrid = snewn(gsz, struct space);
-    memcpy(ingrid, state->grid, gsz * sizeof(struct space));
+    ingrid = snewn(gsz, space);
+    memcpy(ingrid, state->grid, gsz * sizeof(space));
 
     for (n = 0; n < state->ndots; n++) {
-        memcpy(state->grid, ingrid, gsz * sizeof(struct space));
+        memcpy(state->grid, ingrid, gsz * sizeof(space));
 
         if (!dotfortile(state, rctx.best, state->dots[n])) continue;
 
@@ -2109,8 +2212,8 @@ static int solver_recurse(game_state *state, int maxdiff)
         if (diff == DIFF_IMPOSSIBLE && ret != DIFF_IMPOSSIBLE) {
             /* we found our first solved grid; copy it away. */
             assert(!outgrid);
-            outgrid = snewn(gsz, struct space);
-            memcpy(outgrid, state->grid, gsz * sizeof(struct space));
+            outgrid = snewn(gsz, space);
+            memcpy(outgrid, state->grid, gsz * sizeof(space));
         }
         /* reset cell back to unassociated. */
         bestopp = tile_opposite(state, rctx.best);
@@ -2142,7 +2245,7 @@ static int solver_recurse(game_state *state, int maxdiff)
 
     if (outgrid) {
         /* we found (at least one) soln; copy it back to state */
-        memcpy(state->grid, outgrid, gsz * sizeof(struct space));
+        memcpy(state->grid, outgrid, gsz * sizeof(space));
         sfree(outgrid);
     }
     sfree(ingrid);
@@ -2215,7 +2318,7 @@ got_result:
 
 #ifndef EDITOR
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     game_state *tosolve;
     char *ret;
@@ -2247,7 +2350,7 @@ solved:
      */
     for (i = 0; i < tosolve->sx*tosolve->sy; i++)
         tosolve->grid[i].flags &= ~F_TILE_ASSOC;
-    ret = diff_game(currstate, tosolve, 1);
+    ret = diff_game(currstate, tosolve, true, -1);
     free_game(tosolve);
     return ret;
 }
@@ -2258,19 +2361,20 @@ solved:
  */
 
 struct game_ui {
-    int dragging;
+    bool dragging;
     int dx, dy;         /* pixel coords of drag pos. */
     int dotx, doty;     /* grid coords of dot we're dragging from. */
     int srcx, srcy;     /* grid coords of drag start */
-    int cur_x, cur_y, cur_visible;
+    int cur_x, cur_y;
+    bool cur_visible;
 };
 
 static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
-    ui->dragging = FALSE;
+    ui->dragging = false;
     ui->cur_x = ui->cur_y = 1;
-    ui->cur_visible = 0;
+    ui->cur_visible = false;
     return ui;
 }
 
@@ -2311,18 +2415,21 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 #define CURSOR_SIZE DOT_SIZE
 
 struct game_drawstate {
-    int started;
+    bool started;
     int w, h;
     int tilesize;
     unsigned long *grid;
     int *dx, *dy;
     blitter *bl;
+    blitter *blmirror;
 
-    int dragging, dragx, dragy;
+    bool dragging;
+    int dragx, dragy, oppx, oppy;
 
     int *colour_scratch;
 
-    int cx, cy, cur_visible;
+    int cx, cy;
+    bool cur_visible;
     blitter *cur_bl;
 };
 
@@ -2377,20 +2484,18 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 {
     char buf[80];
     int px, py;
-    struct space *sp;
+    space *sp;
 
     px = 2*FROMCOORD((float)x) + 0.5;
     py = 2*FROMCOORD((float)y) + 0.5;
-
-    state->cdiff = -1;
 
     if (button == 'C' || button == 'c') return dupstr("C");
 
     if (button == 'S' || button == 's') {
         char *ret;
         game_state *tmp = dup_game(state);
-        state->cdiff = solver_state(tmp, DIFF_UNREASONABLE-1);
-        ret = diff_game(state, tmp, 0);
+        int cdiff = solver_state(tmp, DIFF_UNREASONABLE-1);
+        ret = diff_game(state, tmp, 0, cdiff);
         free_game(tmp);
         return ret;
     }
@@ -2407,6 +2512,21 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     return NULL;
 }
 #else
+static bool edge_placement_legal(const game_state *state, int x, int y)
+{
+    space *sp = &SPACE(state, x, y);
+    if (sp->type != s_edge)
+        return false;   /* this is a face-centre or a grid vertex */
+
+    /* Check this line doesn't actually intersect a dot */
+    unsigned int flags = (GRID(state, grid, x, y).flags |
+                          GRID(state, grid, x & ~1U, y & ~1U).flags |
+                          GRID(state, grid, (x+1) & ~1U, (y+1) & ~1U).flags);
+    if (flags & F_DOT)
+        return false;
+    return true;
+}
+
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
                             int x, int y, int button)
@@ -2425,7 +2545,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     char buf[80];
     const char *sep = "";
     int px, py;
-    struct space *sp, *dot;
+    space *sp, *dot;
 
     buf[0] = '\0';
 
@@ -2433,28 +2553,26 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         char *ret;
         game_state *tmp = dup_game(state);
         solver_obvious(tmp);
-        ret = diff_game(state, tmp, 0);
+        ret = diff_game(state, tmp, false, -1);
         free_game(tmp);
         return ret;
     }
 
     if (button == LEFT_BUTTON) {
-        ui->cur_visible = 0;
+        ui->cur_visible = false;
         coord_round_to_edge(FROMCOORD((float)x), FROMCOORD((float)y),
                             &px, &py);
 
         if (!INUI(state, px, py)) return NULL;
+        if (!edge_placement_legal(state, px, py))
+            return NULL;
 
-        sp = &SPACE(state, px, py);
-        assert(sp->type == s_edge);
-        {
-            sprintf(buf, "E%d,%d", px, py);
-            return dupstr(buf);
-        }
+        sprintf(buf, "E%d,%d", px, py);
+        return dupstr(buf);
     } else if (button == RIGHT_BUTTON) {
         int px1, py1;
 
-        ui->cur_visible = 0;
+        ui->cur_visible = false;
 
         px = (int)(2*FROMCOORD((float)x) + 0.5);
         py = (int)(2*FROMCOORD((float)y) + 0.5);
@@ -2504,20 +2622,20 @@ static char *interpret_move(const game_state *state, game_ui *ui,
          * Now, if we've managed to find a dot, begin a drag.
          */
         if (dot) {
-            ui->dragging = TRUE;
+            ui->dragging = true;
             ui->dx = x;
             ui->dy = y;
             ui->dotx = dot->x;
             ui->doty = dot->y;
-            return "";
+            return UI_UPDATE;
         }
     } else if (button == RIGHT_DRAG && ui->dragging) {
         /* just move the drag coords. */
         ui->dx = x;
         ui->dy = y;
-        return "";
+        return UI_UPDATE;
     } else if (button == RIGHT_RELEASE && ui->dragging) {
-        ui->dragging = FALSE;
+        ui->dragging = false;
 
         /*
          * Drags are always targeted at a single square.
@@ -2530,7 +2648,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 * is a null move; just update the ui and finish.
 	 */
 	if (px == ui->srcx && py == ui->srcy)
-	    return "";
+	    return UI_UPDATE;
 
 	/*
 	 * Otherwise, we remove the arrow from its starting
@@ -2548,8 +2666,15 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 */
         if (INUI(state, px, py)) {
             sp = &SPACE(state, px, py);
+            dot = &SPACE(state, ui->dotx, ui->doty);
 
-            if (!(sp->flags & F_DOT) && !(sp->flags & F_TILE_ASSOC))
+            /*
+             * Exception: if it's not actually legal to add an arrow
+             * and its opposite at this position, we don't try,
+             * because otherwise we'd append an empty entry to the
+             * undo chain.
+             */
+            if (ok_to_add_assoc_with_opposite(state, sp, dot))
 		sprintf(buf + strlen(buf), "%sA%d,%d,%d,%d",
 			sep, px, py, ui->dotx, ui->doty);
 	}
@@ -2557,25 +2682,25 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	if (buf[0])
 	    return dupstr(buf);
 	else
-	    return "";
+	    return UI_UPDATE;
     } else if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cur_x, &ui->cur_y, state->sx-1, state->sy-1, 0);
+        move_cursor(button, &ui->cur_x, &ui->cur_y, state->sx-1, state->sy-1, false);
         if (ui->cur_x < 1) ui->cur_x = 1;
         if (ui->cur_y < 1) ui->cur_y = 1;
-        ui->cur_visible = 1;
+        ui->cur_visible = true;
         if (ui->dragging) {
             ui->dx = SCOORD(ui->cur_x);
             ui->dy = SCOORD(ui->cur_y);
         }
-        return "";
+        return UI_UPDATE;
     } else if (IS_CURSOR_SELECT(button)) {
         if (!ui->cur_visible) {
-            ui->cur_visible = 1;
-            return "";
+            ui->cur_visible = true;
+            return UI_UPDATE;
         }
         sp = &SPACE(state, ui->cur_x, ui->cur_y);
         if (ui->dragging) {
-            ui->dragging = FALSE;
+            ui->dragging = false;
 
             if ((ui->srcx != ui->dotx || ui->srcy != ui->doty) &&
                 SPACE(state, ui->srcx, ui->srcy).flags & F_TILE_ASSOC) {
@@ -2588,23 +2713,24 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             }
             return dupstr(buf);
         } else if (sp->flags & F_DOT) {
-            ui->dragging = TRUE;
+            ui->dragging = true;
             ui->dx = SCOORD(ui->cur_x);
             ui->dy = SCOORD(ui->cur_y);
             ui->dotx = ui->srcx = ui->cur_x;
             ui->doty = ui->srcy = ui->cur_y;
-            return "";
+            return UI_UPDATE;
         } else if (sp->flags & F_TILE_ASSOC) {
             assert(sp->type == s_tile);
-            ui->dragging = TRUE;
+            ui->dragging = true;
             ui->dx = SCOORD(ui->cur_x);
             ui->dy = SCOORD(ui->cur_y);
             ui->dotx = sp->dotx;
             ui->doty = sp->doty;
             ui->srcx = ui->cur_x;
             ui->srcy = ui->cur_y;
-            return "";
-        } else if (sp->type == s_edge) {
+            return UI_UPDATE;
+        } else if (sp->type == s_edge &&
+                   edge_placement_legal(state, ui->cur_x, ui->cur_y)) {
             sprintf(buf, "E%d,%d", ui->cur_x, ui->cur_y);
             return dupstr(buf);
         }
@@ -2614,24 +2740,26 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 }
 #endif
 
-static int check_complete(const game_state *state, int *dsf, int *colours)
+static bool check_complete(const game_state *state, int *dsf, int *colours)
 {
     int w = state->w, h = state->h;
-    int x, y, i, ret;
+    int x, y, i;
+    bool ret;
 
-    int free_dsf;
+    bool free_dsf;
     struct sqdata {
         int minx, miny, maxx, maxy;
         int cx, cy;
-        int valid, colour;
+        bool valid;
+        int colour;
     } *sqdata;
 
     if (!dsf) {
 	dsf = snew_dsf(w*h);
-	free_dsf = TRUE;
+	free_dsf = true;
     } else {
 	dsf_init(dsf, w*h);
-	free_dsf = FALSE;
+	free_dsf = false;
     }
 
     /*
@@ -2670,7 +2798,7 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
         sqdata[i].minx = w+1;
         sqdata[i].miny = h+1;
         sqdata[i].maxx = sqdata[i].maxy = -1;
-        sqdata[i].valid = FALSE;
+        sqdata[i].valid = false;
     }
     for (y = 0; y < h; y++)
         for (x = 0; x < w; x++) {
@@ -2683,7 +2811,7 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
                 sqdata[i].miny = y;
             if (sqdata[i].maxy < y)
                 sqdata[i].maxy = y;
-            sqdata[i].valid = TRUE;
+            sqdata[i].valid = true;
         }
 
     /*
@@ -2697,12 +2825,12 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
             cx = sqdata[i].cx = sqdata[i].minx + sqdata[i].maxx + 1;
             cy = sqdata[i].cy = sqdata[i].miny + sqdata[i].maxy + 1;
             if (!(SPACE(state, sqdata[i].cx, sqdata[i].cy).flags & F_DOT))
-                sqdata[i].valid = FALSE;   /* no dot at centre of symmetry */
+                sqdata[i].valid = false;   /* no dot at centre of symmetry */
             if (dsf_canonify(dsf, (cy-1)/2*w+(cx-1)/2) != i ||
                 dsf_canonify(dsf, (cy)/2*w+(cx-1)/2) != i ||
                 dsf_canonify(dsf, (cy-1)/2*w+(cx)/2) != i ||
                 dsf_canonify(dsf, (cy)/2*w+(cx)/2) != i)
-                sqdata[i].valid = FALSE;   /* dot at cx,cy isn't ours */
+                sqdata[i].valid = false;   /* dot at cx,cy isn't ours */
             if (SPACE(state, sqdata[i].cx, sqdata[i].cy).flags & F_DOT_BLACK)
                 sqdata[i].colour = 2;
             else
@@ -2732,7 +2860,7 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
                     for (cx = (x-1) >> 1; cx <= x >> 1; cx++) {
                         i = dsf_canonify(dsf, cy*w+cx);
                         if (x != sqdata[i].cx || y != sqdata[i].cy)
-                            sqdata[i].valid = FALSE;
+                            sqdata[i].valid = false;
                     }
             }
 
@@ -2746,7 +2874,7 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
                 assert((cx1==cx2) ^ (cy1==cy2));
                 i = dsf_canonify(dsf, cy1*w+cx1);
                 if (i == dsf_canonify(dsf, cy2*w+cx2))
-                    sqdata[i].valid = FALSE;
+                    sqdata[i].valid = false;
             }
         }
 
@@ -2765,7 +2893,7 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
             x2 = sqdata[i].cx - 1 - x;
             y2 = sqdata[i].cy - 1 - y;
             if (i != dsf_canonify(dsf, y2*w+x2))
-                sqdata[i].valid = FALSE;
+                sqdata[i].valid = false;
         }
 
     /*
@@ -2775,10 +2903,10 @@ static int check_complete(const game_state *state, int *dsf, int *colours)
      * true/false value depending on whether _every_ square in the
      * grid is part of a valid component.
      */
-    ret = TRUE;
+    ret = true;
     for (i = 0; i < w*h; i++) {
         int ci = dsf_canonify(dsf, i);
-        int thisok = sqdata[ci].valid;
+        bool thisok = sqdata[ci].valid;
         if (colours)
             colours[i] = thisok ? sqdata[ci].colour : 0;
         ret = ret && thisok;
@@ -2795,7 +2923,8 @@ static game_state *execute_move(const game_state *state, const char *move)
 {
     int x, y, ax, ay, n, dx, dy;
     game_state *ret = dup_game(state);
-    struct space *sp, *dot;
+    space *sp, *dot;
+    bool currently_solving = false;
 
     debug(("%s\n", move));
 
@@ -2808,7 +2937,7 @@ static game_state *execute_move(const game_state *state, const char *move)
             ) {
             move++;
             if (sscanf(move, "%d,%d%n", &x, &y, &n) != 2 ||
-                !INUI(state, x, y))
+                !INUI(ret, x, y))
                 goto badmove;
 
             sp = &SPACE(ret, x, y);
@@ -2816,14 +2945,14 @@ static game_state *execute_move(const game_state *state, const char *move)
             if (c == 'D' || c == 'd') {
                 unsigned int currf, newf, maskf;
 
-                if (!dot_is_possible(state, sp, 1)) goto badmove;
+                if (!dot_is_possible(ret, sp, 1)) goto badmove;
 
                 newf = F_DOT | (c == 'd' ? F_DOT_BLACK : 0);
                 currf = GRID(ret, grid, x, y).flags;
                 maskf = F_DOT | F_DOT_BLACK;
                 /* if we clicked 'white dot':
                  *   white --> empty, empty --> white, black --> white.
-                 * if we clicker 'black dot':
+                 * if we clicked 'black dot':
                  *   black --> empty, empty --> black, white --> black.
                  */
                 if (currf & maskf) {
@@ -2842,7 +2971,11 @@ static game_state *execute_move(const game_state *state, const char *move)
             } else if (c == 'U') {
                 if (sp->type != s_tile || !(sp->flags & F_TILE_ASSOC))
                     goto badmove;
-                remove_assoc(ret, sp);
+                /* The solver doesn't assume we'll mirror things */
+                if (currently_solving)
+                    remove_assoc(ret, sp);
+                else
+                    remove_assoc_with_opposite(ret, sp);
             } else if (c == 'M') {
                 if (!(sp->flags & F_DOT)) goto badmove;
                 sp->flags ^= F_DOT_HOLD;
@@ -2851,8 +2984,8 @@ static game_state *execute_move(const game_state *state, const char *move)
         } else if (c == 'A' || c == 'a') {
             move++;
             if (sscanf(move, "%d,%d,%d,%d%n", &x, &y, &ax, &ay, &n) != 4 ||
-                x < 1 || y < 1 || x >= (state->sx-1) || y >= (state->sy-1) ||
-                ax < 1 || ay < 1 || ax >= (state->sx-1) || ay >= (state->sy-1))
+                x < 1 || y < 1 || x >= (ret->sx-1) || y >= (ret->sy-1) ||
+                ax < 1 || ay < 1 || ax >= (ret->sx-1) || ay >= (ret->sy-1))
                 goto badmove;
 
             dot = &GRID(ret, grid, ax, ay);
@@ -2864,21 +2997,55 @@ static game_state *execute_move(const game_state *state, const char *move)
                     sp = &GRID(ret, grid, x+dx, y+dy);
                     if (sp->type != s_tile) continue;
                     if (sp->flags & F_TILE_ASSOC) {
-                        space *dot = &SPACE(state, sp->dotx, sp->doty);
+                        space *dot = &SPACE(ret, sp->dotx, sp->doty);
                         if (dot->flags & F_DOT_HOLD) continue;
                     }
-                    add_assoc(state, sp, dot);
+                    /* The solver doesn't assume we'll mirror things */
+                    if (currently_solving)
+                        add_assoc(ret, sp, dot);
+                    else
+                        add_assoc_with_opposite(ret, sp, dot);
                 }
             }
             move += n;
 #ifdef EDITOR
         } else if (c == 'C') {
             move++;
-            clear_game(ret, 1);
+            clear_game(ret, true);
+        } else if (c == 'i') {
+            int diff;
+            move++;
+            for (diff = 0; diff <= DIFF_UNREASONABLE; diff++)
+                if (*move == galaxies_diffchars[diff])
+                    break;
+            if (diff > DIFF_UNREASONABLE)
+                goto badmove;
+
+            ret->cdiff = diff;
+            move++;
+        } else if (c == 'I') {
+            int diff;
+            move++;
+            switch (*move) {
+              case 'A':
+                diff = DIFF_AMBIGUOUS;
+                break;
+              case 'I':
+                diff = DIFF_IMPOSSIBLE;
+                break;
+              case 'U':
+                diff = DIFF_UNFINISHED;
+                break;
+              default:
+                goto badmove;
+            }
+            ret->cdiff = diff;
+            move++;
 #endif
         } else if (c == 'S') {
             move++;
-	    ret->used_solve = 1;
+	    ret->used_solve = true;
+            currently_solving = true;
         } else
             goto badmove;
 
@@ -2888,7 +3055,7 @@ static game_state *execute_move(const game_state *state, const char *move)
             goto badmove;
     }
     if (check_complete(ret, NULL, NULL))
-        ret->completed = 1;
+        ret->completed = true;
     return ret;
 
 badmove:
@@ -2933,6 +3100,9 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 
     assert(!ds->bl);
     ds->bl = blitter_new(dr, TILE_SIZE, TILE_SIZE);
+
+    assert(!ds->blmirror);
+    ds->blmirror = blitter_new(dr, TILE_SIZE, TILE_SIZE);
 
     assert(!ds->cur_bl);
     ds->cur_bl = blitter_new(dr, TILE_SIZE, TILE_SIZE);
@@ -2997,7 +3167,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     struct game_drawstate *ds = snew(struct game_drawstate);
     int i;
 
-    ds->started = 0;
+    ds->started = false;
     ds->w = state->w;
     ds->h = state->h;
 
@@ -3008,14 +3178,15 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     ds->dy = snewn(ds->w*ds->h, int);
 
     ds->bl = NULL;
-    ds->dragging = FALSE;
-    ds->dragx = ds->dragy = 0;
+    ds->blmirror = NULL;
+    ds->dragging = false;
+    ds->dragx = ds->dragy = ds->oppx = ds->oppy = 0;
 
     ds->colour_scratch = snewn(ds->w * ds->h, int);
 
     ds->cur_bl = NULL;
     ds->cx = ds->cy = 0;
-    ds->cur_visible = 0;
+    ds->cur_visible = false;
 
     return ds;
 }
@@ -3024,6 +3195,7 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 {
     if (ds->cur_bl) blitter_free(dr, ds->cur_bl);
     sfree(ds->colour_scratch);
+    if (ds->blmirror) blitter_free(dr, ds->blmirror);
     if (ds->bl) blitter_free(dr, ds->bl);
     sfree(ds->dx);
     sfree(ds->dy);
@@ -3055,7 +3227,10 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 static void draw_arrow(drawing *dr, game_drawstate *ds,
                        int cx, int cy, int ddx, int ddy, int col)
 {
-    float vlen = (float)sqrt(ddx*ddx+ddy*ddy);
+    int sqdist = ddx*ddx+ddy*ddy;
+    if (sqdist == 0)
+        return;                        /* avoid division by zero */
+    float vlen = (float)sqrt(sqdist);
     float xdx = ddx/vlen, xdy = ddy/vlen;
     float ydx = -xdy, ydy = xdx;
     int e1x = cx + (int)(xdx*TILE_SIZE/3), e1y = cy + (int)(xdy*TILE_SIZE/3);
@@ -3149,13 +3324,24 @@ static void draw_square(drawing *dr, game_drawstate *ds, int x, int y,
     draw_update(dr, lx, ly, TILE_SIZE, TILE_SIZE);
 }
 
+static void calculate_opposite_point(const game_ui *ui,
+                                     const game_drawstate *ds, const int x,
+                                     const int y, int *oppositex,
+                                     int *oppositey)
+{
+    /* oppositex - dotx = dotx - x <=> oppositex = 2 * dotx - x */
+    *oppositex = 2 * SCOORD(ui->dotx) - x;
+    *oppositey = 2 * SCOORD(ui->doty) - y;
+}
+
 static void game_redraw(drawing *dr, game_drawstate *ds,
                         const game_state *oldstate, const game_state *state,
                         int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
     int w = ds->w, h = ds->h;
-    int x, y, flashing = FALSE;
+    int x, y;
+    bool flashing = false;
 
     if (flashtime > 0) {
         int frame = (int)(flashtime / FLASH_TIME);
@@ -3164,24 +3350,26 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
     if (ds->dragging) {
         assert(ds->bl);
+        assert(ds->blmirror);
+        blitter_load(dr, ds->blmirror, ds->oppx, ds->oppy);
+        draw_update(dr, ds->oppx, ds->oppy, TILE_SIZE, TILE_SIZE);
         blitter_load(dr, ds->bl, ds->dragx, ds->dragy);
         draw_update(dr, ds->dragx, ds->dragy, TILE_SIZE, TILE_SIZE);
-        ds->dragging = FALSE;
+        ds->dragging = false;
     }
     if (ds->cur_visible) {
         assert(ds->cur_bl);
         blitter_load(dr, ds->cur_bl, ds->cx, ds->cy);
         draw_update(dr, ds->cx, ds->cy, CURSOR_SIZE*2+1, CURSOR_SIZE*2+1);
-        ds->cur_visible = FALSE;
+        ds->cur_visible = false;
     }
 
     if (!ds->started) {
-        draw_rect(dr, 0, 0, DRAW_WIDTH, DRAW_HEIGHT, COL_BACKGROUND);
         draw_rect(dr, BORDER - EDGE_THICKNESS + 1, BORDER - EDGE_THICKNESS + 1,
                   w*TILE_SIZE + EDGE_THICKNESS*2 - 1,
                   h*TILE_SIZE + EDGE_THICKNESS*2 - 1, COL_EDGE);
         draw_update(dr, 0, 0, DRAW_WIDTH, DRAW_HEIGHT);
-        ds->started = TRUE;
+        ds->started = true;
     }
 
     check_complete(state, NULL, ds->colour_scratch);
@@ -3190,7 +3378,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         for (x = 0; x < w; x++) {
             unsigned long flags = 0;
             int ddx = 0, ddy = 0;
-            space *sp;
+            space *sp, *opp;
             int dx, dy;
 
             /*
@@ -3228,6 +3416,11 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
              * everything goes briefly back to background colour.
              */
             sp = &SPACE(state, x*2+1, y*2+1);
+            if (sp->flags & F_TILE_ASSOC) {
+                opp = tile_opposite(state, sp);
+            } else {
+                opp = NULL;
+            }
             if (ds->colour_scratch[y*w+x] && !flashing) {
                 flags |= (ds->colour_scratch[y*w+x] == 2 ?
                           DRAW_BLACK : DRAW_WHITE);
@@ -3243,7 +3436,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
              */
             if ((sp->flags & F_TILE_ASSOC) && !ds->colour_scratch[y*w+x]) {
 		if (ui->dragging && ui->srcx == x*2+1 && ui->srcy == y*2+1) {
-		    /* don't do it */
+                    /* tile is the source, don't do it */
+                } else if (ui->dragging && opp && ui->srcx == opp->x && ui->srcy == opp->y) {
+                    /* opposite tile is the source, don't do it */
 		} else if (sp->doty != y*2+1 || sp->dotx != x*2+1) {
                     flags |= DRAW_ARROW;
                     ddy = sp->doty - (y*2+1);
@@ -3296,7 +3491,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      */
     if (ui->cur_visible) {
         space *sp = &SPACE(state, ui->cur_x, ui->cur_y);
-        ds->cur_visible = TRUE;
+        ds->cur_visible = true;
         ds->cx = SCOORD(ui->cur_x) - CURSOR_SIZE;
         ds->cy = SCOORD(ui->cur_y) - CURSOR_SIZE;
         blitter_save(dr, ds->cur_bl, ds->cx, ds->cy);
@@ -3317,13 +3512,28 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     }
 
     if (ui->dragging) {
-        ds->dragging = TRUE;
+        int oppx, oppy;
+
+        ds->dragging = true;
         ds->dragx = ui->dx - TILE_SIZE/2;
         ds->dragy = ui->dy - TILE_SIZE/2;
+        calculate_opposite_point(ui, ds, ui->dx, ui->dy, &oppx, &oppy);
+        ds->oppx = oppx - TILE_SIZE/2;
+        ds->oppy = oppy - TILE_SIZE/2;
+
         blitter_save(dr, ds->bl, ds->dragx, ds->dragy);
-        draw_arrow(dr, ds, ui->dx, ui->dy,
-                   SCOORD(ui->dotx) - ui->dx,
+        clip(dr, ds->dragx, ds->dragy, TILE_SIZE, TILE_SIZE);
+        draw_arrow(dr, ds, ui->dx, ui->dy, SCOORD(ui->dotx) - ui->dx,
                    SCOORD(ui->doty) - ui->dy, COL_ARROW);
+        unclip(dr);
+        draw_update(dr, ds->dragx, ds->dragy, TILE_SIZE, TILE_SIZE);
+
+        blitter_save(dr, ds->blmirror, ds->oppx, ds->oppy);
+        clip(dr, ds->oppx, ds->oppy, TILE_SIZE, TILE_SIZE);
+        draw_arrow(dr, ds, oppx, oppy, SCOORD(ui->dotx) - oppx,
+                   SCOORD(ui->doty) - oppy, COL_ARROW);
+        unclip(dr);
+        draw_update(dr, ds->oppx, ds->oppy, TILE_SIZE, TILE_SIZE);
     }
 #ifdef EDITOR
     {
@@ -3353,14 +3563,45 @@ static float game_flash_length(const game_state *oldstate,
         return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        space *sp = &SPACE(state, ui->cur_x, ui->cur_y);
+
+        if(sp->flags & F_DOT) {
+            *x = SCOORD(ui->cur_x) - DOT_SIZE;
+            *y = SCOORD(ui->cur_y) - DOT_SIZE;
+            *w = *h = 2 * DOT_SIZE + 1;
+        } else if(sp->type != s_tile) {
+            int dx = (ui->cur_x % 2) ? CURSOR_SIZE : CURSOR_SIZE/3;
+            int dy = (ui->cur_y % 2) ? CURSOR_SIZE : CURSOR_SIZE/3;
+            int x1 = SCOORD(ui->cur_x)-dx, y1 = SCOORD(ui->cur_y)-dy;
+            int xs = dx*2+1, ys = dy*2+1;
+
+            *x = x1;
+            *y = y1;
+            *w = xs;
+            *h = ys;
+        } else {
+            *x = SCOORD(ui->cur_x) - CURSOR_SIZE;
+            *y = SCOORD(ui->cur_y) - CURSOR_SIZE;
+            *w = *h = 2 * CURSOR_SIZE + 1;
+        }
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-    return TRUE;
+    return true;
 }
 
 #ifndef EDITOR
@@ -3546,12 +3787,12 @@ static void game_print(drawing *dr, const game_state *state, int sz)
 const struct game thegame = {
     "Galaxies", "games.galaxies", "galaxies",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
@@ -3559,15 +3800,16 @@ const struct game thegame = {
     dup_game,
     free_game,
 #ifdef EDITOR
-    FALSE, NULL,
+    false, NULL,
 #else
-    TRUE, solve_game,
+    true, solve_game,
 #endif
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
     decode_ui,
+    NULL, /* game_request_keys */
     game_changed_state,
     interpret_move,
     execute_move,
@@ -3578,15 +3820,16 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
 #ifdef EDITOR
-    FALSE, FALSE, NULL, NULL,
-    TRUE,                              /* wants_statusbar */
+    false, false, NULL, NULL,
+    true,                              /* wants_statusbar */
 #else
-    TRUE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
+    true, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
 #endif
-    FALSE, game_timing_state,
+    false, game_timing_state,
     REQUIRE_RBUTTON,		       /* flags */
 };
 
@@ -3611,7 +3854,7 @@ static void dump_state(game_state *state)
     sfree(temp);
 }
 
-static int gen(game_params *p, random_state *rs, int debug)
+static int gen(game_params *p, random_state *rs, bool debug)
 {
     char *desc;
     int diff;
@@ -3623,7 +3866,7 @@ static int gen(game_params *p, random_state *rs, int debug)
     printf("Generating a %dx%d %s puzzle.\n",
            p->w, p->h, galaxies_diffnames[p->diff]);
 
-    desc = new_game_desc(p, rs, NULL, 0);
+    desc = new_game_desc(p, rs, NULL, false);
     state = new_game(NULL, p, desc);
     dump_state(state);
 
@@ -3646,7 +3889,7 @@ static void soak(game_params *p, random_state *rs)
     int diff, n = 0, i, diffs[DIFF_MAX], ndots = 0, nspaces = 0;
 
 #ifndef DEBUGGING
-    solver_show_working = 0;
+    solver_show_working = false;
 #endif
     tt_start = tt_now = time(NULL);
     for (i = 0; i < DIFF_MAX; i++) diffs[i] = 0;
@@ -3660,7 +3903,7 @@ static void soak(game_params *p, random_state *rs)
     printf("]\n");
 
     while (1) {
-        desc = new_game_desc(p, rs, NULL, 0);
+        desc = new_game_desc(p, rs, NULL, false);
         st = new_game(NULL, p, desc);
         diff = solver_state(st, p->diff);
         nspaces += st->w*st->h;
@@ -3688,9 +3931,11 @@ static void soak(game_params *p, random_state *rs)
 int main(int argc, char **argv)
 {
     game_params *p;
-    char *id = NULL, *desc, *err;
+    char *id = NULL, *desc;
+    const char *err;
     game_state *s;
-    int diff, do_soak = 0, verbose = 0;
+    int diff;
+    bool do_soak = false, verbose = false;
     random_state *rs;
     time_t seed = time(NULL);
 
@@ -3698,13 +3943,13 @@ int main(int argc, char **argv)
     while (--argc > 0) {
         char *p = *++argv;
         if (!strcmp(p, "-v")) {
-            verbose = 1;
+            verbose = true;
         } else if (!strcmp(p, "--seed")) {
             if (argc == 0) usage_exit("--seed needs an argument");
             seed = (time_t)atoi(*++argv);
             argc--;
         } else if (!strcmp(p, "--soak")) {
-            do_soak = 1;
+            do_soak = true;
         } else if (*p == '-') {
             usage_exit("unrecognised option");
         } else {
@@ -3729,7 +3974,7 @@ int main(int argc, char **argv)
             p->w = random_upto(rs, 15) + 3;
             p->h = random_upto(rs, 15) + 3;
             p->diff = random_upto(rs, DIFF_UNREASONABLE);
-            diff = gen(p, rs, 0);
+            diff = gen(p, rs, false);
         }
         return 0;
     }
@@ -3740,7 +3985,7 @@ int main(int argc, char **argv)
         gen(p, rs, verbose);
     } else {
 #ifndef DEBUGGING
-        solver_show_working = 1;
+        solver_show_working = true;
 #endif
         *desc++ = '\0';
         decode_params(p, id);
@@ -3891,8 +4136,8 @@ int main(int argc, char **argv)
 
     rs = random_new((void*)&seed, sizeof(time_t));
 
-    desc = new_game_desc(par, rs, NULL, FALSE);
-    params = encode_params(par, FALSE);
+    desc = new_game_desc(par, rs, NULL, false);
+    params = encode_params(par, false);
     printf("%s:%s\n", params, desc);
 
     sfree(desc);

@@ -95,7 +95,7 @@ struct game_state {
     int *crosses;		       /* mark edges which are crossed */
 #endif
     struct graph *graph;
-    int completed, cheated, just_solved;
+    bool completed, cheated, just_solved;
 };
 
 static int edgecmpC(const void *av, const void *bv)
@@ -125,7 +125,7 @@ static game_params *default_params(void)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     int n;
@@ -137,7 +137,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
       case 2: n = 15; break;
       case 3: n = 20; break;
       case 4: n = 25; break;
-      default: return FALSE;
+      default: return false;
     }
 
     sprintf(buf, "%d points", n);
@@ -146,7 +146,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
     *params = ret = snew(game_params);
     ret->n = n;
 
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -166,7 +166,7 @@ static void decode_params(game_params *params, char const *string)
     params->n = atoi(string);
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[80];
 
@@ -185,13 +185,10 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Number of points";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->n);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = NULL;
     ret[1].type = C_END;
-    ret[1].sval = NULL;
-    ret[1].ival = 0;
 
     return ret;
 }
@@ -200,12 +197,12 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->n = atoi(cfg[0].sval);
+    ret->n = atoi(cfg[0].u.string.sval);
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->n < 4)
         return "Number of points must be at least four";
@@ -301,7 +298,7 @@ static int64 dotprod64(long a, long b, long p, long q)
  * between b1 and b2, intersect. We count it as an intersection if
  * any of the endpoints lies _on_ the other line.
  */
-static int cross(point a1, point a2, point b1, point b2)
+static bool cross(point a1, point a2, point b1, point b2)
 {
     long b1x, b1y, b2x, b2y, px, py;
     int64 d1, d2, d3;
@@ -334,7 +331,7 @@ static int cross(point a1, point a2, point b1, point b2)
     /* If they have the same non-zero sign, the lines do not cross. */
     if ((sign64(d1) > 0 && sign64(d2) > 0) ||
 	(sign64(d1) < 0 && sign64(d2) < 0))
-	return FALSE;
+	return false;
 
     /*
      * If the dot products are both exactly zero, then the two line
@@ -351,13 +348,13 @@ static int cross(point a1, point a2, point b1, point b2)
 	d2 = dotprod64(b2x, px, b2y, py);
 	/* If they're both strictly negative, the lines do not cross. */
 	if (sign64(d1) < 0 && sign64(d2) < 0)
-	    return FALSE;
+	    return false;
 	/* Otherwise, take the dot product of a2-a1 with itself. If
 	 * the other two dot products both exceed this, the lines do
 	 * not cross. */
 	d3 = dotprod64(px, px, py, py);
 	if (greater64(d1, d3) && greater64(d2, d3))
-	    return FALSE;
+	    return false;
     }
 
     /*
@@ -376,12 +373,12 @@ static int cross(point a1, point a2, point b1, point b2)
     d2 = dotprod64(b2x, px, b2y, py);
     if ((sign64(d1) > 0 && sign64(d2) > 0) ||
 	(sign64(d1) < 0 && sign64(d2) < 0))
-	return FALSE;
+	return false;
 
     /*
      * The lines must cross.
      */
-    return TRUE;
+    return true;
 }
 
 static unsigned long squarert(unsigned long n) {
@@ -423,7 +420,7 @@ static void addedge(tree234 *edges, int a, int b)
     add234(edges, e);
 }
 
-static int isedge(tree234 *edges, int a, int b)
+static bool isedge(tree234 *edges, int a, int b)
 {
     edge e;
 
@@ -492,7 +489,7 @@ static void make_circle(point *pts, int n, int w)
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     int n = params->n, i;
     long w, h, j, k, m;
@@ -543,7 +540,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     edges = newtree234(edgecmp);
     vlist = snewn(n, vertex);
     while (1) {
-	int added = FALSE;
+        bool added = false;
 
 	for (i = 0; i < n; i++) {
 	    v = index234(vertices, i);
@@ -605,7 +602,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		 * the two vertices involved, and break.
 		 */
 		addedge(edges, j, ki);
-		added = TRUE;
+		added = true;
 		del234(vertices, vs+j);
 		vs[j].param++;
 		add234(vertices, vs+j);
@@ -659,7 +656,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
      */
     ret = NULL;
     {
-	char *sep;
+	const char *sep;
 	char buf[80];
 	int retlen;
 	edge *ea;
@@ -734,7 +731,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int a, b;
 
@@ -762,13 +759,13 @@ static char *validate_desc(const game_params *params, const char *desc)
 
 static void mark_crossings(game_state *state)
 {
-    int ok = TRUE;
+    bool ok = true;
     int i, j;
     edge *e, *e2;
 
 #ifdef SHOW_CROSSINGS
     for (i = 0; (e = index234(state->graph->edges, i)) != NULL; i++)
-	state->crosses[i] = FALSE;
+	state->crosses[i] = false;
 #endif
 
     /*
@@ -782,9 +779,9 @@ static void mark_crossings(game_state *state)
 		continue;
 	    if (cross(state->pts[e2->a], state->pts[e2->b],
 		      state->pts[e->a], state->pts[e->b])) {
-		ok = FALSE;
+		ok = false;
 #ifdef SHOW_CROSSINGS
-		state->crosses[i] = state->crosses[j] = TRUE;
+		state->crosses[i] = state->crosses[j] = true;
 #else
 		goto done;	       /* multi-level break - sorry */
 #endif
@@ -800,7 +797,7 @@ static void mark_crossings(game_state *state)
     done:
 #endif
     if (ok)
-	state->completed = TRUE;
+	state->completed = true;
 }
 
 static game_state *new_game(midend *me, const game_params *params,
@@ -817,7 +814,7 @@ static game_state *new_game(midend *me, const game_params *params,
     state->graph = snew(struct graph);
     state->graph->refcount = 1;
     state->graph->edges = newtree234(edgecmp);
-    state->completed = state->cheated = state->just_solved = FALSE;
+    state->completed = state->cheated = state->just_solved = false;
 
     while (*desc) {
 	a = atoi(desc);
@@ -881,7 +878,7 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     int n = state->params.n;
     int matrix[4];
@@ -1026,9 +1023,9 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -1039,8 +1036,8 @@ static char *game_text_format(const game_state *state)
 struct game_ui {
     int dragpoint;		       /* point being dragged; -1 if none */
     point newpoint;		       /* where it's been dragged to so far */
-    int just_dragged;		       /* reset in game_changed_state */
-    int just_moved;		       /* _set_ in game_changed_state */
+    bool just_dragged;                 /* reset in game_changed_state */
+    bool just_moved;                   /* _set_ in game_changed_state */
     float anim_length;
 };
 
@@ -1048,7 +1045,7 @@ static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->dragpoint = -1;
-    ui->just_moved = ui->just_dragged = FALSE;
+    ui->just_moved = ui->just_dragged = false;
     return ui;
 }
 
@@ -1071,7 +1068,7 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 {
     ui->dragpoint = -1;
     ui->just_moved = ui->just_dragged;
-    ui->just_dragged = FALSE;
+    ui->just_dragged = false;
 }
 
 struct game_drawstate {
@@ -1117,14 +1114,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	    ui->newpoint.x = x;
 	    ui->newpoint.y = y;
 	    ui->newpoint.d = ds->tilesize;
-	    return "";
+	    return UI_UPDATE;
 	}
 
     } else if (IS_MOUSE_DRAG(button) && ui->dragpoint >= 0) {
 	ui->newpoint.x = x;
 	ui->newpoint.y = y;
 	ui->newpoint.d = ds->tilesize;
-	return "";
+	return UI_UPDATE;
     } else if (IS_MOUSE_RELEASE(button) && ui->dragpoint >= 0) {
 	int p = ui->dragpoint;
 	char buf[80];
@@ -1139,7 +1136,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             ui->newpoint.x >= (long)state->w*ui->newpoint.d ||
 	    ui->newpoint.y < 0 ||
             ui->newpoint.y >= (long)state->h*ui->newpoint.d)
-	    return "";
+	    return UI_UPDATE;
 
 	/*
 	 * We aren't cancelling the drag. Construct a move string
@@ -1147,7 +1144,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 */
 	sprintf(buf, "P%d:%ld,%ld/%ld", p,
 		ui->newpoint.x, ui->newpoint.y, ui->newpoint.d);
-	ui->just_dragged = TRUE;
+	ui->just_dragged = true;
 	return dupstr(buf);
     }
 
@@ -1161,13 +1158,13 @@ static game_state *execute_move(const game_state *state, const char *move)
     long x, y, d;
     game_state *ret = dup_game(state);
 
-    ret->just_solved = FALSE;
+    ret->just_solved = false;
 
     while (*move) {
 	if (*move == 'S') {
 	    move++;
 	    if (*move == ';') move++;
-	    ret->cheated = ret->just_solved = TRUE;
+	    ret->cheated = ret->just_solved = true;
 	}
 	if (*move == 'P' &&
 	    sscanf(move+1, "%d:%ld,%ld/%ld%n", &p, &x, &y, &d, &k) == 4 &&
@@ -1299,7 +1296,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     int w, h;
     edge *e;
     int i, j;
-    int bg, points_moved;
+    int bg;
+    bool points_moved;
 
     /*
      * There's no terribly sensible way to do partial redraws of
@@ -1324,7 +1322,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      * Also in this loop we work out the coordinates of all the
      * points for this redraw.
      */
-    points_moved = FALSE;
+    points_moved = false;
     for (i = 0; i < state->params.n; i++) {
         point p = state->pts[i];
         long x, y;
@@ -1339,7 +1337,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	y = p.y * ds->tilesize / p.d;
 
         if (ds->x[i] != x || ds->y[i] != y)
-            points_moved = TRUE;
+            points_moved = true;
 
         ds->x[i] = x;
         ds->y[i] = y;
@@ -1430,14 +1428,22 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-    return TRUE;
+    return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -1455,24 +1461,25 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Untangle", "games.untangle", "untangle",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    FALSE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    false, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
     decode_ui,
+    NULL, /* game_request_keys */
     game_changed_state,
     interpret_move,
     execute_move,
@@ -1483,9 +1490,10 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    FALSE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    false, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
+    false, game_timing_state,
     SOLVE_ANIMATES,		       /* flags */
 };

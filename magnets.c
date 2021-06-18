@@ -41,12 +41,12 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int verbose = 0;
+bool verbose = 0;
 #endif
 
 enum {
     COL_BACKGROUND, COL_HIGHLIGHT, COL_LOWLIGHT,
-    COL_TEXT, COL_ERROR, COL_CURSOR,
+    COL_TEXT, COL_ERROR, COL_CURSOR, COL_DONE,
     COL_NEUTRAL, COL_NEGATIVE, COL_POSITIVE, COL_NOT,
     NCOLOURS
 };
@@ -88,7 +88,8 @@ static char const magnets_diffchars[] = DIFFLIST(ENCODE);
 /* Game parameter functions. */
 
 struct game_params {
-    int w, h, diff, stripclues;
+    int w, h, diff;
+    bool stripclues;
 };
 
 #define DEFAULT_PRESET 2
@@ -113,12 +114,12 @@ static game_params *default_params(void)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char buf[64];
 
-    if (i < 0 || i >= lenof(magnets_presets)) return FALSE;
+    if (i < 0 || i >= lenof(magnets_presets)) return false;
 
     ret = default_params();
     *ret = magnets_presets[i]; /* struct copy */
@@ -130,7 +131,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
             magnets_presets[i].stripclues ? ", strip clues" : "");
     *name = dupstr(buf);
 
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -165,14 +166,14 @@ static void decode_params(game_params *ret, char const *string)
 	if (*string) string++;
     }
 
-    ret->stripclues = 0;
+    ret->stripclues = false;
     if (*string == 'S') {
         string++;
-        ret->stripclues = 1;
+        ret->stripclues = true;
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[256];
     sprintf(buf, "%dx%d", params->w, params->h);
@@ -193,29 +194,24 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Difficulty";
     ret[2].type = C_CHOICES;
-    ret[2].sval = DIFFCONFIG;
-    ret[2].ival = params->diff;
+    ret[2].u.choices.choicenames = DIFFCONFIG;
+    ret[2].u.choices.selected = params->diff;
 
     ret[3].name = "Strip clues";
     ret[3].type = C_BOOLEAN;
-    ret[3].sval = NULL;
-    ret[3].ival = params->stripclues;
+    ret[3].u.boolean.bval = params->stripclues;
 
     ret[4].name = NULL;
     ret[4].type = C_END;
-    ret[4].sval = NULL;
-    ret[4].ival = 0;
 
     return ret;
 }
@@ -224,15 +220,15 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->diff = cfg[2].ival;
-    ret->stripclues = cfg[3].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->diff = cfg[2].u.choices.selected;
+    ret->stripclues = cfg[3].u.boolean.bval;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->w < 2) return "Width must be at least one";
     if (params->h < 2) return "Height must be at least one";
@@ -272,7 +268,8 @@ struct game_state {
     int w, h, wh;
     int *grid;                  /* size w*h, for cell state (pos/neg) */
     unsigned int *flags;        /* size w*h */
-    int solved, completed, numbered;
+    bool solved, completed, numbered;
+    bool *counts_done;
 
     struct game_common *common; /* domino layout never changes. */
 };
@@ -281,10 +278,13 @@ static void clear_state(game_state *ret)
 {
     int i;
 
-    ret->solved = ret->completed = ret->numbered = 0;
+    ret->solved = false;
+    ret->completed = false;
+    ret->numbered = false;
 
     memset(ret->common->rowcount, 0, ret->h*3*sizeof(int));
     memset(ret->common->colcount, 0, ret->w*3*sizeof(int));
+    memset(ret->counts_done, 0, (ret->h + ret->w) * 2 * sizeof(bool));
 
     for (i = 0; i < ret->wh; i++) {
         ret->grid[i] = EMPTY;
@@ -304,6 +304,7 @@ static game_state *new_state(int w, int h)
 
     ret->grid = snewn(ret->wh, int);
     ret->flags = snewn(ret->wh, unsigned int);
+    ret->counts_done = snewn((ret->h + ret->w) * 2, bool);
 
     ret->common = snew(struct game_common);
     ret->common->refcount = 1;
@@ -335,6 +336,10 @@ static game_state *dup_game(const game_state *src)
     dest->grid = snewn(dest->wh, int);
     memcpy(dest->grid, src->grid, dest->wh*sizeof(int));
 
+    dest->counts_done = snewn((dest->h + dest->w) * 2, bool);
+    memcpy(dest->counts_done, src->counts_done,
+           (dest->h + dest->w) * 2 * sizeof(bool));
+
     dest->flags = snewn(dest->wh, unsigned int);
     memcpy(dest->flags, src->flags, dest->wh*sizeof(unsigned int));
 
@@ -350,6 +355,7 @@ static void free_game(game_state *state)
         sfree(state->common->colcount);
         sfree(state->common);
     }
+    sfree(state->counts_done);
     sfree(state->flags);
     sfree(state->grid);
     sfree(state);
@@ -515,7 +521,7 @@ nextchar:
         }
     }
     /* Success. */
-    state->numbered = 1;
+    state->numbered = true;
     goto done;
 
 badchar:
@@ -531,7 +537,7 @@ done:
     return state;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     const char *prob;
     game_state *st = new_game_int(params, desc, &prob);
@@ -596,9 +602,9 @@ static void game_text_hborder(const game_state *state, char **p_r)
     *p_r = p;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -725,21 +731,22 @@ static int count_rowcol(const game_state *state, int num, int roworcol,
 }
 
 static void check_rowcol(game_state *state, int num, int roworcol, int which,
-                        int *wrong, int *incomplete)
+                         bool *wrong, bool *incomplete)
 {
     int count, target = mkrowcol(state, num, roworcol).targets[which];
 
     if (target == -1) return; /* no number to check against. */
 
     count = count_rowcol(state, num, roworcol, which);
-    if (count < target) *incomplete = 1;
-    if (count > target) *wrong = 1;
+    if (count < target) *incomplete = true;
+    if (count > target) *wrong = true;
 }
 
 static int check_completion(game_state *state)
 {
     int i, j, x, y, idx, w = state->w, h = state->h;
-    int which = POSITIVE, wrong = 0, incomplete = 0;
+    int which = POSITIVE;
+    bool wrong = false, incomplete = false;
 
     /* Check row and column counts for magnets. */
     for (which = POSITIVE, j = 0; j < 2; which = OPPOSITE(which), j++) {
@@ -759,14 +766,14 @@ static int check_completion(game_state *state)
                 continue; /* no domino here */
 
             if (!(state->flags[idx] & GS_SET))
-                incomplete = 1;
+                incomplete = true;
 
             which = state->grid[idx];
             if (which != NEUTRAL) {
 #define CHECK(xx,yy) do { \
     if (INGRID(state,xx,yy) && \
         (state->grid[(yy)*w+(xx)] == which)) { \
-        wrong = 1; \
+        wrong = true; \
         state->flags[(yy)*w+(xx)] |= GS_ERROR; \
         state->flags[y*w+x] |= GS_ERROR; \
     } \
@@ -1097,7 +1104,8 @@ static int solve_neither(game_state *state)
 
 static int solve_advancedfull(game_state *state, rowcol rc, int *counts)
 {
-    int i, j, nfound = 0, clearpos = 0, clearneg = 0, ret = 0;
+    int i, j, nfound = 0, ret = 0;
+    bool clearpos = false, clearneg = false;
 
     /* For this row/col, look for a domino entirely within the row where
      * both ends can only be + or - (but isn't held).
@@ -1143,11 +1151,11 @@ static int solve_advancedfull(game_state *state, rowcol rc, int *counts)
 
     if (rc.targets[POSITIVE] >= 0 && counts[POSITIVE] == rc.targets[POSITIVE]) {
         debug(("%s %d has now filled POSITIVE:", rc.name, rc.num));
-        clearpos = 1;
+        clearpos = true;
     }
     if (rc.targets[NEGATIVE] >= 0 && counts[NEGATIVE] == rc.targets[NEGATIVE]) {
         debug(("%s %d has now filled NEGATIVE:", rc.name, rc.num));
-        clearneg = 1;
+        clearneg = true;
     }
 
     if (!clearpos && !clearneg) return 0;
@@ -1199,7 +1207,8 @@ static int solve_nonneutral(game_state *state, rowcol rc, int *counts)
 static int solve_oddlength(game_state *state, rowcol rc, int *counts)
 {
     int i, j, ret = 0, extra, tpos, tneg;
-    int start = -1, length = 0, inempty = 0, startodd = -1;
+    int start = -1, length = 0, startodd = -1;
+    bool inempty = false;
 
     /* need zero neutral cells still to find... */
     if (rc.targets[NEUTRAL] != counts[NEUTRAL])
@@ -1222,7 +1231,7 @@ static int solve_oddlength(game_state *state, rowcol rc, int *counts)
                     if (startodd != -1) goto twoodd;
                     startodd = start;
                 }
-                inempty = 0;
+                inempty = false;
             }
         } else {
             if (inempty)
@@ -1230,7 +1239,7 @@ static int solve_oddlength(game_state *state, rowcol rc, int *counts)
             else {
                 start = i;
                 length = 1;
-                inempty = 1;
+                inempty = true;
             }
         }
     }
@@ -1256,7 +1265,8 @@ twoodd:
  * or to the #remaining negative, no empty cells can be neutral. */
 static int solve_countdominoes_neutral(game_state *state, rowcol rc, int *counts)
 {
-    int i, j, ndom = 0, nonn = 0, ret = 0;
+    int i, j, ndom = 0, ret = 0;
+    bool nonn = false;
 
     if ((rc.targets[POSITIVE] == -1) && (rc.targets[NEGATIVE] == -1))
         return 0; /* need at least one target to compare. */
@@ -1275,10 +1285,10 @@ static int solve_countdominoes_neutral(game_state *state, rowcol rc, int *counts
 
     if ((rc.targets[POSITIVE] != -1) &&
         (rc.targets[POSITIVE]-counts[POSITIVE] == ndom))
-        nonn = 1;
+        nonn = true;
     if ((rc.targets[NEGATIVE] != -1) &&
         (rc.targets[NEGATIVE]-counts[NEGATIVE] == ndom))
-        nonn = 1;
+        nonn = true;
 
     if (!nonn) return 0;
 
@@ -1397,7 +1407,7 @@ static int solve_state(game_state *state, int diff)
 
 
 static char *game_state_diff(const game_state *src, const game_state *dst,
-                             int issolve)
+                             bool issolve)
 {
     char *ret = NULL, buf[80], c;
     int retlen = 0, x, y, i, k;
@@ -1447,7 +1457,7 @@ static void solve_from_aux(const game_state *state, const char *aux)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     game_state *solved = dup_game(currstate);
     char *move = NULL;
@@ -1470,7 +1480,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     return NULL;
 
 solved:
-    move = game_state_diff(currstate, solved, 1);
+    move = game_state_diff(currstate, solved, true);
     free_game(solved);
     return move;
 }
@@ -1595,7 +1605,7 @@ static void gen_game(game_state *new, random_state *rs)
             new->common->rowcount[y*3+val]++;
         }
     }
-    new->numbered = 1;
+    new->numbered = true;
 
     sfree(scratch);
 }
@@ -1681,7 +1691,7 @@ static int check_difficulty(const game_params *params, game_state *new,
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux_r, int interactive)
+			   char **aux_r, bool interactive)
 {
     game_state *new = new_state(params->w, params->h);
     char *desc, *aux = snewn(new->wh+1, char);
@@ -1702,14 +1712,15 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 }
 
 struct game_ui {
-    int cur_x, cur_y, cur_visible;
+    int cur_x, cur_y;
+    bool cur_visible;
 };
 
 static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->cur_x = ui->cur_y = 0;
-    ui->cur_visible = 0;
+    ui->cur_visible = false;
     return ui;
 }
 
@@ -1731,11 +1742,12 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
     if (!oldstate->completed && newstate->completed)
-        ui->cur_visible = 0;
+        ui->cur_visible = false;
 }
 
 struct game_drawstate {
-    int tilesize, started, solved;
+    int tilesize;
+    bool started, solved;
     int w, h;
     unsigned long *what;                /* size w*h */
     unsigned long *colwhat, *rowwhat;   /* size 3*w, 3*h */
@@ -1746,11 +1758,10 @@ struct game_drawstate {
 #define DS_ERROR    0x10
 #define DS_CURSOR   0x20
 #define DS_SET      0x40
-#define DS_FULL     0x80
-#define DS_NOTPOS   0x100
-#define DS_NOTNEG   0x200
-#define DS_NOTNEU   0x400
-#define DS_FLASH    0x800
+#define DS_NOTPOS   0x80
+#define DS_NOTNEG   0x100
+#define DS_NOTNEU   0x200
+#define DS_FLASH    0x400
 
 #define PREFERRED_TILE_SIZE 32
 #define TILE_SIZE (ds->tilesize)
@@ -1758,6 +1769,33 @@ struct game_drawstate {
 
 #define COORD(x) ( (x+1) * TILE_SIZE + BORDER )
 #define FROMCOORD(x) ( (x - BORDER) / TILE_SIZE - 1 )
+
+static bool is_clue(const game_state *state, int x, int y)
+{
+    int h = state->h, w = state->w;
+
+    if (((x == -1 || x == w) && y >= 0 && y < h) ||
+        ((y == -1 || y == h) && x >= 0 && x < w))
+        return true;
+
+    return false;
+}
+
+static int clue_index(const game_state *state, int x, int y)
+{
+    int h = state->h, w = state->w;
+
+    if (y == -1)
+        return x;
+    else if (x == w)
+        return w + y;
+    else if (y == h)
+        return 2 * w + h - x - 1;
+    else if (x == -1)
+        return 2 * (w + h) - y - 1;
+
+    return -1;
+}
 
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
@@ -1768,13 +1806,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     enum { CYCLE_MAGNET, CYCLE_NEUTRAL } action;
 
     if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cur_x, &ui->cur_y, state->w, state->h, 0);
-        ui->cur_visible = 1;
-        return "";
+        move_cursor(button, &ui->cur_x, &ui->cur_y, state->w, state->h, false);
+        ui->cur_visible = true;
+        return UI_UPDATE;
     } else if (IS_CURSOR_SELECT(button)) {
         if (!ui->cur_visible) {
-            ui->cur_visible = 1;
-            return "";
+            ui->cur_visible = true;
+            return UI_UPDATE;
         }
         action = (button == CURSOR_SELECT) ? CYCLE_MAGNET : CYCLE_NEUTRAL;
         gx = ui->cur_x;
@@ -1782,10 +1820,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     } else if (INGRID(state, gx, gy) &&
                (button == LEFT_BUTTON || button == RIGHT_BUTTON)) {
         if (ui->cur_visible) {
-            ui->cur_visible = 0;
-            nullret = "";
+            ui->cur_visible = false;
+            nullret = UI_UPDATE;
         }
         action = (button == LEFT_BUTTON) ? CYCLE_MAGNET : CYCLE_NEUTRAL;
+    } else if (button == LEFT_BUTTON && is_clue(state, gx, gy)) {
+        sprintf(buf, "D%d,%d", gx, gy);
+        return dupstr(buf);
     } else
         return NULL;
 
@@ -1833,7 +1874,7 @@ static game_state *execute_move(const game_state *state, const char *move)
     while (*move) {
         c = *move++;
         if (c == 'S') {
-            ret->solved = TRUE;
+            ret->solved = true;
             n = 0;
         } else if (c == '+' || c == '-' ||
                    c == '.' || c == ' ' || c == '?') {
@@ -1862,6 +1903,9 @@ static game_state *execute_move(const game_state *state, const char *move)
                 ret->flags[idx] |= GS_SET;
                 ret->flags[idx2] |= GS_SET;
             }
+        } else if (c == 'D' && sscanf(move, "%d,%d%n", &x, &y, &n) == 2 &&
+                   is_clue(ret, x, y)) {
+            ret->counts_done[clue_index(ret, x, y)] ^= 1;
         } else
             goto badmove;
 
@@ -1870,7 +1914,7 @@ static game_state *execute_move(const game_state *state, const char *move)
         else if (*move) goto badmove;
     }
     if (check_completion(ret) == 1)
-        ret->completed = 1;
+        ret->completed = true;
 
     return ret;
 
@@ -1911,6 +1955,7 @@ static float *game_colours(frontend *fe, int *ncolours)
         ret[COL_TEXT * 3 + i] = 0.0F;
         ret[COL_NEGATIVE * 3 + i] = 0.0F;
         ret[COL_CURSOR * 3 + i] = 0.9F;
+        ret[COL_DONE * 3 + i] = ret[COL_BACKGROUND * 3 + i] / 1.5F;
     }
 
     ret[COL_POSITIVE * 3 + 0] = 0.8F;
@@ -1937,7 +1982,9 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 {
     struct game_drawstate *ds = snew(struct game_drawstate);
 
-    ds->tilesize = ds->started = ds->solved = 0;
+    ds->tilesize = 0;
+    ds->started = false;
+    ds->solved = false;
     ds->w = state->w;
     ds->h = state->h;
 
@@ -1960,7 +2007,7 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
     sfree(ds);
 }
 
-static void draw_num_col(drawing *dr, game_drawstate *ds, int rowcol, int which,
+static void draw_num(drawing *dr, game_drawstate *ds, int rowcol, int which,
                          int idx, int colbg, int col, int num)
 {
     char buf[32];
@@ -1986,13 +2033,6 @@ static void draw_num_col(drawing *dr, game_drawstate *ds, int rowcol, int which,
               ALIGN_VCENTRE | ALIGN_HCENTRE, col, buf);
 
     draw_update(dr, cx, cy, TILE_SIZE, TILE_SIZE);
-}
-
-static void draw_num(drawing *dr, game_drawstate *ds, int rowcol, int which,
-                     int idx, unsigned long c, int num)
-{
-    draw_num_col(dr, ds, rowcol, which, idx, COL_BACKGROUND,
-                 (c & DS_ERROR) ? COL_ERROR : COL_TEXT, num);
 }
 
 static void draw_sym(drawing *dr, game_drawstate *ds, int x, int y, int which, int col)
@@ -2132,24 +2172,40 @@ static void draw_tile(drawing *dr, game_drawstate *ds, int *dominoes,
     draw_update(dr, cx, cy, TILE_SIZE, TILE_SIZE);
 }
 
+static int get_count_color(const game_state *state, int rowcol, int which,
+                           int index, int target)
+{
+    int idx;
+    int count = count_rowcol(state, index, rowcol, which);
+
+    if ((count > target) ||
+        (count < target && !count_rowcol(state, index, rowcol, -1))) {
+        return COL_ERROR;
+    } else if (rowcol == COLUMN) {
+        idx = clue_index(state, index, which == POSITIVE ? -1 : state->h);
+    } else {
+        idx = clue_index(state, which == POSITIVE ? -1 : state->w, index);
+    }
+
+    if (state->counts_done[idx]) {
+        return COL_DONE;
+    }
+
+    return COL_TEXT;
+}
 
 static void game_redraw(drawing *dr, game_drawstate *ds,
                         const game_state *oldstate, const game_state *state,
                         int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
-    int x, y, w = state->w, h = state->h, which, i, j, flash;
-    unsigned long c = 0;
+    int x, y, w = state->w, h = state->h, which, i, j;
+    bool flash;
 
     flash = (int)(flashtime * 5 / FLASH_TIME) % 2;
 
     if (!ds->started) {
-        /* draw background, corner +-. */
-        draw_rect(dr, 0, 0,
-                  TILE_SIZE * (w+2) + 2 * BORDER,
-                  TILE_SIZE * (h+2) + 2 * BORDER,
-                  COL_BACKGROUND);
-
+        /* draw corner +-. */
         draw_sym(dr, ds, -1, -1, POSITIVE, COL_TEXT);
         draw_sym(dr, ds, state->w, state->h, NEGATIVE, COL_TEXT);
 
@@ -2162,8 +2218,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     for (y = 0; y < h; y++) {
         for (x = 0; x < w; x++) {
             int idx = y*w+x;
-
-            c = state->grid[idx];
+            unsigned long c = state->grid[idx];
 
             if (state->flags[idx] & GS_ERROR)
                 c |= DS_ERROR;
@@ -2191,38 +2246,29 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     }
     /* Draw counts around side */
     for (which = POSITIVE, j = 0; j < 2; which = OPPOSITE(which), j++) {
-        int target, count;
         for (i = 0; i < w; i++) {
-            target = state->common->colcount[i*3+which];
-            count = count_rowcol(state, i, COLUMN, which);
-            c = 0;
-            if ((count > target) ||
-                (count < target && !count_rowcol(state, i, COLUMN, -1)))
-                c |= DS_ERROR;
-            if (count == target) c |= DS_FULL;
-            if (c != ds->colwhat[i*3+which] || !ds->started) {
-                draw_num(dr, ds, COLUMN, which, i, c,
-                         state->common->colcount[i*3+which]);
-                ds->colwhat[i*3+which] = c;
+            int index = i * 3 + which;
+            int target = state->common->colcount[index];
+            int color = get_count_color(state, COLUMN, which, i, target);
+
+            if (color != ds->colwhat[index] || !ds->started) {
+                draw_num(dr, ds, COLUMN, which, i, COL_BACKGROUND, color, target);
+                ds->colwhat[index] = color;
             }
         }
         for (i = 0; i < h; i++) {
-            target = state->common->rowcount[i*3+which];
-            count = count_rowcol(state, i, ROW, which);
-            c = 0;
-            if ((count > target) ||
-                (count < target && !count_rowcol(state, i, ROW, -1)))
-                c |= DS_ERROR;
-            if (count == target) c |= DS_FULL;
-            if (c != ds->rowwhat[i*3+which] || !ds->started) {
-                draw_num(dr, ds, ROW, which, i, c,
-                         state->common->rowcount[i*3+which]);
-                ds->rowwhat[i*3+which] = c;
+            int index = i * 3 + which;
+            int target = state->common->rowcount[index];
+            int color = get_count_color(state, ROW, which, i, target);
+
+            if (color != ds->rowwhat[index] || !ds->started) {
+                draw_num(dr, ds, ROW, which, i, COL_BACKGROUND, color, target);
+                ds->rowwhat[index] = color;
             }
         }
     }
 
-    ds->started = 1;
+    ds->started = true;
 }
 
 static float game_anim_length(const game_state *oldstate,
@@ -2240,14 +2286,27 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        *x = COORD(ui->cur_x);
+        *y = COORD(ui->cur_y);
+        *w = *h = TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-    return TRUE;
+    return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -2282,11 +2341,11 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
     draw_sym(dr, ds, state->w, state->h, NEGATIVE, ink);
     for (which = POSITIVE, j = 0; j < 2; which = OPPOSITE(which), j++) {
         for (i = 0; i < w; i++) {
-            draw_num_col(dr, ds, COLUMN, which, i, paper, ink,
+            draw_num(dr, ds, COLUMN, which, i, paper, ink,
                          state->common->colcount[i*3+which]);
         }
         for (i = 0; i < h; i++) {
-            draw_num_col(dr, ds, ROW, which, i, paper, ink,
+            draw_num(dr, ds, ROW, which, i, paper, ink,
                          state->common->rowcount[i*3+which]);
         }
     }
@@ -2352,24 +2411,25 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Magnets", "games.magnets", "magnets",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
     decode_ui,
+    NULL, /* game_request_keys */
     game_changed_state,
     interpret_move,
     execute_move,
@@ -2380,10 +2440,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
+    false, game_timing_state,
     REQUIRE_RBUTTON,		       /* flags */
 };
 
@@ -2393,7 +2454,7 @@ const struct game thegame = {
 #include <stdarg.h>
 
 const char *quis = NULL;
-int csv = 0;
+bool csv = false;
 
 void usage(FILE *out) {
     fprintf(out, "usage: %s [-v] [--print] <params>|<game id>\n", quis);
@@ -2495,8 +2556,10 @@ static void start_soak(game_params *p, random_state *rs)
 
 int main(int argc, const char *argv[])
 {
-    int print = 0, soak = 0, solved = 0, ret;
-    char *id = NULL, *desc, *desc_gen = NULL, *err, *aux = NULL;
+    bool print = false, soak = false, solved = false;
+    int ret;
+    char *id = NULL, *desc, *desc_gen = NULL, *aux = NULL;
+    const char *err;
     game_state *s = NULL;
     game_params *p = NULL;
     random_state *rs = NULL;
@@ -2508,16 +2571,16 @@ int main(int argc, const char *argv[])
     while (--argc > 0) {
         char *p = (char*)(*++argv);
         if (!strcmp(p, "-v") || !strcmp(p, "--verbose")) {
-            verbose = 1;
+            verbose = true;
         } else if (!strcmp(p, "--csv")) {
-            csv = 1;
+            csv = true;
         } else if (!strcmp(p, "-e") || !strcmp(p, "--seed")) {
             seed = atoi(*++argv);
             argc--;
         } else if (!strcmp(p, "-p") || !strcmp(p, "--print")) {
-            print = 1;
+            print = true;
         } else if (!strcmp(p, "-s") || !strcmp(p, "--soak")) {
-            soak = 1;
+            soak = true;
         } else if (*p == '-') {
             fprintf(stderr, "%s: unrecognised option `%s'\n", argv[0], p);
             usage(stderr);
@@ -2538,7 +2601,7 @@ int main(int argc, const char *argv[])
 
     p = default_params();
     decode_params(p, id);
-    err = validate_params(p, 1);
+    err = validate_params(p, true);
     if (err) {
         fprintf(stderr, "%s: %s", argv[0], err);
         goto done;
@@ -2554,7 +2617,7 @@ int main(int argc, const char *argv[])
     }
 
     if (!desc)
-        desc = desc_gen = new_game_desc(p, rs, &aux, 0);
+        desc = desc_gen = new_game_desc(p, rs, &aux, false);
 
     err = validate_desc(p, desc);
     if (err) {
@@ -2562,23 +2625,23 @@ int main(int argc, const char *argv[])
         goto done;
     }
     s = new_game(NULL, p, desc);
-    printf("%s:%s (seed %ld)\n", id, desc, seed);
+    printf("%s:%s (seed %ld)\n", id, desc, (long)seed);
     if (aux) {
         /* We just generated this ourself. */
         if (verbose || print) {
             doprint(s);
             solve_from_aux(s, aux);
-            solved = 1;
+            solved = true;
         }
     } else {
         doprint(s);
-        verbose = 1;
+        verbose = true;
         ret = solve_state(s, DIFFCOUNT);
         if (ret < 0) printf("Puzzle is impossible.\n");
         else if (ret == 0) printf("Puzzle is ambiguous.\n");
         else printf("Puzzle was solved.\n");
-        verbose = 0;
-        solved = 1;
+        verbose = false;
+        solved = true;
     }
     if (solved) doprint(s);
 

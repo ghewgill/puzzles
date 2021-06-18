@@ -389,26 +389,54 @@ with the default values, and returns a pointer to it.
 
 \S{backend-fetch-preset} \cw{fetch_preset()}
 
-\c int (*fetch_preset)(int i, char **name, game_params **params);
+\c bool (*fetch_preset)(int i, char **name, game_params **params);
 
-This function is used to populate the \q{Type} menu, which provides
-a list of conveniently accessible preset parameters for most games.
+This function is one of the two APIs a back end can provide to
+populate the \q{Type} menu, which provides a list of conveniently
+accessible preset parameters for most games.
 
 The function is called with \c{i} equal to the index of the preset
-required (numbering from zero). It returns \cw{FALSE} if that preset
+required (numbering from zero). It returns \cw{false} if that preset
 does not exist (if \c{i} is less than zero or greater than the
 largest preset index). Otherwise, it sets \c{*params} to point at a
 newly allocated \c{game_params} structure containing the preset
 information, sets \c{*name} to point at a newly allocated C string
 containing the preset title (to go on the \q{Type} menu), and
-returns \cw{TRUE}.
+returns \cw{true}.
 
 If the game does not wish to support any presets at all, this
-function is permitted to return \cw{FALSE} always.
+function is permitted to return \cw{false} always.
+
+If the game wants to return presets in the form of a hierarchical menu
+instead of a flat list (and, indeed, even if it doesn't), then it may
+set this function pointer to \cw{NULL}, and instead fill in the
+alternative function pointer \cw{preset_menu}
+(\k{backend-preset-menu}).
+
+\S{backend-preset-menu} \cw{preset_menu()}
+
+\c struct preset_menu *(*preset_menu)(void);
+
+This function is the more flexible of the two APIs by which a back end
+can define a collection of preset game parameters.
+
+This function simply returns a complete menu hierarchy, in the form of
+a \c{struct preset_menu} (see \k{midend-get-presets}) and further
+submenus (if it wishes) dangling off it. There are utility functions
+described in \k{utils-presets} to make it easy for the back end to
+construct this menu.
+
+If the game has no need to return a hierarchy of menus, it may instead
+opt to implement the \cw{fetch_preset()} function (see
+\k{backend-fetch-preset}).
+
+The game need not fill in the \c{id} fields in the preset menu
+structures. The mid-end will do that after it receives the structure
+from the game, and before passing it on to the front end.
 
 \S{backend-encode-params} \cw{encode_params()}
 
-\c char *(*encode_params)(const game_params *params, int full);
+\c char *(*encode_params)(const game_params *params, bool full);
 
 The job of this function is to take a \c{game_params}, and encode it
 in a string form for use in game IDs. The return value must be a
@@ -432,10 +460,10 @@ letter denoting a parameter, followed optionally by a number giving
 the value of that parameter, with a few mandatory parts at the
 beginning such as numeric width and height separated by \cq{x}.)
 
-If the \c{full} parameter is \cw{TRUE}, this function should encode
+If the \c{full} parameter is \cw{true}, this function should encode
 absolutely everything in the \c{game_params}, such that a subsequent
 call to \cw{decode_params()} (\k{backend-decode-params}) will yield
-an identical structure. If \c{full} is \cw{FALSE}, however, you
+an identical structure. If \c{full} is \cw{false}, however, you
 should leave out anything which is not necessary to describe a
 \e{specific puzzle instance}, i.e. anything which only takes effect
 when a new puzzle is \e{generated}. For example, the Solo
@@ -501,13 +529,13 @@ provided as input. It returns a pointer to the new duplicate.
 
 \S{backend-can-configure} \c{can_configure}
 
-\c int can_configure;
+\c bool can_configure;
 
-This boolean data element is set to \cw{TRUE} if the back end
-supports custom parameter configuration via a dialog box. If it is
-\cw{TRUE}, then the functions \cw{configure()} and
-\cw{custom_params()} are expected to work. See \k{backend-configure}
-and \k{backend-custom-params} for more details.
+This data element is set to \cw{true} if the back end supports custom
+parameter configuration via a dialog box. If it is \cw{true}, then the
+functions \cw{configure()} and \cw{custom_params()} are expected to
+work. See \k{backend-configure} and \k{backend-custom-params} for more
+details.
 
 \S{backend-configure} \cw{configure()}
 
@@ -527,16 +555,15 @@ The \cw{config_item} structure contains the following elements:
 
 \c char *name;
 \c int type;
-\c char *sval;
-\c int ival;
+\c union { /* type-specific fields */ } u;
+\e         iiiiiiiiiiiiiiiiiiiiiiiiii
 
 \c{name} is an ASCII string giving the textual label for a GUI
 control. It is \e{not} expected to be dynamically allocated.
 
 \c{type} contains one of a small number of \c{enum} values defining
-what type of control is being described. The meaning of the \c{sval}
-and \c{ival} fields depends on the value in \c{type}. The valid
-values are:
+what type of control is being described. The usable member of the
+union field \c{u} depends on \c{type}. The valid type values are:
 
 \dt \c{C_STRING}
 
@@ -544,38 +571,64 @@ values are:
 input. The back end does not bother informing the front end that the
 box is numeric rather than textual; some front ends do have the
 capacity to take this into account, but I decided it wasn't worth
-the extra complexity in the interface.) For this type, \c{ival} is
-unused, and \c{sval} contains a dynamically allocated string
-representing the contents of the input box.
+the extra complexity in the interface.)
+
+\lcont{
+
+For controls of this type, \c{u.string} contains a single field
+
+\c char *sval;
+
+which stores a dynamically allocated string representing the contents
+of the input box.
+
+}
 
 \dt \c{C_BOOLEAN}
 
-\dd Describes a simple checkbox. For this type, \c{sval} is unused,
-and \c{ival} is \cw{TRUE} or \cw{FALSE}.
+\dd Describes a simple checkbox.
+
+\lcont{
+
+For controls of this type, \c{u.boolean} contains a single field
+
+\c int bval;
+
+which is either \cw{TRUE} or \cw{FALSE}.
+
+}
 
 \dt \c{C_CHOICES}
 
 \dd Describes a drop-down list presenting one of a small number of
-fixed choices. For this type, \c{sval} contains a list of strings
-describing the choices; the very first character of \c{sval} is used
-as a delimiter when processing the rest (so that the strings
-\cq{:zero:one:two}, \cq{!zero!one!two} and \cq{xzeroxonextwo} all
-define a three-element list containing \cq{zero}, \cq{one} and
-\cq{two}). \c{ival} contains the index of the currently selected
-element, numbering from zero (so that in the above example, 0 would
-mean \cq{zero} and 2 would mean \cq{two}).
+fixed choices.
 
 \lcont{
 
-Note that for this control type, \c{sval} is \e{not} dynamically
-allocated, whereas it was for \c{C_STRING}.
+For controls of this type, \c{u.choices} contains two fields:
+
+\c const char *choicenames;
+\c int selected;
+
+\c{choicenames} contains a list of strings describing the choices. The
+very first character of \c{sval} is used as a delimiter when
+processing the rest (so that the strings \cq{:zero:one:two},
+\cq{!zero!one!two} and \cq{xzeroxonextwo} all define a three-element
+list containing \cq{zero}, \cq{one} and \cq{two}).
+
+\c{selected} contains the index of the currently selected element,
+numbering from zero (so that in the above example, 0 would mean
+\cq{zero} and 2 would mean \cq{two}).
+
+Note that \c{u.choices.choicenames} is \e{not} dynamically allocated,
+unlike \c{u.string.sval}.
 
 }
 
 \dt \c{C_END}
 
-\dd Marks the end of the array of \c{config_item}s. All other fields
-are unused.
+\dd Marks the end of the array of \c{config_item}s. There is no
+associated member of the union field \c{u} for this type.
 
 The array returned from this function is expected to have filled in
 the initial values of all the controls according to the input
@@ -611,7 +664,8 @@ function is never called and need not do anything at all.
 
 \S{backend-validate-params} \cw{validate_params()}
 
-\c char *(*validate_params)(const game_params *params, int full);
+\c const char *(*validate_params)(const game_params *params,
+\c                                bool full);
 
 This function takes a \c{game_params} structure as input, and checks
 that the parameters described in it fall within sensible limits. (At
@@ -656,7 +710,7 @@ a descriptive-format game ID.
 \S{backend-new-desc} \cw{new_desc()}
 
 \c char *(*new_desc)(const game_params *params, random_state *rs,
-\c                   char **aux, int interactive);
+\c                   char **aux, bool interactive);
 
 This function is where all the really hard work gets done. This is
 the function whose job is to randomly generate a new puzzle,
@@ -696,7 +750,8 @@ again in the game description.
 
 \S{backend-validate-desc} \cw{validate_desc()}
 
-\c char *(*validate_desc)(const game_params *params, const char *desc);
+\c const char *(*validate_desc)(const game_params *params,
+\c                              const char *desc);
 
 This function is given a game description, and its job is to
 validate that it describes a puzzle which makes sense.
@@ -879,10 +934,10 @@ divide mouse coordinates by it.)
 in response to the input event; the puzzle was not interested in it
 at all.
 
-\b Returning the empty string (\cw{""}) indicates that the input
+\b Returning the special value \cw{UI_UPDATE} indicates that the input
 event has resulted in a change being made to the \c{game_ui} which
-will require a redraw of the game window, but that no actual
-\e{move} was made (i.e. no new \c{game_state} needs to be created).
+will require a redraw of the game window, but that no actual \e{move}
+was made (i.e. no new \c{game_state} needs to be created).
 
 \b Returning anything else indicates that a move was made and that a
 new \c{game_state} must be created. However, instead of actually
@@ -897,7 +952,7 @@ strings can be written to disk when saving the game and fed to
 
 The return value from \cw{interpret_move()} is expected to be
 dynamically allocated if and only if it is not either \cw{NULL}
-\e{or} the empty string.
+\e{or} the special string constant \c{UI_UPDATE}.
 
 After this function is called, the back end is permitted to rely on
 some subsequent operations happening in sequence:
@@ -991,16 +1046,16 @@ punishable by assertion failure in the mid-end.
 
 \S{backend-can-solve} \c{can_solve}
 
-\c int can_solve;
+\c bool can_solve;
 
-This boolean field is set to \cw{TRUE} if the game's \cw{solve()}
-function does something. If it's set to \cw{FALSE}, the game will
-not even offer the \q{Solve} menu option.
+This field is set to \cw{true} if the game's \cw{solve()} function
+does something. If it's set to \cw{false}, the game will not even
+offer the \q{Solve} menu option.
 
 \S{backend-solve} \cw{solve()}
 
 \c char *(*solve)(const game_state *orig, const game_state *curr,
-\c                const char *aux, char **error);
+\c                const char *aux, const char **error);
 
 This function is called when the user selects the \q{Solve} option
 from the menu.
@@ -1234,6 +1289,51 @@ a mine from the colour it uses when you complete the game. In order
 to achieve this, its \cw{flash_length()} function has to store a
 flag in the \c{game_ui} to indicate which flash type is required.)
 
+\S{backend-get-cursor-location} \cw{get_cursor_location()}
+
+\c void (*get_cursor_location)(const game_ui *ui,
+\c                             const game_drawstate *ds,
+\c                             const game_state *state,
+\c                             const game_params *params,
+\c                             int *x, int *y,
+\c                             int *w, int *h);
+
+This function queries the backend for the rectangular region
+containing the cursor (in games that have one), or other region of
+interest.
+
+This function is called by only
+\cw{midend_get_cursor_location()}(\k{midend-get-cursor-location}). Its
+purpose is to allow front ends to query the location of the backend's
+cursor. With knowledge of this location, a front end can, for example,
+ensure that the region of interest remains visible if the puzzle is
+too big to fit on the screen at once.
+
+On returning, \cw{*x}, \cw{*y} should be set to the X and Y
+coordinates of the upper-left corner of the rectangular region of
+interest, and \cw{*w} and \cw{*h} should be the width and height of
+that region, respectively. In the event that a cursor is not visible
+on screen, this function should return and leave the return parameters
+untouched \dash the midend will notice this. The backend need not
+bother checking that \cw{x}, \cw{y}, \cw{w} and \cw{h} are
+non-\cw{NULL} \dash the midend guarantees that they will not be.
+
+Defining what constitutes a \q{region of interest} is left up to the
+backend. If a game provides a conventional cursor \dash such as Mines,
+Solo, or any of the other grid-based games \dash the most logical
+choice is of course the location of the cursor itself. However, in
+other cases such as Cube or Inertia, there is no \q{cursor} in the
+conventional sense \dash the player instead controls an object moving
+around the screen. In these cases, it makes sense to define the region
+of interest as the bounding box of the player object or another
+sensible region \dash such as the grid square the player is sitting on
+in Cube.
+
+If a backend does not provide a cursor mechanism at all, the backend
+is free to provide an empty implementation of this function, or a
+\cw{NULL} pointer in the \cw{game} structure \dash the midend will
+notice either of these cases and behave appropriately.
+
 \S{backend-status} \cw{status()}
 
 \c int (*status)(const game_state *state);
@@ -1315,27 +1415,27 @@ printing puzzles out on paper.
 
 \S{backend-can-print} \c{can_print}
 
-\c int can_print;
+\c bool can_print;
 
-This flag is set to \cw{TRUE} if the puzzle is capable of printing
+This flag is set to \cw{true} if the puzzle is capable of printing
 itself on paper. (This makes sense for some puzzles, such as Solo,
 which can be filled in with a pencil. Other puzzles, such as
 Twiddle, inherently involve moving things around and so would not
 make sense to print.)
 
-If this flag is \cw{FALSE}, then the functions \cw{print_size()}
+If this flag is \cw{false}, then the functions \cw{print_size()}
 and \cw{print()} will never be called.
 
 \S{backend-can-print-in-colour} \c{can_print_in_colour}
 
-\c int can_print_in_colour;
+\c bool can_print_in_colour;
 
-This flag is set to \cw{TRUE} if the puzzle is capable of printing
+This flag is set to \cw{true} if the puzzle is capable of printing
 itself differently when colour is available. For example, Map can
 actually print coloured regions in different \e{colours} rather than
 resorting to cross-hatching.
 
-If the \c{can_print} flag is \cw{FALSE}, then this flag will be
+If the \c{can_print} flag is \cw{false}, then this flag will be
 ignored.
 
 \S{backend-print-size} \cw{print_size()}
@@ -1407,31 +1507,31 @@ called.
 
 \S{backend-can-format-as-text-ever} \c{can_format_as_text_ever}
 
-\c int can_format_as_text_ever;
+\c bool can_format_as_text_ever;
 
-This boolean field is \cw{TRUE} if the game supports formatting a
+This field is \cw{true} if the game supports formatting a
 game state as ASCII text (typically ASCII art) for copying to the
-clipboard and pasting into other applications. If it is \cw{FALSE},
+clipboard and pasting into other applications. If it is \cw{false},
 front ends will not offer the \q{Copy} command at all.
 
-If this field is \cw{TRUE}, the game does not necessarily have to
+If this field is \cw{true}, the game does not necessarily have to
 support text formatting for \e{all} games: e.g. a game which can be
 played on a square grid or a triangular one might only support copy
 and paste for the former, because triangular grids in ASCII art are
 just too difficult.
 
-If this field is \cw{FALSE}, the functions
+If this field is \cw{false}, the functions
 \cw{can_format_as_text_now()} (\k{backend-can-format-as-text-now})
 and \cw{text_format()} (\k{backend-text-format}) are never called.
 
 \S{backend-can-format-as-text-now} \c{can_format_as_text_now()}
 
-\c int (*can_format_as_text_now)(const game_params *params);
+\c bool (*can_format_as_text_now)(const game_params *params);
 
-This function is passed a \c{game_params} and returns a boolean,
-which is \cw{TRUE} if the game can support ASCII text output for
-this particular game type. If it returns \cw{FALSE}, front ends will
-grey out or otherwise disable the \q{Copy} command.
+This function is passed a \c{game_params}, and returns \cw{true} if
+the game can support ASCII text output for this particular game type.
+If it returns \cw{false}, front ends will grey out or otherwise
+disable the \q{Copy} command.
 
 Games may enable and disable the copy-and-paste function for
 different game \e{parameters}, but are currently constrained to
@@ -1475,28 +1575,28 @@ whether that should come with a newline or not.)
 
 \S{backend-wants-statusbar} \cw{wants_statusbar}
 
-\c int wants_statusbar;
+\c bool wants_statusbar;
 
-This boolean field is set to \cw{TRUE} if the puzzle has a use for a
-textual status line (to display score, completion status, currently
-active tiles, etc).
+This field is set to \cw{true} if the puzzle has a use for a textual
+status line (to display score, completion status, currently active
+tiles, etc).
 
 \S{backend-is-timed} \c{is_timed}
 
-\c int is_timed;
+\c bool is_timed;
 
-This boolean field is \cw{TRUE} if the puzzle is time-critical. If
+This field is \cw{true} if the puzzle is time-critical. If
 so, the mid-end will maintain a game timer while the user plays.
 
-If this field is \cw{FALSE}, then \cw{timing_state()} will never be
+If this field is \cw{false}, then \cw{timing_state()} will never be
 called and need not do anything.
 
 \S{backend-timing-state} \cw{timing_state()}
 
-\c int (*timing_state)(const game_state *state, game_ui *ui);
+\c bool (*timing_state)(const game_state *state, game_ui *ui);
 
 This function is passed the current \c{game_state} and the local
-\c{game_ui}; it returns \cw{TRUE} if the game timer should currently
+\c{game_ui}; it returns \cw{true} if the game timer should currently
 be running.
 
 A typical use for the \c{game_ui} in this function is to note when
@@ -1504,6 +1604,41 @@ the game was first completed (by setting a flag in
 \cw{changed_state()} \dash see \k{backend-changed-state}), and
 freeze the timer thereafter so that the user can undo back through
 their solution process without altering their time.
+
+\S{backend-request-keys} \cw{request_keys()}
+
+\c key_label *(*request_keys)(const game_params *params, int *nkeys);
+
+This function returns a dynamically allocated array of \cw{key_label}
+items containing the buttons the back end deems absolutely
+\e{necessary} for gameplay, not an exhaustive list of every button the
+back end could accept. For example, Keen only returns the digits up to
+the game size and the backspace character, \cw{\\b}, even though it
+\e{could} accept \cw{M}, as only these buttons are actually needed to
+play the game. Each \cw{key_label} item contains the following fields:
+
+\c struct key_label {
+\c     const char *label; /* label for frontend use */
+\c     int button; /* button to pass to midend */
+\c } key_label;
+
+The \cw{label} field of this structure can (and often will) be set by
+the backend to \cw{NULL}, in which case the midend will instead call
+\c{button2label()} (\k{utils-button2label}) and fill in a generic
+label. The \cw{button} field is the associated code that can be passed
+to the midend when the frontend deems appropriate.
+
+The backend should set \cw{*nkeys} to the number of elements in the
+returned array.
+
+The field for this function point in the \cw{game} structure might be
+set to \cw{NULL} (and indeed it is for the majority of the games) to
+indicate that no additional buttons (apart from the cursor keys) are
+required to play the game.
+
+This function should not be called directly by frontends. Instead,
+frontends should use \cw{midend_request_keys()}
+(\k{midend-request-keys}).
 
 \S{backend-flags} \c{flags}
 
@@ -1900,10 +2035,14 @@ Indeed, even horizontal or vertical lines may be anti-aliased.
 
 This function may be used for both drawing and printing.
 
+If the specified thickness is less than 1.0, 1.0 is used.
+This ensures that thin lines are visible even at small scales.
+
 \S{drawing-draw-text} \cw{draw_text()}
 
 \c void draw_text(drawing *dr, int x, int y, int fonttype,
-\c                int fontsize, int align, int colour, char *text);
+\c                int fontsize, int align, int colour,
+\c                const char *text);
 
 Draws text in the puzzle window.
 
@@ -2064,7 +2203,7 @@ printing routines, that code may safely call \cw{draw_update()}.)
 
 \S{drawing-status-bar} \cw{status_bar()}
 
-\c void status_bar(drawing *dr, char *text);
+\c void status_bar(drawing *dr, const char *text);
 
 Sets the text in the game's status bar to \c{text}. The text is copied
 from the supplied buffer, so the caller is free to deallocate or
@@ -2300,15 +2439,14 @@ capabilities.
 
 \S{print-line-dotted} \cw{print_line_dotted()}
 
-\c void print_line_dotted(drawing *dr, int dotted);
+\c void print_line_dotted(drawing *dr, bool dotted);
 
 This function is called to toggle the drawing of dotted lines during
 printing. It is not supported during drawing.
 
-The parameter \cq{dotted} is a boolean; \cw{TRUE} means that future
-lines drawn by \cw{draw_line()}, \cw{draw_circle} and
-\cw{draw_polygon()} will be dotted, and \cw{FALSE} means that they
-will be solid.
+Setting \cq{dotted} to \cw{true} means that future lines drawn by
+\cw{draw_line()}, \cw{draw_circle} and \cw{draw_polygon()} will be
+dotted. Setting it to \cw{false} means that they will be solid.
 
 Some front ends may impose restrictions on the width of dotted
 lines. Asking for a dotted line via this front end will override any
@@ -2335,7 +2473,8 @@ function \cw{drawing_new()} (see \k{drawing-new}).
 \S{drawingapi-draw-text} \cw{draw_text()}
 
 \c void (*draw_text)(void *handle, int x, int y, int fonttype,
-\c                   int fontsize, int align, int colour, char *text);
+\c                   int fontsize, int align, int colour,
+\c                   const char *text);
 
 This function behaves exactly like the back end \cw{draw_text()}
 function; see \k{drawing-draw-text}.
@@ -2438,7 +2577,7 @@ called unless drawing is attempted.
 
 \S{drawingapi-status-bar} \cw{status_bar()}
 
-\c void (*status_bar)(void *handle, char *text);
+\c void (*status_bar)(void *handle, const char *text);
 
 This function behaves exactly like the back end \cw{status_bar()}
 function; see \k{drawing-status-bar}.
@@ -2743,8 +2882,8 @@ these parameters until further notice.
 
 The usual way in which the front end will have an actual
 \c{game_params} structure to pass to this function is if it had
-previously got it from \cw{midend_fetch_preset()}
-(\k{midend-fetch-preset}). Thus, this function is usually called in
+previously got it from \cw{midend_get_presets()}
+(\k{midend-get-presets}). Thus, this function is usually called in
 response to the user making a selection from the presets menu.
 
 \H{midend-get-params} \cw{midend_get_params()}
@@ -2759,7 +2898,7 @@ when finished with by passing it to the game's own
 
 \H{midend-size} \cw{midend_size()}
 
-\c void midend_size(midend *me, int *x, int *y, int user_size);
+\c void midend_size(midend *me, int *x, int *y, bool user_size);
 
 Tells the mid-end to figure out its window size.
 
@@ -2777,7 +2916,7 @@ status bar is also not included in this size.)
 Use \c{user_size} to indicate whether \c{*x} and \c{*y} are a
 requested size, or just a maximum size.
 
-If \c{user_size} is set to \cw{TRUE}, the mid-end will treat the
+If \c{user_size} is set to \cw{true}, the mid-end will treat the
 input size as a request, and will pick a tile size which
 approximates it \e{as closely as possible}, going over the game's
 preferred tile size if necessary to achieve this. The mid-end will
@@ -2900,7 +3039,7 @@ call to this function. Some back ends require that \cw{midend_size()}
 
 \H{midend-process-key} \cw{midend_process_key()}
 
-\c int midend_process_key(midend *me, int x, int y, int button);
+\c bool midend_process_key(midend *me, int x, int y, int button);
 
 The front end calls this function to report a mouse or keyboard
 event. The parameters \c{x}, \c{y} and \c{button} are almost
@@ -2933,10 +3072,22 @@ Calling this function is very likely to result in calls back to the
 front end's drawing API and/or \cw{activate_timer()}
 (\k{frontend-activate-timer}).
 
-The return value from \cw{midend_process_key()} is non-zero, unless
-the effect of the keypress was to request termination of the
-program. A front end should shut down the puzzle in response to a
-zero return.
+The return value from \cw{midend_process_key()} is \cw{true} unless
+the effect of the keypress was to request termination of the program.
+A front end should shut down the puzzle in response to a \cw{false}
+return.
+
+\H{midend-request-keys} \cw{midend_request_keys()}
+
+\c key_label *midend_request_keys(midend *me, int *nkeys);
+
+This function behaves similarly to the backend's \cw{request_keys()}
+function (\k{backend-request-keys}). If the backend does not provide
+\cw{request_keys()}, this function will return \cw{NULL} and set
+\cw{*nkeys} to zero. Otherwise, this function will fill in the generic
+labels (i.e. the \cw{key_label} items that have their \cw{label}
+fields set to \cw{NULL}) by using \cw{button2label()}
+(\k{utils-button2label}).
 
 \H{midend-colours} \cw{midend_colours()}
 
@@ -2966,34 +3117,63 @@ One of the major purposes of timing in the mid-end is to perform
 move animation. Therefore, calling this function is very likely to
 result in calls back to the front end's drawing API.
 
-\H{midend-num-presets} \cw{midend_num_presets()}
+\H{midend-get-presets} \cw{midend_get_presets()}
 
-\c int midend_num_presets(midend *me);
+\c struct preset_menu *midend_get_presets(midend *me, int *id_limit);
 
-Returns the number of game parameter presets supplied by this game.
-Front ends should use this function and \cw{midend_fetch_preset()}
-to configure their presets menu rather than calling the back end
-directly, since the mid-end adds standard customisation facilities.
-(At the time of writing, those customisation facilities are
-implemented hackily by means of environment variables, but it's not
-impossible that they may become more full and formal in future.)
+Returns a data structure describing this game's collection of preset
+game parameters, organised into a hierarchical structure of menus and
+submenus.
 
-\H{midend-fetch-preset} \cw{midend_fetch_preset()}
+The return value is a pointer to a data structure containing the
+following fields (among others, which are not intended for front end
+use):
 
-\c void midend_fetch_preset(midend *me, int n,
-\c                          char **name, game_params **params);
+\c struct preset_menu {
+\c     int n_entries;
+\c     struct preset_menu_entry *entries;
+\c     /* and other things */
+\e     iiiiiiiiiiiiiiiiiiiiii
+\c };
 
-Returns one of the preset game parameter structures for the game. On
-input \c{n} must be a non-negative integer and less than the value
-returned from \cw{midend_num_presets()}. On output, \c{*name} is set
-to an ASCII string suitable for entering in the game's presets menu,
-and \c{*params} is set to the corresponding \c{game_params}
-structure.
+Those fields describe the intended contents of one particular menu in
+the hierarchy. \cq{entries} points to an array of \cq{n_entries}
+items, each of which is a structure containing the following fields:
 
-Both of the two output values are dynamically allocated, but they
-are owned by the mid-end structure: the front end should not ever
-free them directly, because they will be freed automatically during
-\cw{midend_free()}.
+\c struct preset_menu_entry {
+\c     char *title;
+\c     game_params *params;
+\c     struct preset_menu *submenu;
+\c     int id;
+\c };
+
+Of these fields, \cq{title} and \cq{id} are present in every entry,
+giving (respectively) the textual name of the menu item and an integer
+identifier for it. The integer id will correspond to the one returned
+by \c{midend_which_preset} (\k{midend-which-preset}), when that preset
+is the one selected.
+
+The other two fields are mutually exclusive. Each \c{struct
+preset_menu_entry} will have one of those fields \cw{NULL} and the
+other one non-null. If the menu item is an actual preset, then
+\cq{params} will point to the set of game parameters that go with the
+name; if it's a submenu, then \cq{submenu} instead will be non-null,
+and will point at a subsidiary \c{struct preset_menu}.
+
+The complete hierarchy of these structures is owned by the mid-end,
+and will be freed when the mid-end is freed. The front end should not
+attempt to free any of it.
+
+The integer identifiers will be allocated densely from 0 upwards, so
+that it's reasonable for the front end to allocate an array which uses
+them as indices, if it needs to store information per preset menu
+item. For this purpose, the front end may pass the second parameter
+\cq{id_limit} to \cw{midend_get_presets} as the address of an \c{int}
+variable, into which \cw{midend_get_presets} will write an integer one
+larger than the largest id number actually used (i.e. the number of
+elements the front end would need in the array).
+
+Submenu-type entries also have integer identifiers.
 
 \H{midend-which-preset} \cw{midend_which_preset()}
 
@@ -3005,11 +3185,15 @@ no preset matches. Front ends could use this to maintain a tick
 beside one of the items in the menu (or tick the \q{Custom} option
 if the return value is less than zero).
 
+The returned index value (if non-negative) will match the \c{id} field
+of the corresponding \cw{struct preset_menu_entry} returned by
+\c{midend_get_presets()} (\k{midend-get-presets}).
+
 \H{midend-wants-statusbar} \cw{midend_wants_statusbar()}
 
-\c int midend_wants_statusbar(midend *me);
+\c bool midend_wants_statusbar(midend *me);
 
-This function returns \cw{TRUE} if the puzzle has a use for a
+This function returns \cw{true} if the puzzle has a use for a
 textual status line (to display score, completion status, currently
 active tiles, time, or anything else).
 
@@ -3065,8 +3249,8 @@ will probably need to pass it to \cw{midend_set_config}.)
 
 \H{midend-set-config} \cw{midend_set_config()}
 
-\c char *midend_set_config(midend *me, int which,
-\c                         config_item *cfg);
+\c const char *midend_set_config(midend *me, int which,
+\c                               config_item *cfg);
 
 Passes the mid-end the results of a configuration dialog box.
 \c{which} should have the same value which it had when
@@ -3087,7 +3271,7 @@ using \cw{midend_size()} and eventually perform a refresh using
 
 \H{midend-game-id} \cw{midend_game_id()}
 
-\c char *midend_game_id(midend *me, char *id);
+\c const char *midend_game_id(midend *me, const char *id);
 
 Passes the mid-end a string game ID (of any of the valid forms
 \cq{params}, \cq{params:description} or \cq{params#seed}) which the
@@ -3127,12 +3311,12 @@ The returned string, if it is non-\cw{NULL}, is dynamically allocated.
 
 \H{midend-can-format-as-text-now} \cw{midend_can_format_as_text_now()}
 
-\c int midend_can_format_as_text_now(midend *me);
+\c bool midend_can_format_as_text_now(midend *me);
 
-Returns \cw{TRUE} if the game code is capable of formatting puzzles
+Returns \cw{true} if the game code is capable of formatting puzzles
 of the currently selected game type as ASCII.
 
-If this returns \cw{FALSE}, then \cw{midend_text_format()}
+If this returns \cw{false}, then \cw{midend_text_format()}
 (\k{midend-text-format}) will return \cw{NULL}.
 
 \H{midend-text-format} \cw{midend_text_format()}
@@ -3155,7 +3339,7 @@ conversion.
 
 \H{midend-solve} \cw{midend_solve()}
 
-\c char *midend_solve(midend *me);
+\c const char *midend_solve(midend *me);
 
 Requests the mid-end to perform a Solve operation.
 
@@ -3167,6 +3351,34 @@ The front end can expect its drawing API and/or
 \cw{activate_timer()} to be called from within a call to this
 function.  Some back ends require that \cw{midend_size()}
 (\k{midend-size}) is called before \cw{midend_solve()}.
+
+\H{midend-get-cursor-location} \cw{midend_get_cursor_location()}
+
+\c bool midend_get_cursor_location(midend *me,
+\c                                 int *x, int *y,
+\c                                 int *w, int *h);
+
+This function requests the location of the back end's on-screen cursor
+or other region of interest.
+
+What exactly this region contains is up to the backend, but in general
+the region will be an area that the player is controlling with the
+cursor keys \dash such as the player location in Cube and Inertia, or
+the cursor in any of the conventional grid-based games. With knowledge
+of this location, a front end can, for example, ensure that the region
+of interest remains visible even if the entire puzzle is too big to
+fit on the screen.
+
+On success, this function returns \cw{true}, and the locations pointed
+to by \cw{x}, \cw{y}, \cw{w} and \cw{h} are updated to describe the
+cursor region, which has an upper-left corner located at \cw{(*x,*y)}
+and a size of \cw{*w} pixels wide by \cw{*h} pixels tall. The caller
+may pass \cw{NULL} for any number of these pointers, which will be
+ignored.
+
+On failure, this function returns \cw{false}. Failure can occur if
+there is currently no active cursor region, or if the back end lacks
+cursor support.
 
 \H{midend-status} \cw{midend_status()}
 
@@ -3184,18 +3396,18 @@ status code.)
 
 \H{midend-can-undo} \cw{midend_can_undo()}
 
-\c int midend_can_undo(midend *me);
+\c bool midend_can_undo(midend *me);
 
-Returns \cw{TRUE} if the midend is currently in a state where the undo
+Returns \cw{true} if the midend is currently in a state where the undo
 operation is meaningful (i.e. at least one position exists on the undo
 chain before the present one). Front ends may wish to use this to
 visually activate and deactivate an undo button.
 
 \H{midend-can-redo} \cw{midend_can_redo()}
 
-\c int midend_can_redo(midend *me);
+\c bool midend_can_redo(midend *me);
 
-Returns \cw{TRUE} if the midend is currently in a state where the redo
+Returns \cw{true} if the midend is currently in a state where the redo
 operation is meaningful (i.e. at least one position exists on the redo
 chain after the present one). Front ends may wish to use this to
 visually activate and deactivate a redo button.
@@ -3203,8 +3415,7 @@ visually activate and deactivate a redo button.
 \H{midend-serialise} \cw{midend_serialise()}
 
 \c void midend_serialise(midend *me,
-\c                       void (*write)(void *ctx, void *buf, int len),
-\c                       void *wctx);
+\c     void (*write)(void *ctx, const void *buf, int len), void *wctx);
 
 Calling this function causes the mid-end to convert its entire
 internal state into a long ASCII text string, and to pass that
@@ -3227,9 +3438,8 @@ output string.
 
 \H{midend-deserialise} \cw{midend_deserialise()}
 
-\c char *midend_deserialise(midend *me,
-\c                          int (*read)(void *ctx, void *buf, int len),
-\c                          void *rctx);
+\c const char *midend_deserialise(midend *me,
+\c     bool (*read)(void *ctx, void *buf, int len), void *rctx);
 
 This function is the counterpart to \cw{midend_serialise()}. It
 calls the supplied \cw{read} function repeatedly to read a quantity
@@ -3238,8 +3448,8 @@ as output by \cw{midend_serialise()}.
 
 The \cw{read} function is called with the first parameter (\c{ctx})
 equal to \c{rctx}, and should attempt to read \c{len} bytes of data
-into the buffer pointed to by \c{buf}. It should return \cw{FALSE}
-on failure or \cw{TRUE} on success. It should not report success
+into the buffer pointed to by \c{buf}. It should return \cw{false}
+on failure or \cw{true} on success. It should not report success
 unless it has filled the entire buffer; on platforms which might be
 reading from a pipe or other blocking data source, \c{read} is
 responsible for looping until the whole buffer has been filled.
@@ -3266,9 +3476,8 @@ place.
 
 \H{identify-game} \cw{identify_game()}
 
-\c char *identify_game(char **name,
-\c                     int (*read)(void *ctx, void *buf, int len),
-\c                     void *rctx);
+\c const char *identify_game(char **name,
+\c     bool (*read)(void *ctx, void *buf, int len), void *rctx);
 
 This function examines a serialised midend stream, of the same kind
 used by \cw{midend_serialise()} and \cw{midend_deserialise()}, and
@@ -3418,7 +3627,7 @@ calling \cw{midend_timer()}.
 
 \H{frontend-fatal} \cw{fatal()}
 
-\c void fatal(char *fmt, ...);
+\c void fatal(const char *fmt, ...);
 
 This is called by some utility functions if they encounter a
 genuinely fatal error such as running out of memory. It is a
@@ -3535,6 +3744,63 @@ single element (typically measured using \c{sizeof}). \c{rs} is a
 \c{random_state} used to generate all the random numbers for the
 shuffling process.
 
+\H{utils-presets} Presets menu management
+
+The function \c{midend_get_presets()} (\k{midend-get-presets}) returns
+a data structure describing a menu hierarchy. Back ends can also
+choose to provide such a structure to the mid-end, if they want to
+group their presets hierarchically. To make this easy, there are a few
+utility functions to construct preset menu structures, and also one
+intended for front-end use.
+
+\S{utils-preset-menu-new} \cw{preset_menu_new()}
+
+\c struct preset_menu *preset_menu_new(void);
+
+Allocates a new \c{struct preset_menu}, and initialises it to hold no
+menu items.
+
+\S{utils-preset-menu-add_submenu} \cw{preset_menu_add_submenu()}
+
+\c struct preset_menu *preset_menu_add_submenu
+\c     (struct preset_menu *parent, char *title);
+
+Adds a new submenu to the end of an existing preset menu, and returns
+a pointer to a newly allocated \c{struct preset_menu} describing the
+submenu.
+
+The string parameter \cq{title} must be dynamically allocated by the
+caller. The preset-menu structure will take ownership of it, so the
+caller must not free it.
+
+\S{utils-preset-menu-add-preset} \cw{preset_menu_add_preset()}
+
+\c void preset_menu_add_preset
+\c     (struct preset_menu *menu, char *title, game_params *params);
+
+Adds a preset game configuration to the end of a preset menu.
+
+Both the string parameter \cq{title} and the game parameter structure
+\cq{params} itself must be dynamically allocated by the caller. The
+preset-menu structure will take ownership of it, so the caller must
+not free it.
+
+\S{utils-preset-menu-lookup-by-id} \cw{preset_menu_lookup_by_id()}
+
+\c game_params *preset_menu_lookup_by_id
+\c     (struct preset_menu *menu, int id);
+
+Given a numeric index, searches recursively through a preset menu
+hierarchy to find the corresponding menu entry, and returns a pointer
+to its existing \c{game_params} structure.
+
+This function is intended for front end use (but front ends need not
+use it if they prefer to do things another way). If a front end finds
+it inconvenient to store anything more than a numeric index alongside
+each menu item, then this function provides an easy way for the front
+end to get back the actual game parameters corresponding to a menu
+item that the user has selected.
+
 \H{utils-alloc} Memory allocation
 
 Puzzles has some central wrappers on the standard memory allocation
@@ -3616,10 +3882,10 @@ quite everywhere.)
 
 \c void free_cfg(config_item *cfg);
 
-This function correctly frees an array of \c{config_item}s,
-including walking the array until it gets to the end and freeing
-precisely those \c{sval} fields which are expected to be dynamically
-allocated.
+This function correctly frees an array of \c{config_item}s, including
+walking the array until it gets to the end and freeing any subsidiary
+data items in each \c{u} sub-union which are expected to be
+dynamically allocated.
 
 (See \k{backend-configure} for details of the \c{config_item}
 structure.)
@@ -3851,13 +4117,13 @@ Returns the number of elements currently in the tree.
 
 \S{utils-splitpos234} \cw{splitpos234()}
 
-\c tree234 *splitpos234(tree234 *t, int index, int before);
+\c tree234 *splitpos234(tree234 *t, int index, bool before);
 
 Splits the input tree into two pieces at a given position, and
 creates a new tree containing all the elements on one side of that
 position.
 
-If \c{before} is \cw{TRUE}, then all the items at or after position
+If \c{before} is \cw{true}, then all the items at or after position
 \c{index} are left in the input tree, and the items before that
 point are returned in the new tree. Otherwise, the reverse happens:
 all the items at or after \c{index} are moved into the new tree, and
@@ -4068,6 +4334,24 @@ Thus, \cw{ret[background*3]} to \cw{ret[background*3+2]} will be set
 to RGB values defining a sensible background colour, and similary
 \c{highlight} and \c{lowlight} will be set to sensible colours.
 
+\S{utils-button2label} \cw{button2label()}
+
+\c char *button2label(int button);
+
+This function generates a descriptive text label for \cw{button},
+which should be a button code that can be passed to the midend. For
+example, calling this function with \cw{CURSOR_UP} will result in the
+string \cw{"Up"}. This function should only be called when the
+\cw{key_label} item returned by a backend's \cw{request_keys()}
+(\k{backend-request-keys}) function has its \cw{label} field set to
+\cw{NULL}; in this case, the corresponding \cw{button} field can be
+passed to this function to obtain an appropriate label. If, however,
+the field is not \cw{NULL}, this function should not be called with
+the corresponding \cw{button} field.
+
+The returned string is dynamically allocated and should be
+\cw{sfree}'d by the caller.
+
 \C{writing} How to write a new puzzle
 
 This chapter gives a guide to how to actually write a new puzzle:
@@ -4157,15 +4441,11 @@ So start by copying \c{nullgame.c} into your new source file. Then
 you'll gradually add functionality until the very boring Null Game
 turns into your real game.
 
-Next you'll need to add your puzzle to the Makefiles, in order to
-compile it conveniently. \e{Do not edit the Makefiles}: they are
-created automatically by the script \c{mkfiles.pl}, from the file
-called \c{Recipe}. Edit \c{Recipe}, and then re-run \c{mkfiles.pl}.
-
-Also, don't forget to add your puzzle to \c{list.c}: if you don't,
-then it will still run fine on platforms which build each puzzle
-separately, but Mac OS X and other monolithic platforms will not
-include your new puzzle in their single binary.
+Next you'll need to add your puzzle to the build scripts, in order to
+compile it conveniently. Puzzles is a CMake project, so you do this by
+adding a \cw{puzzle()} statement to CMakeLists.txt. Look at the
+existing ones to see what those look like, and add one that looks
+similar.
 
 Once your source file is building, you can move on to the fun bit.
 

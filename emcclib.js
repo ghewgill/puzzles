@@ -23,7 +23,7 @@ mergeInto(LibraryManager.library, {
      * Unused in production, but handy in development.
      */
     js_debug: function(ptr) {
-        console.log(Pointer_stringify(ptr));
+        console.log(UTF8ToString(ptr));
     },
 
     /*
@@ -34,7 +34,7 @@ mergeInto(LibraryManager.library, {
      * in a configuration dialog).
      */
     js_error_box: function(ptr) {
-        alert(Pointer_stringify(ptr));
+        alert(UTF8ToString(ptr));
     },
 
     /*
@@ -45,7 +45,7 @@ mergeInto(LibraryManager.library, {
      * provides neither presets nor configurability.
      */
     js_remove_type_dropdown: function() {
-        document.getElementById("gametype").style.display = "none";
+        gametypelist.style.display = "none";
     },
 
     /*
@@ -59,43 +59,60 @@ mergeInto(LibraryManager.library, {
     },
 
     /*
-     * void js_add_preset(const char *name);
+     * void js_add_preset(int menuid, const char *name, int value);
      *
-     * Add a preset to the drop-down types menu. The provided text is
-     * the name of the preset. (The corresponding game_params stays on
-     * the C side and never comes out this far; we just pass a numeric
-     * index back to the C code when a selection is made.)
-     *
-     * The special 'Custom' preset is requested by passing NULL to
-     * this function, rather than the string "Custom", since in that
-     * case we need to do something special - see below.
+     * Add a preset to the drop-down types menu, or to a submenu of
+     * it. 'menuid' specifies an index into our array of submenus
+     * where the item might be placed; 'value' specifies the number
+     * that js_get_selected_preset() will return when this item is
+     * clicked.
      */
-    js_add_preset: function(ptr) {
-        var name = (ptr == 0 ? "Customise..." : Pointer_stringify(ptr));
-        var value = gametypeoptions.length;
+    js_add_preset: function(menuid, ptr, value) {
+        var name = UTF8ToString(ptr);
+        var item = document.createElement("li");
+        item.setAttribute("data-index", value);
+        var tick = document.createElement("span");
+        tick.appendChild(document.createTextNode("\u2713"));
+        tick.style.color = "transparent";
+        tick.style.paddingRight = "0.5em";
+        item.appendChild(tick);
+        item.appendChild(document.createTextNode(name));
+        gametypesubmenus[menuid].appendChild(item);
+        gametypeitems.push(item);
 
-        var option = document.createElement("option");
-        option.value = value;
-        option.appendChild(document.createTextNode(name));
-        gametypeselector.appendChild(option);
-        gametypeoptions.push(option);
-
-        if (ptr == 0) {
-            // The option we've just created is the one for inventing
-            // a new custom setup.
-            gametypenewcustom = option;
-            option.value = -1;
-
-            // Now create another element called 'Custom', which will
-            // be auto-selected by us to indicate the custom settings
-            // you've previously selected. However, we don't add it to
-            // the game type selector; it will only appear when the
-            // user actually has custom settings selected.
-            option = document.createElement("option");
-            option.value = -2;
-            option.appendChild(document.createTextNode("Custom"));
-            gametypethiscustom = option;
+        item.onclick = function(event) {
+            if (dlg_dimmer === null) {
+                gametypeselectedindex = value;
+                command(2);
+            }
         }
+    },
+
+    /*
+     * int js_add_preset_submenu(int menuid, const char *name);
+     *
+     * Add a submenu in the presets menu hierarchy. Returns its index,
+     * for passing as the 'menuid' argument in further calls to
+     * js_add_preset or this function.
+     */
+    js_add_preset_submenu: function(menuid, ptr, value) {
+        var name = UTF8ToString(ptr);
+        var item = document.createElement("li");
+        // We still create a transparent tick element, even though it
+        // won't ever be selected, to make submenu titles line up
+        // nicely with their neighbours.
+        var tick = document.createElement("span");
+        tick.appendChild(document.createTextNode("\u2713"));
+        tick.style.color = "transparent";
+        tick.style.paddingRight = "0.5em";
+        item.appendChild(tick);
+        item.appendChild(document.createTextNode(name));
+        var submenu = document.createElement("ul");
+        item.appendChild(submenu);
+        gametypesubmenus[menuid].appendChild(item);
+        var toret = gametypesubmenus.length;
+        gametypesubmenus.push(submenu);
+        return toret;
     },
 
     /*
@@ -105,12 +122,7 @@ mergeInto(LibraryManager.library, {
      * dropdown.
      */
     js_get_selected_preset: function() {
-        for (var i in gametypeoptions) {
-            if (gametypeoptions[i].selected) {
-                return gametypeoptions[i].value;
-            }
-        }
-        return 0;
+        return gametypeselectedindex;
     },
 
     /*
@@ -121,33 +133,15 @@ mergeInto(LibraryManager.library, {
      * which turn out to exactly match a preset).
      */
     js_select_preset: function(n) {
-        if (gametypethiscustom !== null) {
-            // Fiddle with the Custom/Customise options. If we're
-            // about to select the Custom option, then it should be in
-            // the menu, and the other one should read "Re-customise";
-            // if we're about to select another one, then the static
-            // Custom option should disappear and the other one should
-            // read "Customise".
-
-            if (gametypethiscustom.parentNode == gametypeselector)
-                gametypeselector.removeChild(gametypethiscustom);
-            if (gametypenewcustom.parentNode == gametypeselector)
-                gametypeselector.removeChild(gametypenewcustom);
-
-            if (n < 0) {
-                gametypeselector.appendChild(gametypethiscustom);
-                gametypenewcustom.lastChild.data = "Re-customise...";
+        gametypeselectedindex = n;
+        for (var i in gametypeitems) {
+            var item = gametypeitems[i];
+            var tick = item.firstChild;
+            if (item.getAttribute("data-index") == n) {
+                tick.style.color = "inherit";
             } else {
-                gametypenewcustom.lastChild.data = "Customise...";
+                tick.style.color = "transparent";
             }
-            gametypeselector.appendChild(gametypenewcustom);
-            gametypenewcustom.selected = false;
-        }
-
-        if (n < 0) {
-            gametypethiscustom.selected = true;
-        } else {
-            gametypeoptions[n].selected = true;
         }
     },
 
@@ -173,13 +167,13 @@ mergeInto(LibraryManager.library, {
      * the random seed permalink.
      */
     js_update_permalinks: function(desc, seed) {
-        desc = Pointer_stringify(desc);
+        desc = UTF8ToString(desc);
         permalink_desc.href = "#" + desc;
 
         if (seed == 0) {
             permalink_seed.style.display = "none";
         } else {
-            seed = Pointer_stringify(seed);
+            seed = UTF8ToString(seed);
             permalink_seed.href = "#" + seed;
             permalink_seed.style.display = "inline";
         }
@@ -192,8 +186,8 @@ mergeInto(LibraryManager.library, {
      * after a move.
      */
     js_enable_undo_redo: function(undo, redo) {
-        undo_button.disabled = (undo == 0);
-        redo_button.disabled = (redo == 0);
+        disable_menu_item(undo_button, (undo == 0));
+        disable_menu_item(redo_button, (redo == 0));
     },
 
     /*
@@ -283,7 +277,7 @@ mergeInto(LibraryManager.library, {
      * Draw a rectangle.
      */
     js_canvas_draw_rect: function(x, y, w, h, colptr) {
-        ctx.fillStyle = Pointer_stringify(colptr);
+        ctx.fillStyle = UTF8ToString(colptr);
         ctx.fillRect(x, y, w, h);
     },
 
@@ -320,7 +314,7 @@ mergeInto(LibraryManager.library, {
      * Postscriptish drawing frameworks).
      */
     js_canvas_draw_line: function(x1, y1, x2, y2, width, colour) {
-        colour = Pointer_stringify(colour);
+        colour = UTF8ToString(colour);
 
         ctx.beginPath();
         ctx.moveTo(x1 + 0.5, y1 + 0.5);
@@ -351,13 +345,13 @@ mergeInto(LibraryManager.library, {
                        getValue(pointptr+8*i+4, 'i32') + 0.5);
         ctx.closePath();
         if (fill != 0) {
-            ctx.fillStyle = Pointer_stringify(fill);
+            ctx.fillStyle = UTF8ToString(fill);
             ctx.fill();
         }
         ctx.lineWidth = '1';
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = Pointer_stringify(outline);
+        ctx.strokeStyle = UTF8ToString(outline);
         ctx.stroke();
     },
 
@@ -372,13 +366,13 @@ mergeInto(LibraryManager.library, {
         ctx.beginPath();
         ctx.arc(x + 0.5, y + 0.5, r, 0, 2*Math.PI);
         if (fill != 0) {
-            ctx.fillStyle = Pointer_stringify(fill);
+            ctx.fillStyle = UTF8ToString(fill);
             ctx.fill();
         }
         ctx.lineWidth = '1';
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = Pointer_stringify(outline);
+        ctx.strokeStyle = UTF8ToString(outline);
         ctx.stroke();
     },
 
@@ -403,7 +397,7 @@ mergeInto(LibraryManager.library, {
      * per (font,height) pair.
      */
     js_canvas_find_font_midpoint: function(height, font) {
-        font = Pointer_stringify(font);
+        font = UTF8ToString(font);
 
         // Reuse cached value if possible
         if (midpoint_cache[font] !== undefined)
@@ -457,12 +451,12 @@ mergeInto(LibraryManager.library, {
      * function to do it for us with almost no extra effort.
      */
     js_canvas_draw_text: function(x, y, halign, colptr, fontptr, text) {
-        ctx.font = Pointer_stringify(fontptr);
-        ctx.fillStyle = Pointer_stringify(colptr);
+        ctx.font = UTF8ToString(fontptr);
+        ctx.fillStyle = UTF8ToString(colptr);
         ctx.textAlign = (halign == 0 ? 'left' :
                          halign == 1 ? 'center' : 'right');
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText(Pointer_stringify(text), x, y);
+        ctx.fillText(UTF8ToString(text), x, y);
     },
 
     /*
@@ -548,7 +542,7 @@ mergeInto(LibraryManager.library, {
      * Set the text in the status bar.
      */
     js_canvas_set_statusbar: function(ptr) {
-        var text = Pointer_stringify(ptr);
+        var text = UTF8ToString(ptr);
         statusbar.replaceChild(document.createTextNode(text),
                                statusbar.lastChild);
     },
@@ -580,38 +574,7 @@ mergeInto(LibraryManager.library, {
      * overlay on top of the rest of the puzzle web page.
      */
     js_dialog_init: function(titletext) {
-        // Create an overlay on the page which darkens everything
-        // beneath it.
-        dlg_dimmer = document.createElement("div");
-        dlg_dimmer.style.width = "100%";
-        dlg_dimmer.style.height = "100%";
-        dlg_dimmer.style.background = '#000000';
-        dlg_dimmer.style.position = 'fixed';
-        dlg_dimmer.style.opacity = 0.3;
-        dlg_dimmer.style.top = dlg_dimmer.style.left = 0;
-        dlg_dimmer.style["z-index"] = 99;
-
-        // Now create a form which sits on top of that in turn.
-        dlg_form = document.createElement("form");
-        dlg_form.style.width = (window.innerWidth * 2 / 3) + "px";
-        dlg_form.style.opacity = 1;
-        dlg_form.style.background = '#ffffff';
-        dlg_form.style.color = '#000000';
-        dlg_form.style.position = 'absolute';
-        dlg_form.style.border = "2px solid black";
-        dlg_form.style.padding = "20px";
-        dlg_form.style.top = (window.innerHeight / 10) + "px";
-        dlg_form.style.left = (window.innerWidth / 6) + "px";
-        dlg_form.style["z-index"] = 100;
-
-        var title = document.createElement("p");
-        title.style.marginTop = "0px";
-        title.appendChild(document.createTextNode
-                          (Pointer_stringify(titletext)));
-        dlg_form.appendChild(title);
-
-        dlg_return_funcs = [];
-        dlg_next_id = 0;
+        dialog_init(UTF8ToString(titletext));
     },
 
     /*
@@ -621,10 +584,10 @@ mergeInto(LibraryManager.library, {
      * construction.
      */
     js_dialog_string: function(index, title, initialtext) {
-        dlg_form.appendChild(document.createTextNode(Pointer_stringify(title)));
+        dlg_form.appendChild(document.createTextNode(UTF8ToString(title)));
         var editbox = document.createElement("input");
         editbox.type = "text";
-        editbox.value = Pointer_stringify(initialtext);
+        editbox.value = UTF8ToString(initialtext);
         dlg_form.appendChild(editbox);
         dlg_form.appendChild(document.createElement("br"));
 
@@ -644,9 +607,9 @@ mergeInto(LibraryManager.library, {
      * gives the separator.
      */
     js_dialog_choices: function(index, title, choicelist, initvalue) {
-        dlg_form.appendChild(document.createTextNode(Pointer_stringify(title)));
+        dlg_form.appendChild(document.createTextNode(UTF8ToString(title)));
         var dropdown = document.createElement("select");
-        var choicestr = Pointer_stringify(choicelist);
+        var choicestr = UTF8ToString(choicelist);
         var items = choicestr.slice(1).split(choicestr[0]);
         var options = [];
         for (var i in items) {
@@ -690,7 +653,7 @@ mergeInto(LibraryManager.library, {
         dlg_form.appendChild(checkbox);
         var checkboxlabel = document.createElement("label");
         checkboxlabel.setAttribute("for", checkbox.id);
-        checkboxlabel.textContent = Pointer_stringify(title);
+        checkboxlabel.textContent = UTF8ToString(title);
         dlg_form.appendChild(checkboxlabel);
         dlg_form.appendChild(document.createElement("br"));
 
@@ -706,29 +669,13 @@ mergeInto(LibraryManager.library, {
      * everything else on the page.
      */
     js_dialog_launch: function() {
-        // Put in the OK and Cancel buttons at the bottom.
-        var button;
-
-        button = document.createElement("input");
-        button.type = "button";
-        button.value = "OK";
-        button.onclick = function(event) {
+        dialog_launch(function(event) {
             for (var i in dlg_return_funcs)
                 dlg_return_funcs[i]();
-            command(3);
-        }
-        dlg_form.appendChild(button);
-
-        button = document.createElement("input");
-        button.type = "button";
-        button.value = "Cancel";
-        button.onclick = function(event) {
-            command(4);
-        }
-        dlg_form.appendChild(button);
-
-        document.body.appendChild(dlg_dimmer);
-        document.body.appendChild(dlg_form);
+            command(3);         // OK
+        }, function(event) {
+            command(4);         // Cancel
+        });
     },
 
     /*
@@ -738,10 +685,7 @@ mergeInto(LibraryManager.library, {
      * associated with it.
      */
     js_dialog_cleanup: function() {
-        document.body.removeChild(dlg_dimmer);
-        document.body.removeChild(dlg_form);
-        dlg_dimmer = dlg_form = null;
-        onscreen_canvas.focus();
+        dialog_cleanup();
     },
 
     /*

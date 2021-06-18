@@ -217,6 +217,9 @@
 		37DDFDB516F58765007B6287 /* style.css in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDB416F58765007B6287 /* style.css */; };
 		37DDFDB716F5A879007B6287 /* help.html in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDB616F5A879007B6287 /* help.html */; };
 		37DDFDC116F78FE2007B6287 /* inprogress.png in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDC016F78FE2007B6287 /* inprogress.png */; };
+		F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA971DE3A09C008C6D7F /* findloop.c */; };
+		F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA981DE3A09C008C6D7F /* palisade.c */; };
+		F1EFAA9C1DE3A88C008C6D7F /* palisade.html in Resources */ = {isa = PBXBuildFile; fileRef = F1EFAA9B1DE3A88C008C6D7F /* palisade.html */; };
 		37F367892513250000E35EFD /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 37F367882513250000E35EFD /* Images.xcassets */; };
 		37F3678B251603D900E35EFD /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37F3678A251603D900E35EFD /* WebKit.framework */; };
 /* End PBXBuildFile section */
@@ -450,6 +453,9 @@
 		37DDFDB416F58765007B6287 /* style.css */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.css; path = style.css; sourceTree = "<group>"; };
 		37DDFDB616F5A879007B6287 /* help.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = help.html; sourceTree = "<group>"; };
 		37DDFDC016F78FE2007B6287 /* inprogress.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = inprogress.png; sourceTree = SOURCE_ROOT; };
+		F1EFAA971DE3A09C008C6D7F /* findloop.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = findloop.c; sourceTree = "<group>"; };
+		F1EFAA981DE3A09C008C6D7F /* palisade.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = palisade.c; sourceTree = "<group>"; };
+		F1EFAA9B1DE3A88C008C6D7F /* palisade.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = palisade.html; sourceTree = "<group>"; };
 		37F367882513250000E35EFD /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		37F3678A251603D900E35EFD /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -554,6 +560,8 @@
 		3701DC2E16E7330700896D7D /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				F1EFAA971DE3A09C008C6D7F /* findloop.c */,
+				F1EFAA981DE3A09C008C6D7F /* palisade.c */,
 				3701DD3B16F398EA00896D7D /* help */,
 				3701DCE116EB16B400896D7D /* icons */,
 				3701DCA416E7391800896D7D /* printing.c */,
@@ -711,6 +719,7 @@
 		3701DD3B16F398EA00896D7D /* help */ = {
 			isa = PBXGroup;
 			children = (
+				F1EFAA9B1DE3A88C008C6D7F /* palisade.html */,
 				3782E80316F9B30F0040B261 /* help-back.png */,
 				3782E80716F9B9040040B261 /* help-back@2x.png */,
 				3782E80516F9B6700040B261 /* help-forward.png */,
@@ -878,6 +887,7 @@
 				3701DD6E16F3997400896D7D /* galaxies.html in Resources */,
 				3701DD6F16F3997400896D7D /* guess.html in Resources */,
 				3701DD7016F3997400896D7D /* index.html in Resources */,
+				F1EFAA9C1DE3A88C008C6D7F /* palisade.html in Resources */,
 				3701DD7116F3997400896D7D /* inertia.html in Resources */,
 				3701DD7216F3997400896D7D /* intro.html in Resources */,
 				3701DD7316F3997400896D7D /* keen.html in Resources */,
@@ -992,6 +1002,7 @@
 				3701DC1916E730ED00896D7D /* AppDelegate.m in Sources */,
 				3701DC6716E734A800896D7D /* blackbox.c in Sources */,
 				3701DC6816E734A800896D7D /* bridges.c in Sources */,
+				F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */,
 				3701DC6916E734A800896D7D /* combi.c in Sources */,
 				3701DC6A16E734A800896D7D /* cube.c in Sources */,
 				3701DC6B16E734A800896D7D /* divvy.c in Sources */,
@@ -1053,6 +1064,7 @@
 				3701DD3216EDC7F200896D7D /* GameSettingsController.m in Sources */,
 				3701DD3516EEEC9A00896D7D /* GameSettingsChoiceController.m in Sources */,
 				3701DD3A16F3959400896D7D /* GameHelpController.m in Sources */,
+				F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */,
 				3786A3271AA83A9000B052ED /* flood.c in Sources */,
 				3782E85D16FE488F0040B261 /* svnversion.c in Sources */,
 			);

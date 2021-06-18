@@ -55,7 +55,7 @@ struct game_params {
 
 struct game_state {
     int w, h;
-    int completed;
+    bool completed;
     unsigned char *grid;
 };
 
@@ -77,13 +77,13 @@ static const struct game_params pegs_presets[] = {
     {9, 9, TYPE_RANDOM},
 };
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char str[80];
 
     if (i < 0 || i >= lenof(pegs_presets))
-        return FALSE;
+        return false;
 
     ret = snew(game_params);
     *ret = pegs_presets[i];
@@ -94,7 +94,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 
     *name = dupstr(str);
     *params = ret;
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -129,7 +129,7 @@ static void decode_params(game_params *params, char const *string)
 	    params->type = i;
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char str[80];
 
@@ -149,24 +149,20 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Board type";
     ret[2].type = C_CHOICES;
-    ret[2].sval = TYPECONFIG;
-    ret[2].ival = params->type;
+    ret[2].u.choices.choicenames = TYPECONFIG;
+    ret[2].u.choices.selected = params->type;
 
     ret[3].name = NULL;
     ret[3].type = C_END;
-    ret[3].sval = NULL;
-    ret[3].ival = 0;
 
     return ret;
 }
@@ -175,14 +171,14 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->type = cfg[2].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->type = cfg[2].u.choices.selected;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (full && (params->w <= 3 || params->h <= 3))
 	return "Width and height must both be greater than three";
@@ -504,7 +500,7 @@ static void pegs_generate(unsigned char *grid, int w, int h, random_state *rs)
  */
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     int w = params->w, h = params->h;
     unsigned char *grid;
@@ -660,7 +656,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int len = params->w * params->h;
 
@@ -681,7 +677,7 @@ static game_state *new_game(midend *me, const game_params *params,
 
     state->w = w;
     state->h = h;
-    state->completed = 0;
+    state->completed = false;
     state->grid = snewn(w*h, unsigned char);
     for (i = 0; i < w*h; i++)
 	state->grid[i] = (desc[i] == 'P' ? GRID_PEG :
@@ -711,14 +707,14 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     return NULL;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -741,10 +737,11 @@ static char *game_text_format(const game_state *state)
 }
 
 struct game_ui {
-    int dragging;		       /* boolean: is a drag in progress? */
+    bool dragging;                     /* is a drag in progress? */
     int sx, sy;			       /* grid coords of drag start cell */
     int dx, dy;			       /* pixel coords of current drag posn */
-    int cur_x, cur_y, cur_visible, cur_jumping;
+    int cur_x, cur_y;
+    bool cur_visible, cur_jumping;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -753,8 +750,9 @@ static game_ui *new_ui(const game_state *state)
     int x, y, v;
 
     ui->sx = ui->sy = ui->dx = ui->dy = 0;
-    ui->dragging = FALSE;
-    ui->cur_visible = ui->cur_jumping = 0;
+    ui->dragging = false;
+    ui->cur_visible = false;
+    ui->cur_jumping = false;
 
     /* make sure we start the cursor somewhere on the grid. */
     for (x = 0; x < state->w; x++) {
@@ -793,7 +791,13 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
      * Cancel a drag, in case the source square has become
      * unoccupied.
      */
-    ui->dragging = FALSE;
+    ui->dragging = false;
+
+    /*
+     * Also, cancel a keyboard-driven jump if one is half way to being
+     * input.
+     */
+    ui->cur_jumping = false;
 }
 
 #define PREFERRED_TILE_SIZE 33
@@ -808,10 +812,11 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 struct game_drawstate {
     int tilesize;
     blitter *drag_background;
-    int dragging, dragx, dragy;
+    bool dragging;
+    int dragx, dragy;
     int w, h;
     unsigned char *grid;
-    int started;
+    bool started;
     int bgcolour;
 };
 
@@ -842,13 +847,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	ty = FROMCOORD(y);
 	if (tx >= 0 && tx < w && ty >= 0 && ty < h &&
 	    state->grid[ty*w+tx] == GRID_PEG) {
-	    ui->dragging = TRUE;
+	    ui->dragging = true;
 	    ui->sx = tx;
 	    ui->sy = ty;
 	    ui->dx = x;
 	    ui->dy = y;
-            ui->cur_visible = ui->cur_jumping = 0;
-	    return "";		       /* ui modified */
+            ui->cur_visible = false;
+            ui->cur_jumping = false;
+	    return UI_UPDATE;
 	}
     } else if (button == LEFT_DRAG && ui->dragging) {
 	/*
@@ -856,7 +862,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 */
 	ui->dx = x;
 	ui->dy = y;
-	return "";		       /* ui modified */
+	return UI_UPDATE;
     } else if (button == LEFT_RELEASE && ui->dragging) {
 	int tx, ty, dx, dy;
 
@@ -864,22 +870,22 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 * Button released. Identify the target square of the drag,
 	 * see if it represents a valid move, and if so make it.
 	 */
-	ui->dragging = FALSE;	       /* cancel the drag no matter what */
+	ui->dragging = false;	       /* cancel the drag no matter what */
 	tx = FROMCOORD(x);
 	ty = FROMCOORD(y);
 	if (tx < 0 || tx >= w || ty < 0 || ty >= h)
-	    return "";		       /* target out of range */
+	    return UI_UPDATE;	       /* target out of range */
 	dx = tx - ui->sx;
 	dy = ty - ui->sy;
 	if (max(abs(dx),abs(dy)) != 2 || min(abs(dx),abs(dy)) != 0)
-	    return "";		       /* move length was wrong */
+	    return UI_UPDATE;	       /* move length was wrong */
 	dx /= 2;
 	dy /= 2;
 
 	if (state->grid[ty*w+tx] != GRID_HOLE ||
 	    state->grid[(ty-dy)*w+(tx-dx)] != GRID_PEG ||
 	    state->grid[ui->sy*w+ui->sx] != GRID_PEG)
-	    return "";		       /* grid contents were invalid */
+	    return UI_UPDATE;	       /* grid contents were invalid */
 
 	/*
 	 * We have a valid move. Encode it simply as source and
@@ -892,14 +898,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             /* Not jumping; move cursor as usual, making sure we don't
              * leave the gameboard (which may be an irregular shape) */
             int cx = ui->cur_x, cy = ui->cur_y;
-            move_cursor(button, &cx, &cy, w, h, 0);
-            ui->cur_visible = 1;
+            move_cursor(button, &cx, &cy, w, h, false);
+            ui->cur_visible = true;
             if (state->grid[cy*w+cx] == GRID_HOLE ||
                 state->grid[cy*w+cx] == GRID_PEG) {
                 ui->cur_x = cx;
                 ui->cur_y = cy;
             }
-            return "";
+            return UI_UPDATE;
         } else {
             int dx, dy, mx, my, jx, jy;
 
@@ -912,7 +918,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             mx = ui->cur_x+dx; my = ui->cur_y+dy;
             jx = mx+dx; jy = my+dy;
 
-            ui->cur_jumping = 0; /* reset, whatever. */
+            ui->cur_jumping = false; /* reset, whatever. */
             if (jx >= 0 && jy >= 0 && jx < w && jy < h &&
                 state->grid[my*w+mx] == GRID_PEG &&
                 state->grid[jy*w+jx] == GRID_HOLE) {
@@ -922,21 +928,21 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 ui->cur_x = jx; ui->cur_y = jy;
                 return dupstr(buf);
             }
-            return "";
+            return UI_UPDATE;
         }
     } else if (IS_CURSOR_SELECT(button)) {
         if (!ui->cur_visible) {
-            ui->cur_visible = 1;
-            return "";
+            ui->cur_visible = true;
+            return UI_UPDATE;
         }
         if (ui->cur_jumping) {
-            ui->cur_jumping = 0;
-            return "";
+            ui->cur_jumping = false;
+            return UI_UPDATE;
         }
         if (state->grid[ui->cur_y*w+ui->cur_x] == GRID_PEG) {
             /* cursor is on peg: next arrow-move wil jump. */
-            ui->cur_jumping = 1;
-            return "";
+            ui->cur_jumping = true;
+            return UI_UPDATE;
         }
         return NULL;
     }
@@ -987,7 +993,7 @@ static game_state *execute_move(const game_state *state, const char *move)
                 if (ret->grid[i] == GRID_PEG)
                     count++;
             if (count == 1)
-                ret->completed = 1;
+                ret->completed = true;
         }
 
 	return ret;
@@ -1049,14 +1055,14 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     /* We can't allocate the blitter rectangle for the drag background
      * until we know what size to make it. */
     ds->drag_background = NULL;
-    ds->dragging = FALSE;
+    ds->dragging = false;
 
     ds->w = w;
     ds->h = h;
     ds->grid = snewn(w*h, unsigned char);
     memset(ds->grid, 255, w*h);
 
-    ds->started = FALSE;
+    ds->started = false;
     ds->bgcolour = -1;
 
     return ds;
@@ -1073,16 +1079,17 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 static void draw_tile(drawing *dr, game_drawstate *ds,
 		      int x, int y, int v, int bgcolour)
 {
-    int cursor = 0, jumping = 0, bg;
+    bool cursor = false, jumping = false;
+    int bg;
 
     if (bgcolour >= 0) {
 	draw_rect(dr, x, y, TILESIZE, TILESIZE, bgcolour);
     }
     if (v >= GRID_JUMPING) {
-        jumping = 1; v -= GRID_JUMPING;
+        jumping = true; v -= GRID_JUMPING;
     }
     if (v >= GRID_CURSOR) {
-        cursor = 1; v -= GRID_CURSOR;
+        cursor = true; v -= GRID_CURSOR;
     }
 
     if (v == GRID_HOLE) {
@@ -1124,14 +1131,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	assert(ds->drag_background);
         blitter_load(dr, ds->drag_background, ds->dragx, ds->dragy);
         draw_update(dr, ds->dragx, ds->dragy, TILESIZE, TILESIZE);
-	ds->dragging = FALSE;
+	ds->dragging = false;
     }
 
     if (!ds->started) {
-	draw_rect(dr, 0, 0,
-		  TILESIZE * state->w + 2 * BORDER,
-		  TILESIZE * state->h + 2 * BORDER, COL_BACKGROUND);
-
 	/*
 	 * Draw relief marks around all the squares that aren't
 	 * GRID_OBST.
@@ -1210,7 +1213,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 			      TILESIZE, COL_BACKGROUND);
 		}
 
-	ds->started = TRUE;
+	ds->started = true;
 
 	draw_update(dr, 0, 0,
 		    TILESIZE * state->w + 2 * BORDER,
@@ -1248,7 +1251,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      * Draw the dragging sprite if any.
      */
     if (ui->dragging) {
-	ds->dragging = TRUE;
+	ds->dragging = true;
 	ds->dragx = ui->dx - TILESIZE/2;
 	ds->dragy = ui->dy - TILESIZE/2;
 	blitter_save(dr, ds->drag_background, ds->dragx, ds->dragy);
@@ -1273,6 +1276,19 @@ static float game_flash_length(const game_state *oldstate,
         return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        *x = COORD(ui->cur_x);
+        *y = COORD(ui->cur_y);
+        *w = *h = TILESIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     /*
@@ -1282,9 +1298,9 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-    return TRUE;
+    return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -1302,24 +1318,25 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Pegs", "games.pegs", "pegs",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    FALSE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    false, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
     decode_ui,
+    NULL, /* game_request_keys */
     game_changed_state,
     interpret_move,
     execute_move,
@@ -1330,10 +1347,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    FALSE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    false, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
+    false, game_timing_state,
     0,				       /* flags */
 };
 

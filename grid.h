@@ -50,7 +50,7 @@ struct grid_face {
    * grid_find_incentre() on a face, and it will fill in ix,iy below
    * and set has_incentre to indicate that it's done so.
    */
-  int has_incentre;
+  bool has_incentre;
   int ix, iy;      /* incentre (centre of largest inscribed circle) */
 };
 struct grid_edge {
@@ -100,11 +100,14 @@ typedef struct grid {
   A(SNUBSQUARE,snubsquare) \
   A(CAIRO,cairo) \
   A(GREATHEXAGONAL,greathexagonal) \
+  A(KAGOME,kagome) \
   A(OCTAGONAL,octagonal) \
   A(KITE,kites) \
   A(FLORET,floret) \
   A(DODECAGONAL,dodecagonal) \
   A(GREATDODECAGONAL,greatdodecagonal) \
+  A(GREATGREATDODECAGONAL,greatgreatdodecagonal) \
+  A(COMPASSDODECAGONAL,compassdodecagonal) \
   A(PENROSE_P2,penrose_p2_kite) \
   A(PENROSE_P3,penrose_p3_thick)
 
@@ -115,8 +118,8 @@ typedef enum grid_type { GRIDGEN_LIST(ENUM) GRID_TYPE_MAX } grid_type;
 /* Free directly after use if non-NULL. Will never contain an underscore
  * (so clients can safely use that as a separator). */
 char *grid_new_desc(grid_type type, int width, int height, random_state *rs);
-char *grid_validate_desc(grid_type type, int width, int height,
-                         const char *desc);
+const char *grid_validate_desc(grid_type type, int width, int height,
+                               const char *desc);
 
 grid *grid_new(grid_type type, int width, int height, const char *desc);
 

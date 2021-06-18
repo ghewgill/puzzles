@@ -61,12 +61,13 @@ extern void js_debug(const char *);
 extern void js_error_box(const char *message);
 extern void js_remove_type_dropdown(void);
 extern void js_remove_solve_button(void);
-extern void js_add_preset(const char *name);
+extern void js_add_preset(int menuid, const char *name, int value);
+extern int js_add_preset_submenu(int menuid, const char *name);
 extern int js_get_selected_preset(void);
 extern void js_select_preset(int n);
 extern void js_get_date_64(unsigned *p);
 extern void js_update_permalinks(const char *desc, const char *seed);
-extern void js_enable_undo_redo(int undo, int redo);
+extern void js_enable_undo_redo(bool undo, bool redo);
 extern void js_activate_timer();
 extern void js_deactivate_timer();
 extern void js_canvas_start_draw(void);
@@ -100,7 +101,7 @@ extern void js_dialog_init(const char *title);
 extern void js_dialog_string(int i, const char *title, const char *initvalue);
 extern void js_dialog_choices(int i, const char *title, const char *choicelist,
                               int initvalue);
-extern void js_dialog_boolean(int i, const char *title, int initvalue);
+extern void js_dialog_boolean(int i, const char *title, bool initvalue);
 extern void js_dialog_launch(void);
 extern void js_dialog_cleanup(void);
 extern void js_focus_canvas(void);
@@ -121,7 +122,7 @@ void get_random_seed(void **randseed, int *randseedsize)
  * Fatal error, called in cases of complete despair such as when
  * malloc() has returned NULL.
  */
-void fatal(char *fmt, ...)
+void fatal(const char *fmt, ...)
 {
     char buf[512];
     va_list ap;
@@ -135,7 +136,7 @@ void fatal(char *fmt, ...)
     js_error_box(buf);
 }
 
-void debug_printf(char *fmt, ...)
+void debug_printf(const char *fmt, ...)
 {
     char buf[512];
     va_list ap;
@@ -170,17 +171,17 @@ midend *me;
 /* ----------------------------------------------------------------------
  * Timing functions.
  */
-int timer_active = FALSE;
+bool timer_active = false;
 void deactivate_timer(frontend *fe)
 {
     js_deactivate_timer();
-    timer_active = FALSE;
+    timer_active = false;
 }
 void activate_timer(frontend *fe)
 {
     if (!timer_active) {
         js_activate_timer();
-        timer_active = TRUE;
+        timer_active = true;
     }
 }
 void timer_callback(double tplus)
@@ -200,7 +201,7 @@ static void resize(void)
 {
     int w, h;
     w = h = INT_MAX;
-    midend_size(me, &w, &h, FALSE);
+    midend_size(me, &w, &h, false);
     js_canvas_set_size(w, h);
     canvas_w = w;
     canvas_h = h;
@@ -209,7 +210,7 @@ static void resize(void)
 /* Called from JS when the user uses the resize handle */
 void resize_puzzle(int w, int h)
 {
-    midend_size(me, &w, &h, TRUE);
+    midend_size(me, &w, &h, true);
     if (canvas_w != w || canvas_h != h) { 
         js_canvas_set_size(w, h);
         canvas_w = w;
@@ -276,7 +277,7 @@ void mousemove(int x, int y, int buttons)
  * Keyboard handler called from JS.
  */
 void key(int keycode, int charcode, const char *key, const char *chr,
-         int shift, int ctrl)
+         bool shift, bool ctrl)
 {
     int keyevent = -1;
 
@@ -309,6 +310,8 @@ void key(int keycode, int charcode, const char *key, const char *chr,
         keyevent = MOD_NUM_KEYPAD | '7';
     } else if (!strnullcmp(key, "PageUp") || keycode==33) {
         keyevent = MOD_NUM_KEYPAD | '9';
+    } else if (shift && ctrl && (keycode & 0x1F) == 26) {
+        keyevent = UI_REDO;
     } else if (chr && chr[0] && !chr[1]) {
         keyevent = chr[0] & 0xFF;
     } else if (keycode >= 96 && keycode < 106) {
@@ -322,10 +325,10 @@ void key(int keycode, int charcode, const char *key, const char *chr,
     }
 
     if (keyevent >= 0) {
-        if (shift && keyevent >= 0x100)
+        if (shift && (keyevent >= 0x100 && !IS_UI_FAKE_KEY(keyevent)))
             keyevent |= MOD_SHFT;
 
-        if (ctrl) {
+        if (ctrl && !IS_UI_FAKE_KEY(keyevent)) {
             if (keyevent >= 0x100)
                 keyevent |= MOD_CTRL;
             else
@@ -381,7 +384,8 @@ static void js_unclip(void *handle)
 }
 
 static void js_draw_text(void *handle, int x, int y, int fonttype,
-                         int fontsize, int align, int colour, char *text)
+                         int fontsize, int align, int colour,
+                         const char *text)
 {
     char fontstyle[80];
     int halign;
@@ -512,7 +516,7 @@ static void js_end_draw(void *handle)
     js_canvas_end_draw();
 }
 
-static void js_status_bar(void *handle, char *text)
+static void js_status_bar(void *handle, const char *text)
 {
     js_canvas_set_statusbar(text);
 }
@@ -550,7 +554,22 @@ const struct drawing_api js_drawing = {
  */
 static game_params **presets;
 static int npresets;
-int have_presets_dropdown;
+bool have_presets_dropdown;
+
+void populate_js_preset_menu(int menuid, struct preset_menu *menu)
+{
+    int i;
+    for (i = 0; i < menu->n_entries; i++) {
+        struct preset_menu_entry *entry = &menu->entries[i];
+        if (entry->params) {
+            presets[entry->id] = entry->params;
+            js_add_preset(menuid, entry->title, entry->id);
+        } else {
+            int js_submenu = js_add_preset_submenu(menuid, entry->title);
+            populate_js_preset_menu(js_submenu, entry->submenu);
+        }
+    }
+}
 
 void select_appropriate_preset(void)
 {
@@ -581,13 +600,14 @@ static void cfg_start(int which)
     for (i = 0; cfg[i].type != C_END; i++) {
 	switch (cfg[i].type) {
 	  case C_STRING:
-            js_dialog_string(i, cfg[i].name, cfg[i].sval);
+            js_dialog_string(i, cfg[i].name, cfg[i].u.string.sval);
 	    break;
 	  case C_BOOLEAN:
-            js_dialog_boolean(i, cfg[i].name, cfg[i].ival);
+            js_dialog_boolean(i, cfg[i].name, cfg[i].u.boolean.bval);
 	    break;
 	  case C_CHOICES:
-            js_dialog_choices(i, cfg[i].name, cfg[i].sval, cfg[i].ival);
+            js_dialog_choices(i, cfg[i].name, cfg[i].u.choices.choicenames,
+                              cfg[i].u.choices.selected);
 	    break;
 	}
     }
@@ -601,26 +621,43 @@ static void cfg_start(int which)
  */
 void dlg_return_sval(int index, const char *val)
 {
-    sfree(cfg[index].sval);
-    cfg[index].sval = dupstr(val);
+    config_item *i = cfg + index;
+    switch (i->type) {
+      case C_STRING:
+        sfree(i->u.string.sval);
+        i->u.string.sval = dupstr(val);
+        break;
+      default:
+        assert(0 && "Bad type for return_sval");
+    }
 }
 void dlg_return_ival(int index, int val)
 {
-    cfg[index].ival = val;
+    config_item *i = cfg + index;
+    switch (i->type) {
+      case C_BOOLEAN:
+        i->u.boolean.bval = val;
+        break;
+      case C_CHOICES:
+        i->u.choices.selected = val;
+        break;
+      default:
+        assert(0 && "Bad type for return_ival");
+    }
 }
 
 /*
- * Called when the user clicks OK or Cancel. use_results will be TRUE
- * or FALSE respectively, in those cases. We terminate the dialog box,
+ * Called when the user clicks OK or Cancel. use_results will be true
+ * or false respectively, in those cases. We terminate the dialog box,
  * unless the user selected an invalid combination of parameters.
  */
-static void cfg_end(int use_results)
+static void cfg_end(bool use_results)
 {
     if (use_results) {
         /*
          * User hit OK.
          */
-        char *err = midend_set_config(me, cfg_which, cfg);
+        const char *err = midend_set_config(me, cfg_which, cfg);
 
         if (err) {
             /*
@@ -696,20 +733,20 @@ void command(int n)
                 midend_redraw(me);
                 update_undo_redo();
                 js_focus_canvas();
-                select_appropriate_preset(); /* sort out Custom/Customise */
+                select_appropriate_preset();
             }
         }
         break;
       case 3:                          /* OK clicked in a config box */
-        cfg_end(TRUE);
+        cfg_end(true);
         update_undo_redo();
         break;
       case 4:                          /* Cancel clicked in a config box */
-        cfg_end(FALSE);
+        cfg_end(false);
         update_undo_redo();
         break;
       case 5:                          /* New Game */
-        midend_process_key(me, 0, 0, 'n');
+        midend_process_key(me, 0, 0, UI_NEWGAME);
         update_undo_redo();
         js_focus_canvas();
         break;
@@ -719,24 +756,146 @@ void command(int n)
         js_focus_canvas();
         break;
       case 7:                          /* Undo */
-        midend_process_key(me, 0, 0, 'u');
+        midend_process_key(me, 0, 0, UI_UNDO);
         update_undo_redo();
         js_focus_canvas();
         break;
       case 8:                          /* Redo */
-        midend_process_key(me, 0, 0, 'r');
+        midend_process_key(me, 0, 0, UI_REDO);
         update_undo_redo();
         js_focus_canvas();
         break;
       case 9:                          /* Solve */
         if (thegame.can_solve) {
-            char *msg = midend_solve(me);
+            const char *msg = midend_solve(me);
             if (msg)
                 js_error_box(msg);
         }
         update_undo_redo();
         js_focus_canvas();
         break;
+    }
+}
+
+/* ----------------------------------------------------------------------
+ * Called from JS to prepare a save-game file, and free one after it's
+ * been used.
+ */
+
+struct savefile_write_ctx {
+    char *buffer;
+    size_t pos;
+};
+
+static void savefile_write(void *vctx, const void *vbuf, int len)
+{
+    static const unsigned char length[256] = {
+        /*
+         * Assign a length of 1 to any printable ASCII character that
+         * can be written literally in URI-encoding, i.e.
+         *
+         *    A-Z a-z 0-9 - _ . ! ~ * ' ( )
+         *
+         * Assign length 3 (for % and two hex digits) to all other
+         * byte values.
+         */
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 1, 3, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 1, 1, 3,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3,
+        3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 1,
+        3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 1, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    };
+    static const char hexdigits[] = "0123456789ABCDEF";
+
+    struct savefile_write_ctx *ctx = (struct savefile_write_ctx *)vctx;
+    const unsigned char *buf = (const unsigned char *)vbuf;
+    for (int i = 0; i < len; i++) {
+        unsigned char c = buf[i];
+        int clen = length[c];
+        if (ctx->buffer) {
+            if (clen == 1) {
+                ctx->buffer[ctx->pos] = c;
+            } else {
+                ctx->buffer[ctx->pos] = '%';
+                ctx->buffer[ctx->pos+1] = hexdigits[c >> 4];
+                ctx->buffer[ctx->pos+2] = hexdigits[c & 0xF];
+            }
+        }
+        ctx->pos += clen;
+    }
+}
+
+char *get_save_file(void)
+{
+    struct savefile_write_ctx ctx;
+    size_t size;
+
+    /* First pass, to count up the size */
+    ctx.buffer = NULL;
+    ctx.pos = 0;
+    midend_serialise(me, savefile_write, &ctx);
+    size = ctx.pos;
+
+    /* Second pass, to actually write out the data. We have to put a
+     * terminating \0 on the end (which we expect never to show up in
+     * the actual serialisation format - it's text, not binary) so
+     * that the Javascript side can easily find out the length. */
+    ctx.buffer = snewn(size+1, char);
+    ctx.pos = 0;
+    midend_serialise(me, savefile_write, &ctx);
+    assert(ctx.pos == size);
+    ctx.buffer[ctx.pos] = '\0';
+
+    return ctx.buffer;
+}
+
+void free_save_file(char *buffer)
+{
+    sfree(buffer);
+}
+
+struct savefile_read_ctx {
+    const char *buffer;
+    int len_remaining;
+};
+
+static bool savefile_read(void *vctx, void *buf, int len)
+{
+    struct savefile_read_ctx *ctx = (struct savefile_read_ctx *)vctx;
+    if (ctx->len_remaining < len)
+        return false;
+    memcpy(buf, ctx->buffer, len);
+    ctx->len_remaining -= len;
+    ctx->buffer += len;
+    return true;
+}
+
+void load_game(const char *buffer, int len)
+{
+    struct savefile_read_ctx ctx;
+    const char *err;
+
+    ctx.buffer = buffer;
+    ctx.len_remaining = len;
+    err = midend_deserialise(me, savefile_read, &ctx);
+
+    if (err) {
+        js_error_box(err);
+    } else {
+        select_appropriate_preset();
+        resize();
+        midend_redraw(me);
     }
 }
 
@@ -750,7 +909,7 @@ void command(int n)
  */
 int main(int argc, char **argv)
 {
-    char *param_err;
+    const char *param_err;
     float *colours;
     int i;
 
@@ -787,25 +946,18 @@ int main(int argc, char **argv)
      * Set up the game-type dropdown with presets and/or the Custom
      * option.
      */
-    npresets = midend_num_presets(me);
-    if (npresets == 0) {
-        /*
-         * This puzzle doesn't have selectable game types at all.
-         * Completely remove the drop-down list from the page.
-         */
-        js_remove_type_dropdown();
-        have_presets_dropdown = FALSE;
-    } else {
+    {
+        struct preset_menu *menu = midend_get_presets(me, &npresets);
         presets = snewn(npresets, game_params *);
-        for (i = 0; i < npresets; i++) {
-            char *name;
-            midend_fetch_preset(me, i, &name, &presets[i]);
-            js_add_preset(name);
-        }
-        if (thegame.can_configure)
-            js_add_preset(NULL);   /* the 'Custom' entry in the dropdown */
+        for (i = 0; i < npresets; i++)
+            presets[i] = NULL;
 
-        have_presets_dropdown = TRUE;
+        populate_js_preset_menu(0, menu);
+
+        if (thegame.can_configure)
+            js_add_preset(0, "Custom", -1);
+
+        have_presets_dropdown = true;
 
         /*
          * Now ensure the appropriate element of the presets menu

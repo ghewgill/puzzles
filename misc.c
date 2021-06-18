@@ -9,14 +9,25 @@
 
 #include "puzzles.h"
 
+char UI_UPDATE[] = "";
+
 void free_cfg(config_item *cfg)
 {
     config_item *i;
 
     for (i = cfg; i->type != C_END; i++)
 	if (i->type == C_STRING)
-	    sfree(i->sval);
+	    sfree(i->u.string.sval);
     sfree(cfg);
+}
+
+void free_keys(key_label *keys, int nkeys)
+{
+    int i;
+
+    for(i = 0; i < nkeys; i++)
+        sfree(keys[i].label);
+    sfree(keys);
 }
 
 /*
@@ -35,7 +46,7 @@ void free_cfg(config_item *cfg)
  * keyless, reversible, but visually completely obfuscatory masking
  * function to the mine bitmap.
  */
-void obfuscate_bitmap(unsigned char *bmp, int bits, int decode)
+void obfuscate_bitmap(unsigned char *bmp, int bits, bool decode)
 {
     int bytes, firsthalf, secondhalf;
     struct step {
@@ -167,6 +178,25 @@ unsigned char *hex2bin(const char *in, int outlen)
     return ret;
 }
 
+char *fgetline(FILE *fp)
+{
+    char *ret = snewn(512, char);
+    int size = 512, len = 0;
+    while (fgets(ret + len, size - len, fp)) {
+	len += strlen(ret + len);
+	if (ret[len-1] == '\n')
+	    break;		       /* got a newline, we're done */
+	size = len + 512;
+	ret = sresize(ret, size, char);
+    }
+    if (len == 0) {		       /* first fgets returned NULL */
+	sfree(ret);
+	return NULL;
+    }
+    ret[len] = '\0';
+    return ret;
+}
+
 void game_mkhighlight_specific(frontend *fe, float *ret,
 			       int background, int highlight, int lowlight)
 {
@@ -258,7 +288,7 @@ void draw_rect_corners(drawing *dr, int cx, int cy, int r, int col)
     draw_line(dr, cx + r, cy + r, cx + r/2, cy + r, col);
 }
 
-void move_cursor(int button, int *x, int *y, int maxw, int maxh, int wrap)
+void move_cursor(int button, int *x, int *y, int maxw, int maxh, bool wrap)
 {
     int dx = 0, dy = 0;
     switch (button) {
@@ -349,7 +379,7 @@ void pos2c(int w, int h, int pos, int *cx, int *cy)
 
 void draw_text_outline(drawing *dr, int x, int y, int fonttype,
                        int fontsize, int align,
-                       int text_colour, int outline_colour, char *text)
+                       int text_colour, int outline_colour, const char *text)
 {
     if (outline_colour > -1) {
         draw_text(dr, x-1, y, fonttype, fontsize, align, outline_colour, text);
@@ -358,6 +388,56 @@ void draw_text_outline(drawing *dr, int x, int y, int fonttype,
         draw_text(dr, x, y+1, fonttype, fontsize, align, outline_colour, text);
     }
     draw_text(dr, x, y, fonttype, fontsize, align, text_colour, text);
+
+}
+
+/* kludge for sprintf() in Rockbox not supporting "%-8.8s" */
+void copy_left_justified(char *buf, size_t sz, const char *str)
+{
+    size_t len = strlen(str);
+    assert(sz > 0);
+    memset(buf, ' ', sz - 1);
+    assert(len <= sz - 1);
+    memcpy(buf, str, len);
+    buf[sz - 1] = 0;
+}
+
+/* Returns a dynamically allocated label for a generic button.
+ * Game-specific buttons should go into the `label' field of key_label
+ * instead. */
+char *button2label(int button)
+{
+    /* check if it's a keyboard button */
+    if(('A' <= button && button <= 'Z') ||
+       ('a' <= button && button <= 'z') ||
+       ('0' <= button && button <= '9') )
+    {
+        char str[2];
+        str[0] = button;
+        str[1] = '\0';
+        return dupstr(str);
+    }
+
+    switch(button)
+    {
+    case CURSOR_UP:
+        return dupstr("Up");
+    case CURSOR_DOWN:
+        return dupstr("Down");
+    case CURSOR_LEFT:
+        return dupstr("Left");
+    case CURSOR_RIGHT:
+        return dupstr("Right");
+    case CURSOR_SELECT:
+        return dupstr("Select");
+    case '\b':
+        return dupstr("Clear");
+    default:
+        fatal("unknown generic key");
+    }
+
+    /* should never get here */
+    return NULL;
 }
 
 /* vim: set shiftwidth=4 tabstop=8: */

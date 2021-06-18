@@ -39,7 +39,7 @@ enum {
 
 struct game_params {
     int w, h;
-    int force_corner_start;
+    bool force_corner_start;
 };
 
 enum { DIR_N = 0, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW, DIR_MAX };
@@ -52,7 +52,7 @@ static const int dys[DIR_MAX] = { -1, -1, 0, 1, 1,  1,  0, -1 };
 
 struct game_state {
     int w, h, n;
-    int completed, used_solve, impossible;
+    bool completed, used_solve, impossible;
     int *dirs;                  /* direction enums, size n */
     int *nums;                  /* numbers, size n */
     unsigned int *flags;        /* flags, size n */
@@ -92,35 +92,36 @@ static int whichdiri(game_state *state, int fromi, int toi)
     return whichdir(fromi%w, fromi/w, toi%w, toi/w);
 }
 
-static int ispointing(const game_state *state, int fromx, int fromy,
-                      int tox, int toy)
+static bool ispointing(const game_state *state, int fromx, int fromy,
+                       int tox, int toy)
 {
     int w = state->w, dir = state->dirs[fromy*w+fromx];
 
     /* (by convention) squares do not point to themselves. */
-    if (fromx == tox && fromy == toy) return 0;
+    if (fromx == tox && fromy == toy) return false;
 
     /* the final number points to nothing. */
-    if (state->nums[fromy*w + fromx] == state->n) return 0;
+    if (state->nums[fromy*w + fromx] == state->n) return false;
 
     while (1) {
-        if (!INGRID(state, fromx, fromy)) return 0;
-        if (fromx == tox && fromy == toy) return 1;
+        if (!INGRID(state, fromx, fromy)) return false;
+        if (fromx == tox && fromy == toy) return true;
         fromx += dxs[dir]; fromy += dys[dir];
     }
-    return 0; /* not reached */
+    return false; /* not reached */
 }
 
-static int ispointingi(game_state *state, int fromi, int toi)
+static bool ispointingi(game_state *state, int fromi, int toi)
 {
     int w = state->w;
     return ispointing(state, fromi%w, fromi/w, toi%w, toi/w);
 }
 
 /* Taking the number 'num', work out the gap between it and the next
- * available number up or down (depending on d). Return 1 if the region
- * at (x,y) will fit in that gap, or 0 otherwise. */
-static int move_couldfit(const game_state *state, int num, int d, int x, int y)
+ * available number up or down (depending on d). Return true if the
+ * region at (x,y) will fit in that gap. */
+static bool move_couldfit(
+    const game_state *state, int num, int d, int x, int y)
 {
     int n, gap, i = y*state->w+x, sz;
 
@@ -136,54 +137,54 @@ static int move_couldfit(const game_state *state, int num, int d, int x, int y)
         /* no gap, so the only allowable move is that that directly
          * links the two numbers. */
         n = state->nums[i];
-        return (n == num+d) ? 0 : 1;
+        return n != num+d;
     }
     if (state->prev[i] == -1 && state->next[i] == -1)
-        return 1; /* single unconnected square, always OK */
+        return true; /* single unconnected square, always OK */
 
     sz = dsf_size(state->dsf, i);
-    return (sz > gap) ? 0 : 1;
+    return sz <= gap;
 }
 
-static int isvalidmove(const game_state *state, int clever,
-                       int fromx, int fromy, int tox, int toy)
+static bool isvalidmove(const game_state *state, bool clever,
+                        int fromx, int fromy, int tox, int toy)
 {
     int w = state->w, from = fromy*w+fromx, to = toy*w+tox;
     int nfrom, nto;
 
     if (!INGRID(state, fromx, fromy) || !INGRID(state, tox, toy))
-        return 0;
+        return false;
 
     /* can only move where we point */
     if (!ispointing(state, fromx, fromy, tox, toy))
-        return 0;
+        return false;
 
     nfrom = state->nums[from]; nto = state->nums[to];
 
     /* can't move _from_ the preset final number, or _to_ the preset 1. */
     if (((nfrom == state->n) && (state->flags[from] & FLAG_IMMUTABLE)) ||
         ((nto   == 1)        && (state->flags[to]   & FLAG_IMMUTABLE)))
-        return 0;
+        return false;
 
     /* can't create a new connection between cells in the same region
      * as that would create a loop. */
     if (dsf_canonify(state->dsf, from) == dsf_canonify(state->dsf, to))
-        return 0;
+        return false;
 
     /* if both cells are actual numbers, can't drag if we're not
      * one digit apart. */
     if (ISREALNUM(state, nfrom) && ISREALNUM(state, nto)) {
         if (nfrom != nto-1)
-            return 0;
+            return false;
     } else if (clever && ISREALNUM(state, nfrom)) {
         if (!move_couldfit(state, nfrom, +1, tox, toy))
-            return 0;
+            return false;
     } else if (clever && ISREALNUM(state, nto)) {
         if (!move_couldfit(state, nto, -1, fromx, fromy))
-            return 0;
+            return false;
     }
 
-    return 1;
+    return true;
 }
 
 static void makelink(game_state *state, int from, int to)
@@ -197,10 +198,10 @@ static void makelink(game_state *state, int from, int to)
     state->prev[to] = from;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    if (params->w * params->h >= 100) return 0;
-    return 1;
+    if (params->w * params->h >= 100) return false;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -279,18 +280,19 @@ static void strip_nums(game_state *state) {
     dsf_init(state->dsf, state->n);
 }
 
-static int check_nums(game_state *orig, game_state *copy, int only_immutable)
+static bool check_nums(game_state *orig, game_state *copy, bool only_immutable)
 {
-    int i, ret = 1;
+    int i;
+    bool ret = true;
     assert(copy->n == orig->n);
     for (i = 0; i < copy->n; i++) {
-        if (only_immutable && !copy->flags[i] & FLAG_IMMUTABLE) continue;
+        if (only_immutable && !(copy->flags[i] & FLAG_IMMUTABLE)) continue;
         assert(copy->nums[i] >= 0);
         assert(copy->nums[i] <= copy->n);
         if (copy->nums[i] != orig->nums[i]) {
             debug(("check_nums: (%d,%d) copy=%d, orig=%d.",
                    i%orig->w, i/orig->w, copy->nums[i], orig->nums[i]));
-            ret = 0;
+            ret = false;
         }
     }
     return ret;
@@ -302,7 +304,7 @@ static game_params *default_params(void)
 {
     game_params *ret = snew(game_params);
     ret->w = ret->h = 4;
-    ret->force_corner_start = 1;
+    ret->force_corner_start = true;
 
     return ret;
 }
@@ -316,13 +318,13 @@ static const struct game_params signpost_presets[] = {
   { 7, 7, 1 }
 };
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char buf[80];
 
     if (i < 0 || i >= lenof(signpost_presets))
-        return FALSE;
+        return false;
 
     ret = default_params();
     *ret = signpost_presets[i];
@@ -332,7 +334,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
             ret->force_corner_start ? "" : ", free ends");
     *name = dupstr(buf);
 
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -356,15 +358,15 @@ static void decode_params(game_params *ret, char const *string)
         ret->h = atoi(string);
         while (*string && isdigit((unsigned char)*string)) string++;
     }
-    ret->force_corner_start = 0;
+    ret->force_corner_start = false;
     if (*string == 'c') {
         string++;
-        ret->force_corner_start = 1;
+        ret->force_corner_start = true;
     }
 
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char data[256];
 
@@ -387,24 +389,19 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Start and end in corners";
     ret[2].type = C_BOOLEAN;
-    ret[2].sval = NULL;
-    ret[2].ival = params->force_corner_start;
+    ret[2].u.boolean.bval = params->force_corner_start;
 
     ret[3].name = NULL;
     ret[3].type = C_END;
-    ret[3].sval = NULL;
-    ret[3].ival = 0;
 
     return ret;
 }
@@ -413,20 +410,21 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->force_corner_start = cfg[2].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->force_corner_start = cfg[2].u.boolean.bval;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
-    if (params->w < 2 || params->h < 2)
-	return "Width and height must both be at least two";
-    if (params->w == 2 && params->h == 2)   /* leads to generation hang */
-	return "Width and height cannot both be two";
-
+    if (params->w < 1) return "Width must be at least one";
+    if (params->h < 1) return "Height must be at least one";
+    if (full && params->w == 1 && params->h == 1)
+	/* The UI doesn't let us move these from unsolved to solved,
+	 * so we disallow generating (but not playing) them. */
+	return "Width and height cannot both be one";
     return NULL;
 }
 
@@ -501,10 +499,11 @@ static void free_game(game_state *state)
 }
 
 static void unpick_desc(const game_params *params, const char *desc,
-                        game_state **sout, char **mout)
+                        game_state **sout, const char **mout)
 {
     game_state *state = blank_game(params->w, params->h);
-    char *msg = NULL, c;
+    const char *msg = NULL;
+    char c;
     int num = 0, i = 0;
 
     while (*desc) {
@@ -552,7 +551,7 @@ done:
     }
 }
 
-static char *generate_desc(game_state *state, int issolve)
+static char *generate_desc(game_state *state, bool issolve)
 {
     char *ret, buf[80];
     int retlen, i, k;
@@ -605,10 +604,11 @@ static int cell_adj(game_state *state, int i, int *ai, int *ad)
     return n;
 }
 
-static int new_game_fill(game_state *state, random_state *rs,
-                         int headi, int taili)
+static bool new_game_fill(game_state *state, random_state *rs,
+                          int headi, int taili)
 {
-    int nfilled, an, ret = 0, j;
+    int nfilled, an, j;
+    bool ret = false;
     int *aidx, *adir;
 
     aidx = snewn(state->n, int);
@@ -623,6 +623,7 @@ static int new_game_fill(game_state *state, random_state *rs,
 
     state->dirs[taili] = 0;
     nfilled = 2;
+    assert(state->n > 1);
 
     while (nfilled < state->n) {
         /* Try and expand _from_ headi; keep going if there's only one
@@ -637,6 +638,8 @@ static int new_game_fill(game_state *state, random_state *rs,
             headi = aidx[j];
             an = cell_adj(state, headi, aidx, adir);
         } while (an == 1);
+
+	if (nfilled == state->n) break;
 
         /* Try and expand _to_ taili; keep going if there's only one
          * place to go to. */
@@ -658,7 +661,7 @@ static int new_game_fill(game_state *state, random_state *rs,
 
     /* it could happen that our last two weren't in line; if that's the
      * case, we have to start again. */
-    if (state->dirs[headi] != -1) ret = 1;
+    if (state->dirs[headi] != -1) ret = true;
 
 done:
     sfree(aidx);
@@ -713,11 +716,12 @@ static void debug_desc(const char *what, game_state *state)
 
 /* Expects a fully-numbered game_state on input, and makes sure
  * FLAG_IMMUTABLE is only set on those numbers we need to solve
- * (as for a real new-game); returns 1 if it managed
- * this (such that it could solve it), or 0 if not. */
-static int new_game_strip(game_state *state, random_state *rs)
+ * (as for a real new-game); returns true if it managed
+ * this (such that it could solve it), or false if not. */
+static bool new_game_strip(game_state *state, random_state *rs)
 {
-    int *scratch, i, j, ret = 1;
+    int *scratch, i, j;
+    bool ret = true;
     game_state *copy = dup_game(state);
 
     debug(("new_game_strip."));
@@ -728,7 +732,7 @@ static int new_game_strip(game_state *state, random_state *rs)
     if (solve_state(copy) > 0) {
         debug(("new_game_strip: soluble immediately after strip."));
         free_game(copy);
-        return 1;
+        return true;
     }
 
     scratch = snewn(state->n, int);
@@ -755,9 +759,9 @@ static int new_game_strip(game_state *state, random_state *rs)
         debug_state("Copy of state: ", copy);
         strip_nums(copy);
         if (solve_state(copy) > 0) goto solved;
-        assert(check_nums(state, copy, 1));
+        assert(check_nums(state, copy, true));
     }
-    ret = 0;
+    ret = false;
     goto done;
 
 solved:
@@ -776,7 +780,7 @@ solved:
             dup_game_to(copy, state);
             strip_nums(copy);
             if (solve_state(copy) > 0) {
-                assert(check_nums(state, copy, 0));
+                assert(check_nums(state, copy, false));
                 debug(("new_game_strip: OK, removing number"));
             } else {
                 assert(state->nums[j] <= state->n);
@@ -795,11 +799,14 @@ done:
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     game_state *state = blank_game(params->w, params->h);
     char *ret;
     int headi, taili;
+
+    /* this shouldn't happen (validate_params), but let's play it safe */
+    if (params->w == 1 && params->h == 1) return dupstr("1a");
 
 generate:
     blank_game_into(state);
@@ -836,14 +843,14 @@ generate:
         assert(solve_state(tosolve) > 0);
         free_game(tosolve);
     }
-    ret = generate_desc(state, 0);
+    ret = generate_desc(state, false);
     free_game(state);
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
-    char *ret = NULL;
+    const char *ret = NULL;
 
     unpick_desc(params, desc, NULL, &ret);
     return ret;
@@ -906,7 +913,7 @@ static void head_number(game_state *state, int i, struct head_meta *head)
                 head->why = "contains cell with immutable number";
             } else if (head->start != ss) {
                 debug(("head_number: chain with non-sequential numbers!"));
-                state->impossible = 1;
+                state->impossible = true;
             }
         }
         off++;
@@ -1012,7 +1019,7 @@ static void connect_numbers(game_state *state)
             dni = dsf_canonify(state->dsf, state->next[i]);
             if (di == dni) {
                 debug(("connect_numbers: chain forms a loop."));
-                state->impossible = 1;
+                state->impossible = true;
             }
             dsf_merge(state->dsf, di, dni);
         }
@@ -1139,9 +1146,10 @@ static void update_numbers(game_state *state)
     sfree(heads);
 }
 
-static int check_completion(game_state *state, int mark_errors)
+static bool check_completion(game_state *state, bool mark_errors)
 {
-    int n, j, k, error = 0, complete;
+    int n, j, k;
+    bool error = false, complete;
 
     /* NB This only marks errors that are possible to perpetrate with
      * the current UI in interpret_move. Things like forming loops in
@@ -1162,7 +1170,7 @@ static int check_completion(game_state *state, int mark_errors)
                         state->flags[j] |= FLAG_ERROR;
                         state->flags[k] |= FLAG_ERROR;
                     }
-                    error = 1;
+                    error = true;
                 }
             }
         }
@@ -1170,16 +1178,16 @@ static int check_completion(game_state *state, int mark_errors)
 
     /* Search and mark numbers n not pointing to n+1; if any numbers
      * are missing we know we've not completed. */
-    complete = 1;
+    complete = true;
     for (n = 1; n < state->n; n++) {
         if (state->numsi[n] == -1 || state->numsi[n+1] == -1)
-            complete = 0;
+            complete = false;
         else if (!ispointingi(state, state->numsi[n], state->numsi[n+1])) {
             if (mark_errors) {
                 state->flags[state->numsi[n]] |= FLAG_ERROR;
                 state->flags[state->numsi[n+1]] |= FLAG_ERROR;
             }
-            error = 1;
+            error = true;
         } else {
             /* make sure the link is explicitly made here; for instance, this
              * is nice if the user drags from 2 out (making 3) and a 4 is also
@@ -1194,13 +1202,13 @@ static int check_completion(game_state *state, int mark_errors)
         if ((state->nums[n] < 0) ||
             (state->nums[n] == 0 &&
              (state->next[n] != -1 || state->prev[n] != -1))) {
-            error = 1;
+            error = true;
             if (mark_errors)
                 state->flags[n] |= FLAG_ERROR;
         }
     }
 
-    if (error) return 0;
+    if (error) return false;
     return complete;
 }
 static game_state *new_game(midend *me, const game_params *params,
@@ -1212,7 +1220,7 @@ static game_state *new_game(midend *me, const game_params *params,
     if (!state) assert(!"new_game failed to unpick");
 
     update_numbers(state);
-    check_completion(state, 1); /* update any auto-links */
+    check_completion(state, true); /* update any auto-links */
 
     return state;
 }
@@ -1244,7 +1252,7 @@ static int solve_single(game_state *state, game_state *copy, int *from)
         while (1) {
             x += dxs[d]; y += dys[d];
             if (!INGRID(state, x, y)) break;
-            if (!isvalidmove(state, 1, sx, sy, x, y)) continue;
+            if (!isvalidmove(state, true, sx, sy, x, y)) continue;
 
             /* can't link to somewhere with a back-link we would have to
              * break (the solver just doesn't work like this). */
@@ -1273,7 +1281,7 @@ static int solve_single(game_state *state, game_state *copy, int *from)
             ;
         } else if (poss == -1) {
             debug(("Solver: nowhere possible for (%d,%d) to link to.", sx, sy));
-            copy->impossible = 1;
+            copy->impossible = true;
             return -1;
         } else {
             debug(("Solver: linking (%d,%d) to only possible next (%d,%d).",
@@ -1290,7 +1298,7 @@ static int solve_single(game_state *state, game_state *copy, int *from)
         x = i%w; y = i/w;
         if (from[i] == -1) {
             debug(("Solver: nowhere possible to link to (%d,%d)", x, y));
-            copy->impossible = 1;
+            copy->impossible = true;
             return -1;
         } else if (from[i] == -2) {
             /*debug(("Solver: (%d,%d) has multiple possible prev squares.", x, y));*/
@@ -1327,7 +1335,7 @@ static int solve_state(game_state *state)
     sfree(scratch);
 
     update_numbers(state);
-    ret = state->impossible ? -1 : check_completion(state, 0);
+    ret = state->impossible ? -1 : check_completion(state, false);
     debug(("Solver finished: %s",
            ret < 0 ? "impossible" : ret > 0 ? "solved" : "not solved"));
     debug_state("After solver: ", state);
@@ -1335,7 +1343,7 @@ static int solve_state(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     game_state *tosolve;
     char *ret = NULL;
@@ -1344,7 +1352,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     tosolve = dup_game(currstate);
     result = solve_state(tosolve);
     if (result > 0)
-        ret = generate_desc(tosolve, 1);
+        ret = generate_desc(tosolve, true);
     free_game(tosolve);
     if (ret) return ret;
 
@@ -1355,7 +1363,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     else if (result == 0)
         *error = "Unable to solve puzzle.";
     else
-        ret = generate_desc(tosolve, 1);
+        ret = generate_desc(tosolve, true);
 
     free_game(tosolve);
 
@@ -1366,9 +1374,10 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 
 
 struct game_ui {
-    int cx, cy, cshow;
+    int cx, cy;
+    bool cshow;
 
-    int dragging, drag_is_from;
+    bool dragging, drag_is_from;
     int sx, sy;         /* grid coords of start cell */
     int dx, dy;         /* pixel coords of drag posn */
 };
@@ -1380,9 +1389,10 @@ static game_ui *new_ui(const game_state *state)
     /* NB: if this is ever changed to as to require more than a structure
      * copy to clone, there's code that needs fixing in game_redraw too. */
 
-    ui->cx = ui->cy = ui->cshow = 0;
+    ui->cx = ui->cy = 0;
+    ui->cshow = false;
 
-    ui->dragging = 0;
+    ui->dragging = false;
     ui->sx = ui->sy = ui->dx = ui->dy = 0;
 
     return ui;
@@ -1405,18 +1415,22 @@ static void decode_ui(game_ui *ui, const char *encoding)
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
-    if (!oldstate->completed && newstate->completed)
-        ui->cshow = ui->dragging = 0;
+    if (!oldstate->completed && newstate->completed) {
+        ui->cshow = false;
+        ui->dragging = false;
+    }
 }
 
 struct game_drawstate {
-    int tilesize, started, solved;
+    int tilesize;
+    bool started, solved;
     int w, h, n;
     int *nums, *dirp;
     unsigned int *f;
     double angle_offset;
 
-    int dragging, dx, dy;
+    bool dragging;
+    int dx, dy;
     blitter *dragb;
 };
 
@@ -1428,40 +1442,43 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     char buf[80];
 
     if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cx, &ui->cy, state->w, state->h, 0);
-        ui->cshow = 1;
+        move_cursor(button, &ui->cx, &ui->cy, state->w, state->h, false);
+        ui->cshow = true;
         if (ui->dragging) {
             ui->dx = COORD(ui->cx) + TILE_SIZE/2;
             ui->dy = COORD(ui->cy) + TILE_SIZE/2;
         }
-        return "";
+        return UI_UPDATE;
     } else if (IS_CURSOR_SELECT(button)) {
         if (!ui->cshow)
-            ui->cshow = 1;
+            ui->cshow = true;
         else if (ui->dragging) {
-            ui->dragging = FALSE;
-            if (ui->sx == ui->cx && ui->sy == ui->cy) return "";
+            ui->dragging = false;
+            if (ui->sx == ui->cx && ui->sy == ui->cy) return UI_UPDATE;
             if (ui->drag_is_from) {
-                if (!isvalidmove(state, 0, ui->sx, ui->sy, ui->cx, ui->cy)) return "";
+                if (!isvalidmove(state, false, ui->sx, ui->sy, ui->cx, ui->cy))
+                    return UI_UPDATE;
                 sprintf(buf, "L%d,%d-%d,%d", ui->sx, ui->sy, ui->cx, ui->cy);
             } else {
-                if (!isvalidmove(state, 0, ui->cx, ui->cy, ui->sx, ui->sy)) return "";
+                if (!isvalidmove(state, false, ui->cx, ui->cy, ui->sx, ui->sy))
+                    return UI_UPDATE;
                 sprintf(buf, "L%d,%d-%d,%d", ui->cx, ui->cy, ui->sx, ui->sy);
             }
             return dupstr(buf);
         } else {
-            ui->dragging = TRUE;
+            ui->dragging = true;
             ui->sx = ui->cx;
             ui->sy = ui->cy;
             ui->dx = COORD(ui->cx) + TILE_SIZE/2;
             ui->dy = COORD(ui->cy) + TILE_SIZE/2;
-            ui->drag_is_from = (button == CURSOR_SELECT) ? 1 : 0;
+            ui->drag_is_from = (button == CURSOR_SELECT);
         }
-        return "";
+        return UI_UPDATE;
     }
     if (IS_MOUSE_DOWN(button)) {
         if (ui->cshow) {
-            ui->cshow = ui->dragging = 0;
+            ui->cshow = false;
+            ui->dragging = false;
         }
         assert(!ui->dragging);
         if (!INGRID(state, x, y)) return NULL;
@@ -1478,36 +1495,38 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 return NULL;
         }
 
-        ui->dragging = TRUE;
-        ui->drag_is_from = (button == LEFT_BUTTON) ? 1 : 0;
+        ui->dragging = true;
+        ui->drag_is_from = (button == LEFT_BUTTON);
         ui->sx = x;
         ui->sy = y;
         ui->dx = mx;
         ui->dy = my;
-        ui->cshow = 0;
-        return "";
+        ui->cshow = false;
+        return UI_UPDATE;
     } else if (IS_MOUSE_DRAG(button) && ui->dragging) {
         ui->dx = mx;
         ui->dy = my;
-        return "";
+        return UI_UPDATE;
     } else if (IS_MOUSE_RELEASE(button) && ui->dragging) {
-        ui->dragging = FALSE;
-        if (ui->sx == x && ui->sy == y) return ""; /* single click */
+        ui->dragging = false;
+        if (ui->sx == x && ui->sy == y) return UI_UPDATE; /* single click */
 
         if (!INGRID(state, x, y)) {
             int si = ui->sy*w+ui->sx;
             if (state->prev[si] == -1 && state->next[si] == -1)
-                return "";
+                return UI_UPDATE;
             sprintf(buf, "%c%d,%d",
                     (int)(ui->drag_is_from ? 'C' : 'X'), ui->sx, ui->sy);
             return dupstr(buf);
         }
 
         if (ui->drag_is_from) {
-            if (!isvalidmove(state, 0, ui->sx, ui->sy, x, y)) return "";
+            if (!isvalidmove(state, false, ui->sx, ui->sy, x, y))
+                return UI_UPDATE;
             sprintf(buf, "L%d,%d-%d,%d", ui->sx, ui->sy, x, y);
         } else {
-            if (!isvalidmove(state, 0, x, y, ui->sx, ui->sy)) return "";
+            if (!isvalidmove(state, false, x, y, ui->sx, ui->sy))
+                return UI_UPDATE;
             sprintf(buf, "L%d,%d-%d,%d", x, y, ui->sx, ui->sy);
         }
         return dupstr(buf);
@@ -1516,7 +1535,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     else if ((button == 'x' || button == 'X') && ui->cshow) {
         int si = ui->cy*w + ui->cx;
         if (state->prev[si] == -1 && state->next[si] == -1)
-            return "";
+            return UI_UPDATE;
         sprintf(buf, "%c%d,%d",
                 (int)((button == 'x') ? 'C' : 'X'), ui->cx, ui->cy);
         return dupstr(buf);
@@ -1553,7 +1572,7 @@ static game_state *execute_move(const game_state *state, const char *move)
     if (move[0] == 'S') {
         game_params p;
 	game_state *tmp;
-        char *valid;
+        const char *valid;
 	int i;
 
         p.w = state->w; p.h = state->h;
@@ -1569,15 +1588,17 @@ static game_state *execute_move(const game_state *state, const char *move)
 	    ret->next[i] = tmp->next[i];
 	}
 	free_game(tmp);
-        ret->used_solve = 1;
+        ret->used_solve = true;
     } else if (sscanf(move, "L%d,%d-%d,%d", &sx, &sy, &ex, &ey) == 4) {
-        if (!isvalidmove(state, 0, sx, sy, ex, ey)) return NULL;
+        if (!isvalidmove(state, false, sx, sy, ex, ey)) return NULL;
 
         ret = dup_game(state);
 
         si = sy*w+sx; ei = ey*w+ex;
         makelink(ret, si, ei);
     } else if (sscanf(move, "%c%d,%d", &c, &sx, &sy) == 3) {
+        int sset;
+
         if (c != 'C' && c != 'X') return NULL;
         if (!INGRID(state, sx, sy)) return NULL;
         si = sy*w+sx;
@@ -1586,11 +1607,12 @@ static game_state *execute_move(const game_state *state, const char *move)
 
         ret = dup_game(state);
 
-        if (c == 'C') {
+        sset = state->nums[si] / (state->n+1);
+        if (c == 'C' || (c == 'X' && sset == 0)) {
             /* Unlink the single cell we dragged from the board. */
             unlink_cell(ret, si);
         } else {
-            int i, set, sset = state->nums[si] / (state->n+1);
+            int i, set;
             for (i = 0; i < state->n; i++) {
                 /* Unlink all cells in the same set as the one we dragged
                  * from the board. */
@@ -1608,7 +1630,7 @@ static game_state *execute_move(const game_state *state, const char *move)
     }
     if (ret) {
         update_numbers(ret);
-        if (check_completion(ret, 1)) ret->completed = 1;
+        if (check_completion(ret, true)) ret->completed = true;
     }
 
     return ret;
@@ -1714,7 +1736,9 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     struct game_drawstate *ds = snew(struct game_drawstate);
     int i;
 
-    ds->tilesize = ds->started = ds->solved = 0;
+    ds->tilesize = 0;
+    ds->started = false;
+    ds->solved = false;
     ds->w = state->w;
     ds->h = state->h;
     ds->n = state->n;
@@ -1730,7 +1754,8 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 
     ds->angle_offset = 0.0F;
 
-    ds->dragging = ds->dx = ds->dy = 0;
+    ds->dragging = false;
+    ds->dx = ds->dy = 0;
     ds->dragb = NULL;
 
     return ds;
@@ -1836,10 +1861,11 @@ static void tile_redraw(drawing *dr, game_drawstate *ds, int tx, int ty,
     int cb = TILE_SIZE / 16, textsz;
     char buf[20];
     int arrowcol, sarrowcol, setcol, textcol;
-    int acx, acy, asz, empty = 0;
+    int acx, acy, asz;
+    bool empty = false;
 
     if (num == 0 && !(f & F_ARROW_POINT) && !(f & F_ARROW_INPOINT)) {
-        empty = 1;
+        empty = true;
         /*
          * We don't display text in empty cells: typically these are
          * signified by num=0. However, in some cases a cell could
@@ -1967,7 +1993,7 @@ static void tile_redraw(drawing *dr, game_drawstate *ds, int tx, int ty,
 
 static void draw_drag_indicator(drawing *dr, game_drawstate *ds,
                                 const game_state *state, const game_ui *ui,
-                                int validdrag)
+                                bool validdrag)
 {
     int dir, w = ds->w, acol = COL_ARROW;
     int fx = FROMCOORD(ui->dx), fy = FROMCOORD(ui->dy);
@@ -1982,7 +2008,7 @@ static void draw_drag_indicator(drawing *dr, game_drawstate *ds,
         /* Draw an arrow pointing away from/towards the origin cell. */
         int ox = COORD(ui->sx) + TILE_SIZE/2, oy = COORD(ui->sy) + TILE_SIZE/2;
         double tana, offset;
-        double xdiff = fabs(ox - ui->dx), ydiff = fabs(oy - ui->dy);
+        double xdiff = abs(ox - ui->dx), ydiff = abs(oy - ui->dy);
 
         if (xdiff == 0) {
             ang = (oy > ui->dy) ? 0.0F : PI;
@@ -2016,7 +2042,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                         int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
-    int x, y, i, w = ds->w, dirp, force = 0;
+    int x, y, i, w = ds->w, dirp;
+    bool force = false;
     unsigned int f;
     double angle_offset = 0.0;
     game_state *postdrop = NULL;
@@ -2025,14 +2052,14 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         angle_offset = 2.0 * PI * (flashtime / FLASH_SPIN);
     if (angle_offset != ds->angle_offset) {
         ds->angle_offset = angle_offset;
-        force = 1;
+        force = true;
     }
 
     if (ds->dragging) {
         assert(ds->dragb);
         blitter_load(dr, ds->dragb, ds->dx, ds->dy);
         draw_update(dr, ds->dx, ds->dy, BLITTER_SIZE, BLITTER_SIZE);
-        ds->dragging = FALSE;
+        ds->dragging = false;
     }
 
     /* If an in-progress drag would make a valid move if finished, we
@@ -2054,7 +2081,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     if (!ds->started) {
         int aw = TILE_SIZE * state->w;
         int ah = TILE_SIZE * state->h;
-        draw_rect(dr, 0, 0, aw + 2 * BORDER, ah + 2 * BORDER, COL_BACKGROUND);
         draw_rect_outline(dr, BORDER - 1, BORDER - 1, aw + 2, ah + 2, COL_GRID);
         draw_update(dr, 0, 0, aw + 2 * BORDER, ah + 2 * BORDER);
     }
@@ -2133,15 +2159,15 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         }
     }
     if (ui->dragging) {
-        ds->dragging = TRUE;
+        ds->dragging = true;
         ds->dx = ui->dx - BLITTER_SIZE/2;
         ds->dy = ui->dy - BLITTER_SIZE/2;
         blitter_save(dr, ds->dragb, ds->dx, ds->dy);
 
-        draw_drag_indicator(dr, ds, state, ui, postdrop ? 1 : 0);
+        draw_drag_indicator(dr, ds, state, ui, postdrop != NULL);
     }
     if (postdrop) free_game(postdrop);
-    if (!ds->started) ds->started = TRUE;
+    if (!ds->started) ds->started = true;
 }
 
 static float game_anim_length(const game_state *oldstate,
@@ -2160,14 +2186,27 @@ static float game_flash_length(const game_state *oldstate,
         return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cshow) {
+        *x = COORD(ui->cx);
+        *y = COORD(ui->cy);
+        *w = *h = TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
+static bool game_timing_state(const game_state *state, game_ui *ui)
 {
-    return TRUE;
+    return true;
 }
 
 static void game_print_size(const game_params *params, float *x, float *y)
@@ -2218,24 +2257,25 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Signpost", "games.signpost", "signpost",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,
     decode_ui,
+    NULL, /* game_request_keys */
     game_changed_state,
     interpret_move,
     execute_move,
@@ -2246,10 +2286,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
+    false, game_timing_state,
     REQUIRE_RBUTTON,		       /* flags */
 };
 
@@ -2319,7 +2360,8 @@ static void start_soak(game_params *p, char *seedstr)
 
 static void process_desc(char *id)
 {
-    char *desc, *err, *solvestr;
+    char *desc, *solvestr;
+    const char *err;
     game_params *p;
     game_state *s;
 
@@ -2363,8 +2405,10 @@ static void process_desc(char *id)
 
 int main(int argc, const char *argv[])
 {
-    char *id = NULL, *desc, *err, *aux = NULL;
-    int soak = 0, verbose = 0, stdin_desc = 0, n = 1, i;
+    char *id = NULL, *desc, *aux = NULL;
+    const char *err;
+    bool soak = false, verbose = false, stdin_desc = false;
+    int n = 1, i;
     char *seedstr = NULL, newseed[16];
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -2373,9 +2417,9 @@ int main(int argc, const char *argv[])
     while (--argc > 0) {
         char *p = (char*)(*++argv);
         if (!strcmp(p, "-v") || !strcmp(p, "--verbose"))
-            verbose = 1;
+            verbose = true;
         else if (!strcmp(p, "--stdin"))
-            stdin_desc = 1;
+            stdin_desc = true;
         else if (!strcmp(p, "-e") || !strcmp(p, "--seed")) {
             seedstr = dupstr(*++argv);
             argc--;
@@ -2383,7 +2427,7 @@ int main(int argc, const char *argv[])
             n = atoi(*++argv);
             argc--;
         } else if (!strcmp(p, "-s") || !strcmp(p, "--soak")) {
-            soak = 1;
+            soak = true;
         } else if (*p == '-') {
             fprintf(stderr, "%s: unrecognised option `%s'\n", argv[0], p);
             usage(stderr);
@@ -2393,7 +2437,7 @@ int main(int argc, const char *argv[])
         }
     }
 
-    sprintf(newseed, "%lu", time(NULL));
+    sprintf(newseed, "%lu", (unsigned long) time(NULL));
     seedstr = dupstr(newseed);
 
     if (id || !stdin_desc) {
