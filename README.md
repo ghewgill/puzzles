@@ -25,7 +25,7 @@ Each puzzle source file contains a TODO list.
    * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
    * [Number Ball](http://www.janko.at/Raetsel/Nanbaboru/index.htm) mode: Squares with a ball must contain a number.
 * [Spokes](http://puzzlepicnic.com/genre?id=12): Connect all hubs using horizontal, vertical and diagonal lines.
-* Sticks (based on [Tatebo-Yokoko](https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm)): Fill in the grid with horizontal and vertical line segments.
+* Sticks (based on [Tatebo-Yokobo](https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm)): Fill in the grid with horizontal and vertical line segments.
    
 ### Abandoned
 
