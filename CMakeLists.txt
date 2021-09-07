@@ -1,3 +1,12 @@
+set(abcd_crop 420x420 192x192+108+108)
+set(ascent_crop 420x420 210x210+75+15)
+set(boats_crop 420x420 128x128+188+22)
+set(crossing_crop 504x504 180x180+167+139)
+set(rome_crop 420x420 180x180+90+30)
+set(salad_crop 420x420 180x180+120+0)
+set(seismic_crop 420x420 180x180+90+30)
+set(spokes_crop 360x360 180x180+120+180)
+
 puzzle(abcd
   DISPLAYNAME "ABCD"
   DESCRIPTION "Letter placement puzzle"
