@@ -1,0 +1,27 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :7:Seismic
+PARAMS  :5:6x6de
+CPARAMS :5:6x6de
+SEED    :15:827918011608825
+DESC    :35:aaa2abaa3a1ab4a2a1c2ad4ba,c1b3h2n5e
+NSTATES :2:19
+STATEPOS:2:19
+MOVE    :6:R1,1,1
+MOVE    :6:R0,0,1
+MOVE    :6:R1,0,2
+MOVE    :6:R2,1,2
+MOVE    :6:R2,0,3
+MOVE    :6:R4,0,2
+MOVE    :6:R5,0,1
+MOVE    :6:R4,3,1
+MOVE    :6:R4,5,1
+MOVE    :6:R5,5,2
+MOVE    :6:R5,4,1
+MOVE    :6:R3,4,1
+MOVE    :6:R3,5,3
+MOVE    :6:R4,4,2
+MOVE    :6:R2,4,3
+MOVE    :6:R5,2,1
+MOVE    :6:R5,3,3
+MOVE    :6:R5,1,2

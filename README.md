@@ -42,6 +42,7 @@ Each puzzle source file contains a TODO list.
 ```cmake
 add_subdirectory(puzzles-unreleased) # or whatever this folder is called
 ```
+* Optional: To add icons on Unix, copy all save files from the `savefiles` subfolder to the `icons` folder in the main repository. 
 * Run CMake in the main folder.
 
 ---

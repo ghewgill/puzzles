@@ -1,0 +1,18 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :8:Clusters
+PARAMS  :3:5x5
+CPARAMS :3:5x5
+SEED    :15:967467197201931
+DESC    :6:DlADbc
+NSTATES :2:10
+STATEPOS:2:10
+MOVE    :4:B21;
+MOVE    :8:A11;A17;
+MOVE    :4:A10;
+MOVE    :16:B23;B18;B24;B19;
+MOVE    :4:A12;
+MOVE    :10:B4;B9;B14;
+MOVE    :10:A13;A8;A7;
+MOVE    :3:A2;
+MOVE    :6:A1;A6;
