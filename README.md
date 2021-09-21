@@ -5,34 +5,45 @@ This repo contains several unfinished contributions for [Simon Tatham's Portable
 
 ## Contents
 
-Each puzzle source file contains a TODO list.
+Click on a puzzle to read a detailed description.
 
-### Playable and fully commented
+<table>
+<tr>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/abcd.md">ABCD</a></b><br/>Place letters according to the numbers. Identical letters cannot touch.</td>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/ascent.md">Ascent</a></b><br/>Place each number once to create a path.</td>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/boats.md">Boats</a></b><br/>Find the fleet in the grid.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/abcd.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/abcd.png"></a></td>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/ascent.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/ascent.png"></a></td>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/boats.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/boats.png"></a></td>
+</tr>
+<tr>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/clusters.md">Clusters</a></b><br/>Fill in the grid with red and blue clusters, with all dead ends given.</td>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/mathrax.md">Mathrax</a></b><br/>Place each number according to the arithmetic clues.</td>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/rome.md">Rome</a></b><br/>Fill the grid with arrows leading to a goal.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/clusters.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/clusters.png"></a></td>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/mathrax.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/mathrax.png"></a></td>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/rome.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/rome.png"></a></td>
+</tr>
+<tr>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/salad.md">Salad</a></b><br/>Place each character once in every row and column. Some squares remain empty.</td>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/spokes.md">Spokes</a></b><br/>Connect all hubs using horizontal, vertical and diagonal lines.</td>
+<td align="center"><b><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/sticks.md">Sticks</a></b><br/>Fill in the grid with horizontal and vertical line segments.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/salad.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/salad.png"></a></td>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/spokes.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/spokes.png"></a></td>
+<td><a href="https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/sticks.md"><img src="https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/sticks.png"></a></td>
+</tr>
+</table>
 
-* ABCD (based on [ABC Combi](http://www.janko.at/Raetsel/AbcKombi/index.htm)): Place letters in the grid according to the numbers in the border. Identical letters cannot touch.
-* Ascent (based on [Hidoku](http://www.janko.at/Raetsel/Hidoku/index.htm)): Create a path of numbers, using each number exactly once. Contains several modes.
-   * Rectangular grid: Numbers must be orthogonally or diagonally adjacent.
-   * Honeycomb and Hexagonal grid: The path can't cross itself.
-   * [Edges](https://www.janko.at/Raetsel/Abc-Pfad/index.htm): Arrows outside the grid point to the row, column or diagonal where the number is located.
-* Boats (based on [Battleship](http://www.janko.at/Raetsel/Battleships/index.htm)): Place the entire fleet into the grid according to the numbers on the side.
-* [Rome](http://www.janko.at/Raetsel/Nikoli/Roma.htm): Place arrows in the grid, so all arrows lead to a goal.
+### Abandoned puzzles
 
-### Playable
-
-* [Clusters](http://www.inabapuzzle.com/honkaku/kura.html): Fill in the grid with red and blue clusters. Tiles with a dot are adjacent to exactly 1 other tile of the same color. All other tiles are adjacent to at least 2 tiles of the same color.
-* [Mathrax](http://www.janko.at/Raetsel/Mathrax/index.htm): Fill the latin square with numbers. Some grid intersections contain clues, which indicate the result of the operation applied to the topleft and bottomright numbers, and the result of the operation applied to the topright and bottomleft numbers.
-* Salad: Place each character once in every row and column. Some squares remain empty. Contains two modes.
-   * [ABC End View](http://www.janko.at/Raetsel/AbcEndView/index.htm) mode: Letters on the side show which letter appears first when 'looking' into the grid.
-   * [Number Ball](http://www.janko.at/Raetsel/Nanbaboru/index.htm) mode: Squares with a ball must contain a number.
-* [Spokes](http://puzzlepicnic.com/genre?id=12): Connect all hubs using horizontal, vertical and diagonal lines.
-* Sticks (based on [Tatebo-Yokobo](https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm)): Fill in the grid with horizontal and vertical line segments.
-   
-### Abandoned
-
-* Seismic (based on [Hakyuu](http://www.janko.at/Raetsel/Hakyuu/index.htm)): Place numbers in each area, keeping enough distance between equal numbers. Contains two modes.
-   * Seismic: Two equal numbers N in the same row or column must have at least N spaces between them.
-   * Tectonic: Two equal numbers cannot be horizontally, vertically or diagonally adjacent. 
-* Crossing (based on [Nansuke](http://www.nikoli.co.jp/en/puzzles/number_skeleton.html)): Place each number from the list into the crossword.
+* [Seismic](https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/seismic.md): Place numbers in each area, keeping enough distance between equal numbers.
+* [Crossing](https://github.com/x-sheep/puzzles-unreleased/blob/master/docs/crossing.md): Place each number from the list into the crossword.
 
 ## Building with CMake
 
