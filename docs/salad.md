@@ -15,7 +15,7 @@ I don't know who first designed ABC End View.
 
 ## Controls
 
-Salad uses a control scheme similar Solo, but with the ability to mark empty squares.
+Salad uses a control scheme similar to Solo, but with the ability to mark empty squares.
 
 Left-click to select a cell, then type a letter or number on your keyboard to enter it. Press Backspace or Space to clear a cell.
 
