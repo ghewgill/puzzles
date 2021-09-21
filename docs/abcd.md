@@ -4,8 +4,8 @@
 
 You're given an empty grid, and several rows of numbers on the side. You have to write a letter in every empty cell, following these rules:
 
-* The numbers on the edge indicate how many instances of a specific letter appear in that row or column.
-* Identical letters can not be horizontally or vertically adjacent.
+1. The numbers on the edge indicate how many instances of a specific letter appear in that row or column.
+2. Identical letters can not be horizontally or vertically adjacent.
 
 The inventor of this type is unknown. This puzzle is also known under the names *ABCD Puzzle*, *ABC-Kombi* or *ABCD-Rätsel*.
 

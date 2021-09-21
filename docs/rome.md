@@ -4,8 +4,8 @@
 
 You're given a grid that has been divided into areas, containing arrows and one or more goals (represented by circles). Your goal is to fill every empty space with an arrow pointing up, down, left or right while following these rules:
 
-* Every outlined area contains different arrows.
-* Following the arrows must lead to one of the circled goals.
+1. Every outlined area contains different arrows.
+2. Following the arrows must lead to one of the circled goals.
 
 This type was invented by [Nikoli](https://www.nikoli.co.jp/), who name it *Roma*.
 
