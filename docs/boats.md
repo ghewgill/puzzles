@@ -6,7 +6,7 @@ You're given a grid, and a list of boats which must be located inside that grid.
 
 The numbers on the side indicate the amount of cells inside that row or column which are occupied by a boat.
 
-Some boat segments are given (corner pieces, centers, or single-length boats), along with ther orientation.
+Some boat segments are given (corner pieces, centers, or single-length boats), along with their orientation.
 
 At the bottom of the puzzle is a list of every boat that must be placed in the grid. When a boat is found, it is automatically crossed off of this list. Make sure a boat is surrounded by water on all sides, to indicate that it cannot possibly grow any further.
 

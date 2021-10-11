@@ -2,7 +2,7 @@
 
 ![](https://raw.githubusercontent.com/x-sheep/puzzles-unreleased/master/docs/img/crossing.png)
 
-You're given an grid with several black squares, and a list of numbers. Your objective is to fill every empty square with a digit, so each number appears once in the grid when reading from left-to-right or from top-to-bottom.
+You're given a grid with several black squares, and a list of numbers. Your objective is to fill every empty square with a digit, so each number appears once in the grid when reading from left-to-right or from top-to-bottom.
 
 This is an implementation of *Nansuke*, which was invented by Nikoli. It's sometimes known as *Number Skeleton*.
 

@@ -29,13 +29,13 @@ These parameters are available from the ‘Custom…’ option on the ‘Type’
 
 <dl>
 	<dt>Width, Height</dt>
-	<dd>Size of the grid in squares (exluding the size of the numbers on the edge).</dd>
+	<dd>Size of the grid in squares (excluding the size of the numbers on the edge).</dd>
 	<dt>Letters</dt>
 	<dd>The amount of different letters that can appear in the puzzle.</dd>
 	<dt>Remove clues</dt>
 	<dd>When enabled, the difficulty is increased by hiding certain number clues.</dd>
 	<dt>Allow diagonal touching</dt>
-	<dd>When disabled, letters cannot be diagionally adjacent (in addition to letters not being orthogonally adjacent).</dd>
+	<dd>When disabled, letters cannot be diagonally adjacent (in addition to letters not being orthogonally adjacent).</dd>
 </dl>
 
 ## Status
