@@ -3,6 +3,7 @@ NSString *GameDescriptions[][2] = {
     {@"Ascent", @"Create a path of numbers, using each number exactly once."},
     {@"Black Box", @"Find the hidden balls in the box by bouncing laser beams off them."},
     {@"Boats", @"Place the entire fleet into the grid according to the numbers on the side."},
+    {@"Bricks", @"Shade several cells in the hexagonal grid while making sure each cell has another shaded cell below it."},
     {@"Bridges", @"Connect all the islands with a network of bridges."},
     {@"Clusters", @"Fill in the grid with red and blue clusters."},
     {@"Crossing", @"Number crossword."},
