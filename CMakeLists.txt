@@ -46,6 +46,12 @@ puzzle(boats
   OBJECTIVE "Find the fleet in the grid.")
 solver(boats ${CMAKE_SOURCE_DIR}/dsf.c)
 
+puzzle(bricks
+  DISPLAYNAME "Bricks"
+  DESCRIPTION "Hexagonal shading puzzle"
+  OBJECTIVE "Shade several cells in the hexagonal grid while making sure each cell has another shaded cell below it.")
+solver(bricks)
+
 puzzle(bridges
   DISPLAYNAME "Bridges"
   DESCRIPTION "Bridge-placing puzzle"
