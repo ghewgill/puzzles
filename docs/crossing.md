@@ -6,7 +6,7 @@ You're given a grid with several black squares, and a list of numbers. Your obje
 
 This is an implementation of *Nansuke*, which was invented by Nikoli. It's sometimes known as *Number Skeleton*.
 
-More information: http://www.nikoli.co.jp/en/puzzles/number_skeleton.html
+More information: https://www.nikoli.co.jp/en/puzzles/nansuke/
 
 ## Controls
 

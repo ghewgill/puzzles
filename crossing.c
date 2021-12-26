@@ -4,7 +4,7 @@
  * Created for Simon Tatham's Portable Puzzle Collection
  * See LICENCE for licence details
  *
- * http://www.nikoli.co.jp/en/puzzles/number_skeleton.html
+ * https://www.nikoli.co.jp/en/puzzles/nansuke/
  *
  * Objective: Place all numbers in the list below into the grid.
  * Numbers can be placed horizontally or vertically. Every cell has one digit.

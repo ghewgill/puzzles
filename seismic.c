@@ -10,8 +10,7 @@
  * row/column must have at least Z other cells between them.
  *
  * This puzzle is also known as Hakyukoka or Ripple Effect.
- * Tutorial (contains Flash):
- * http://www.nikoli.co.jp/en/puzzles/ripple_effect.html
+ * https://www.nikoli.co.jp/en/puzzles/ripple_effect/
  */
 
 /*

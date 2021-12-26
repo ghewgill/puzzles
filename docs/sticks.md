@@ -8,7 +8,7 @@ You are given a grid with several black cells. Fill every blank cell with a line
 2. A line can't overlap more than one number.
 3. Numbers in black cells indicate the amount of lines connected to the cell.
 
-This puzzle type was invented by Nikoli, and is known as *Tatebo-Yokobo*.
+This puzzle type was invented by [Nikoli](https://www.nikoli.co.jp/), and is known as *Tatebo-Yokobo*.
 
 More information: https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm
 
