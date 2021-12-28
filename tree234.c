@@ -43,9 +43,6 @@ static void logprintf(const char *fmt, ...)
     va_end(ap);
 }
 #define LOG(x) (logprintf x)
-#define smalloc malloc
-#define srealloc realloc
-#define sfree free
 #else
 #define LOG(x)
 #endif
@@ -335,7 +332,7 @@ static void *add234_internal(tree234 *t, void *e, int index) {
     }
 
     n = t->root;
-    while (n) {
+    do {
 	LOG(("  node %p: %p/%d \"%s\" %p/%d \"%s\" %p/%d \"%s\" %p/%d\n",
 	     n,
 	     n->kids[0], n->counts[0], n->elems[0],
@@ -388,7 +385,7 @@ static void *add234_internal(tree234 *t, void *e, int index) {
 	if (!n->kids[ki])
 	    break;
 	n = n->kids[ki];
-    }
+    } while (n);
 
     add234_insert(NULL, e, NULL, &t->root, n, ki);
 
