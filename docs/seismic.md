@@ -7,7 +7,7 @@ You're given a grid that has been divided into areas. Fill each empty cell with 
 * Seismic: Two equal numbers N in the same row or column must have at least N spaces between them.
 * Tectonic: Two equal numbers cannot be horizontally, vertically or diagonally adjacent.
 
-Seismic mode is an implementation of *Hakyuu*, a puzzle invented by Nikoli. It's also known as *Ripple Effect*. More information: http://www.janko.at/Raetsel/Hakyuu/index.htm
+Seismic mode is an implementation of *Hakyuu*, a puzzle invented by [Nikoli](https://www.nikoli.co.jp/). It's also known as *Ripple Effect*. More information: http://www.janko.at/Raetsel/Hakyuu/index.htm
 
 I don't know who first invented Tectonic.
 

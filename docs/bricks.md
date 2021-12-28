@@ -10,7 +10,7 @@ while following these rules:
 3. A number indicates the amount of shaded cells around it.
 4. Cells with numbers cannot be shaded.
 
-This genre was invented by Nikoli.
+This genre was invented by [Nikoli](https://www.nikoli.co.jp/) under the name *Tawamurenga*.
 
 ## Controls
 

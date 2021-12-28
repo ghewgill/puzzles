@@ -43,7 +43,7 @@ These parameters are available from the ‘Custom…’ option on the ‘Type’
 	<dt>Multiplication clues</dt>
 	<dd>Allows clues with the multiplication operation to appear.</dd>
 	<dt>Division clues</dt>
-	<dd>Allows clues with the subtraction operation to appear. Note that clues with a ratio of one are covered by Equality clues instead.</dd>
+	<dd>Allows clues with the division operation to appear. Note that clues with a ratio of one are covered by Equality clues instead.</dd>
 	<dt>Equality clues</dt>
 	<dd>Allows clue with equality signs to appear.</dd>
 	<dt>Even/odd clues</dt>
