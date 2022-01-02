@@ -33,6 +33,4 @@ These parameters are available from the ‘Custom…’ option on the ‘Type’
 
 This game is playable.
 
-In my opinion, the gap between Easy and Tricky difficulty is currently too high, and there should be more difficulty levels between the two.
-
-It would also be interesting if the game had more varied layouts similar to [Puzzle Picnic](http://www.puzzlepicnic.com/genre?id=12), where the grids aren't fully filled with hubs.
+It would be interesting if the game had more varied layouts similar to [Puzzle Picnic](http://www.puzzlepicnic.com/genre?id=12), where the grids aren't fully filled with hubs.
