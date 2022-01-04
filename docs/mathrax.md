@@ -45,9 +45,9 @@ These parameters are available from the ‘Custom…’ option on the ‘Type’
 	<dt>Division clues</dt>
 	<dd>Allows clues with the division operation to appear. Note that clues with a ratio of one are covered by Equality clues instead.</dd>
 	<dt>Equality clues</dt>
-	<dd>Allows clue with equality signs to appear.</dd>
+	<dd>Allows clues with equality signs to appear.</dd>
 	<dt>Even/odd clues</dt>
-	<dd>Allows Even clues and Odd clues to appear</dd>
+	<dd>Allows Even clues and Odd clues to appear.</dd>
 </dl>
 
 ## Status
