@@ -9,6 +9,7 @@ build.ninja
 *.vcxproj
 *.vcxproj.filters
 *.dir/
+build/
 Debug/
 Win32/
 include/
