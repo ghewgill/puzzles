@@ -778,12 +778,12 @@ static int spokes_solve(game_state *state, struct spokes_scratch *solver, int di
 		if(diff == DIFF_LIMITED && total >= ACTION_LIMIT)
 			break;
 		
-		if(action = spokes_solver_full(state, solver)) {
+		if((action = spokes_solver_full(state, solver))) {
 			total += action;
 			continue;
 		}
 		
-		if(action = spokes_solver_diagonal(state)) {
+		if((action = spokes_solver_diagonal(state))) {
 			total += action;
 			continue;
 		}
