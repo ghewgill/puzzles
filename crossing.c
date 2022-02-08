@@ -1625,7 +1625,6 @@ static void draw_numbers(drawing *dr, game_drawstate *ds, int w, int h, char **n
 	float hgt = 2.8 * tilesize;
 	float wdt = w * tilesize;
 	int rows = 4;
-	float rowhgt = hgt / rows;
 	float fontsz;
 	float tmpwdt;
 	float whprop = 0.6;
