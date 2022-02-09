@@ -1623,33 +1623,63 @@ static void draw_triangle(drawing *dr, int tx, int ty, int tilesize)
 	draw_polygon(dr, coords, 3, COL_LOWLIGHT, COL_LOWLIGHT);
 }
 
-static void draw_numbers(drawing *dr, game_drawstate *ds, float iy, char **numbers, int numcount)
+static void draw_numbers(drawing *dr, game_drawstate *ds, int w, int h, char **numbers, int numcount)
 {
 	float tilesize = ds->tilesize;
-	float x = 0.5;
-	float y = iy;
+	float x, y;
 	int i = 0;
 	char *num;
-	float fontsz = tilesize/2;
 	int color;
 	int l = 0;
-	
+	float hgt = 2.8 * tilesize;
+	float wdt = w * tilesize;
+	int rows = 4;
+	float fontsz;
+	float tmpwdt;
+	float whprop = 0.6;
+	float space = 0.8;
+	float yoff = (h + 1.2) * tilesize;
+
+	/* Figure out the number of rows and font size that make it all fit */
+	while (1)
+	{
+		fontsz = hgt / rows / 1.4;
+		tmpwdt = -space;
+		for (i = rows - 1; i < numcount + rows - 1; i += rows)
+		{
+			l = strlen(numbers[min(i, numcount - 1)]);
+			tmpwdt += l * whprop + space;
+		}
+		if (fontsz * tmpwdt <= wdt)
+		{
+			if (numcount > rows)
+				space += (wdt / fontsz - tmpwdt) / ((numcount + rows - 1) / rows - 1);
+			break;
+		}
+		if (wdt / tmpwdt > hgt / (rows + 1) / 1.4)
+		{
+			fontsz = wdt / tmpwdt;
+			break;
+		}
+		rows++;
+	}
+
+	x = 0.5 * tilesize - space * fontsz;
+	y = yoff;
+	l = 0;
 	for (i = 0; i < numcount; i++)
 	{
+		if (i % rows == 0)
+		{
+			x += (l * whprop + space) * fontsz;
+			y = yoff;
+		}
 		num = numbers[i];
 		l = strlen(num);
 		color = ds->done[i] == 0 ? COL_GRID : ds->done[i] == 1 ? COL_LOWLIGHT : COL_ERROR;
-		draw_text(dr,
-			x*tilesize, y*tilesize,
-			FONT_FIXED, fontsz,
-			ALIGN_VCENTRE | ALIGN_HLEFT, color, num);
-		y+= 0.7;
-		
-		if(y > iy+2.5)
-		{
-			y = iy;
-			x += l * (0.45);
-		}
+		draw_text(dr, x, y, FONT_FIXED, fontsz,
+			  ALIGN_VNORMAL | ALIGN_HLEFT, color, num);
+		y += hgt / rows;
 	}
 }
 
@@ -1811,7 +1841,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 		draw_rect_outline(dr, tx, ty, tilesize+1, tilesize+1, COL_GRID);
 	}
 	
-	draw_numbers(dr, ds, h+1, puzzle->numbers, puzzle->numcount);
+	draw_numbers(dr, ds, w, h, puzzle->numbers, puzzle->numcount);
 }
 
 static float game_anim_length(const game_state *oldstate,
