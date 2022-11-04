@@ -3231,10 +3231,10 @@ static void edge_bbox(game_drawstate *ds, grid *g, grid_edge *e,
     grid_to_screen(ds, g, x1, y1, &x1, &y1);
     grid_to_screen(ds, g, x2, y2, &x2, &y2);
     /* Allow extra margin for dots, and thickness of lines */
-    xmin = min(x1, x2) - 2;
-    xmax = max(x1, x2) + 2;
-    ymin = min(y1, y2) - 2;
-    ymax = max(y1, y2) + 2;
+    xmin = min(x1, x2) - (ds->tilesize + 15) / 16;
+    xmax = max(x1, x2) + (ds->tilesize + 15) / 16;
+    ymin = min(y1, y2) - (ds->tilesize + 15) / 16;
+    ymax = max(y1, y2) + (ds->tilesize + 15) / 16;
 
     *x = xmin;
     *y = ymin;
@@ -3295,7 +3295,7 @@ static void game_redraw_line(drawing *dr, game_drawstate *ds,
 	if (draw_faint_lines)
 	    draw_line(dr, x1, y1, x2, y2, line_colour);
     } else {
-	draw_thick_line(dr, 3.0,
+	draw_thick_line(dr, ds->tilesize*3/32.0,
 			x1 + 0.5, y1 + 0.5,
 			x2 + 0.5, y2 + 0.5,
 			line_colour);
@@ -3310,7 +3310,7 @@ static void game_redraw_dot(drawing *dr, game_drawstate *ds,
     int x, y;
 
     grid_to_screen(ds, g, d->x, d->y, &x, &y);
-    draw_circle(dr, x, y, 2, COL_FOREGROUND, COL_FOREGROUND);
+    draw_circle(dr, x, y, ds->tilesize*2/32.0, COL_FOREGROUND, COL_FOREGROUND);
 }
 
 static bool boxes_intersect(int x0, int y0, int w0, int h0,

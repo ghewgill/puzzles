@@ -12,19 +12,8 @@
 /*
  * Further thoughts on possible enhancements:
  *
- *  - I think it might be feasible to have these JS puzzles permit
- *    loading and saving games in disk files. Saving would be done by
- *    constructing a data: URI encapsulating the save file, and then
- *    telling the browser to visit that URI with the effect that it
- *    would naturally pop up a 'where would you like to save this'
- *    dialog box. Loading, more or less similarly, might be feasible
- *    by using the DOM File API to ask the user to select a file and
- *    permit us to see its contents.
- *
  *  - I should think about whether these webified puzzles can support
- *    touchscreen-based tablet browsers (assuming there are any that
- *    can cope with the reasonably modern JS and run it fast enough to
- *    be worthwhile).
+ *    touchscreen-based tablet browsers.
  *
  *  - think about making use of localStorage. It might be useful to
  *    let the user save games into there as an alternative to disk
@@ -34,9 +23,6 @@
  *    probably rather have a nice simple 'quick save' and 'quick load'
  *    button pair. Also, that might be a useful place to store
  *    preferences, if I ever get round to writing a preferences UI.
- *
- *  - some CSS to make the button bar and configuration dialogs a
- *    little less ugly would probably not go amiss.
  *
  *  - this is a downright silly idea, but it does occur to me that if
  *    I were to write a PDF output driver for the Puzzles printing
@@ -79,7 +65,7 @@ extern void js_canvas_clip_rect(int x, int y, int w, int h);
 extern void js_canvas_unclip(void);
 extern void js_canvas_draw_line(float x1, float y1, float x2, float y2,
                                 int width, const char *colour);
-extern void js_canvas_draw_poly(int *points, int npoints,
+extern void js_canvas_draw_poly(const int *points, int npoints,
                                 const char *fillcolour,
                                 const char *outlinecolour);
 extern void js_canvas_draw_circle(int x, int y, int r,
@@ -96,6 +82,8 @@ extern void js_canvas_copy_from_blitter(int id, int x, int y, int w, int h);
 extern void js_canvas_make_statusbar(void);
 extern void js_canvas_set_statusbar(const char *text);
 extern void js_canvas_set_size(int w, int h);
+extern void js_canvas_set_nominal_size();
+extern double js_get_device_pixel_ratio();
 
 extern void js_dialog_init(const char *title);
 extern void js_dialog_string(int i, const char *title, const char *initvalue);
@@ -196,19 +184,40 @@ void timer_callback(double tplus)
  */
 static int canvas_w, canvas_h;
 
-/* Called when we resize as a result of changing puzzle settings */
-static void resize(void)
+/* 
+ * Called when we resize as a result of changing puzzle settings.
+ * "initial" is true if this is the first call, or the first call
+ * since a midend_reset_tilesize().  In that case, we might want to
+ * adjust the size to compensate for the device pixel ratio.
+ */
+static void resize(bool initial)
 {
     int w, h;
+    double dpr;
     w = h = INT_MAX;
     midend_size(me, &w, &h, false);
+    if (initial) {
+        dpr = js_get_device_pixel_ratio();
+        if (dpr != 1.0) {
+            /*
+             * The default w and h are probably in units of
+             * sensible-sized pixels (~0.25 mm).  Scale them to the
+             * actual device pixels and then ask for a size near
+             * that.
+             */
+            w *= dpr;
+            h *= dpr;
+            midend_size(me, &w, &h, true);
+        }
+    }
     js_canvas_set_size(w, h);
+    js_canvas_set_nominal_size();
     canvas_w = w;
     canvas_h = h;
 }
 
-/* Called from JS when the user uses the resize handle */
-void resize_puzzle(int w, int h)
+/* Called from JS when the device pixel ratio changes */
+void rescale_puzzle(int w, int h)
 {
     midend_size(me, &w, &h, true);
     if (canvas_w != w || canvas_h != h) { 
@@ -219,11 +228,18 @@ void resize_puzzle(int w, int h)
     }
 }
 
+/* Called from JS when the user uses the resize handle */
+void resize_puzzle(int w, int h)
+{
+    rescale_puzzle(w, h);
+    js_canvas_set_nominal_size();
+}
+
 /* Called from JS when the user uses the restore button */
 void restore_puzzle_size(int w, int h)
 {
     midend_reset_tilesize(me);
-    resize();
+    resize(true);
     midend_force_redraw(me);
 }
 
@@ -274,27 +290,37 @@ void mousemove(int x, int y, int buttons)
 }
 
 /*
- * Keyboard handler called from JS.
+ * Keyboard handler called from JS.  Returns true if the key was
+ * handled and hence the keydown event should be cancelled.
  */
-void key(int keycode, int charcode, const char *key, const char *chr,
+bool key(int keycode, const char *key, const char *chr, int location,
          bool shift, bool ctrl)
 {
+    /* Key location constants from JavaScript. */
+    #define DOM_KEY_LOCATION_STANDARD 0
+    #define DOM_KEY_LOCATION_LEFT     1
+    #define DOM_KEY_LOCATION_RIGHT    2
+    #define DOM_KEY_LOCATION_NUMPAD   3
     int keyevent = -1;
 
-    if (!strnullcmp(key, "Backspace") || !strnullcmp(key, "Del") ||
-        keycode == 8 || keycode == 46) {
+    if (!strnullcmp(key, "Backspace") || !strnullcmp(key, "Delete") ||
+        !strnullcmp(key, "Del"))
         keyevent = 127;                /* Backspace / Delete */
-    } else if (!strnullcmp(key, "Enter") || keycode == 13) {
+    else if (!strnullcmp(key, "Enter"))
         keyevent = 13;             /* return */
-    } else if (!strnullcmp(key, "Left") || keycode == 37) {
+    else if (!strnullcmp(key, "Spacebar"))
+        keyevent = ' ';
+    else if (!strnullcmp(key, "Escape"))
+        keyevent = 27;
+    else if (!strnullcmp(key, "ArrowLeft") || !strnullcmp(key, "Left"))
         keyevent = CURSOR_LEFT;
-    } else if (!strnullcmp(key, "Up") || keycode == 38) {
+    else if (!strnullcmp(key, "ArrowUp") || !strnullcmp(key, "Up"))
         keyevent = CURSOR_UP;
-    } else if (!strnullcmp(key, "Right") || keycode == 39) {
+    else if (!strnullcmp(key, "ArrowRight") || !strnullcmp(key, "Right"))
         keyevent = CURSOR_RIGHT;
-    } else if (!strnullcmp(key, "Down") || keycode == 40) {
+    else if (!strnullcmp(key, "ArrowDown") || !strnullcmp(key, "Down"))
         keyevent = CURSOR_DOWN;
-    } else if (!strnullcmp(key, "End") || keycode == 35) {
+    else if (!strnullcmp(key, "End"))
         /*
          * We interpret Home, End, PgUp and PgDn as numeric keypad
          * controls regardless of whether they're the ones on the
@@ -304,25 +330,55 @@ void key(int keycode, int charcode, const char *key, const char *chr,
          * puzzles like Cube and Inertia.
          */
         keyevent = MOD_NUM_KEYPAD | '1';
-    } else if (!strnullcmp(key, "PageDown") || keycode==34) {
+    else if (!strnullcmp(key, "PageDown"))
         keyevent = MOD_NUM_KEYPAD | '3';
-    } else if (!strnullcmp(key, "Home") || keycode==36) {
+    else if (!strnullcmp(key, "Home"))
         keyevent = MOD_NUM_KEYPAD | '7';
-    } else if (!strnullcmp(key, "PageUp") || keycode==33) {
+    else if (!strnullcmp(key, "PageUp"))
         keyevent = MOD_NUM_KEYPAD | '9';
-    } else if (shift && ctrl && (keycode & 0x1F) == 26) {
+    else if (shift && ctrl && (!strnullcmp(key, "Z") || !strnullcmp(key, "z")))
         keyevent = UI_REDO;
-    } else if (chr && chr[0] && !chr[1]) {
+    else if (key && (unsigned char)key[0] < 0x80 && key[1] == '\0')
+        /* Key generating a single ASCII character. */
+        keyevent = key[0];
+    /*
+     * In modern browsers (since about 2017), all keys that Puzzles
+     * cares about should be matched by one of the clauses above.  The
+     * code below that checks keycode and chr should be relavent only
+     * in older browsers.
+     */
+    else if (keycode == 8 || keycode == 46)
+        keyevent = 127;                /* Backspace / Delete */
+    else if (keycode == 13)
+        keyevent = 13;             /* return */
+    else if (keycode == 37)
+        keyevent = CURSOR_LEFT;
+    else if (keycode == 38)
+        keyevent = CURSOR_UP;
+    else if (keycode == 39)
+        keyevent = CURSOR_RIGHT;
+    else if (keycode == 40)
+        keyevent = CURSOR_DOWN;
+    else if (keycode == 35)
+        keyevent = MOD_NUM_KEYPAD | '1';
+    else if (keycode == 34)
+        keyevent = MOD_NUM_KEYPAD | '3';
+    else if (keycode == 36)
+        keyevent = MOD_NUM_KEYPAD | '7';
+    else if (keycode == 33)
+        keyevent = MOD_NUM_KEYPAD | '9';
+    else if (shift && ctrl && (keycode & 0x1F) == 26)
+        keyevent = UI_REDO;
+    else if (chr && chr[0] && !chr[1])
         keyevent = chr[0] & 0xFF;
-    } else if (keycode >= 96 && keycode < 106) {
+    else if (keycode >= 96 && keycode < 106)
         keyevent = MOD_NUM_KEYPAD | ('0' + keycode - 96);
-    } else if (keycode >= 65 && keycode <= 90) {
+    else if (keycode >= 65 && keycode <= 90)
         keyevent = keycode + (shift ? 0 : 32);
-    } else if (keycode >= 48 && keycode <= 57) {
+    else if (keycode >= 48 && keycode <= 57)
         keyevent = keycode;
-    } else if (keycode == 32) {        /* space / CURSOR_SELECT2 */
+    else if (keycode == 32)        /* space / CURSOR_SELECT2 */
         keyevent = keycode;
-    }
 
     if (keyevent >= 0) {
         if (shift && (keyevent >= 0x100 && !IS_UI_FAKE_KEY(keyevent)))
@@ -335,9 +391,15 @@ void key(int keycode, int charcode, const char *key, const char *chr,
                 keyevent &= 0x1F;
         }
 
+        if ('0' <= keyevent && keyevent <= '9' &&
+            location == DOM_KEY_LOCATION_NUMPAD)
+            keyevent |= MOD_NUM_KEYPAD;
+
         midend_process_key(me, 0, 0, keyevent);
         update_undo_redo();
+        return true; /* We've probably handled the event. */
     }
+    return false; /* Event not handled, because we don't even recognise it. */
 }
 
 /*
@@ -424,7 +486,7 @@ static void js_draw_thick_line(void *handle, float thickness,
     js_canvas_draw_line(x1, y1, x2, y2, thickness, colour_strings[colour]);
 }
 
-static void js_draw_poly(void *handle, int *coords, int npoints,
+static void js_draw_poly(void *handle, const int *coords, int npoints,
                          int fillcolour, int outlinecolour)
 {
     js_canvas_draw_poly(coords, npoints,
@@ -672,7 +734,7 @@ static void cfg_end(bool use_results)
              */
             select_appropriate_preset();
             midend_new_game(me);
-            resize();
+            resize(false);
             midend_redraw(me);
             free_cfg(cfg);
             js_dialog_cleanup();
@@ -729,7 +791,7 @@ void command(int n)
                 assert(i < npresets);
                 midend_set_params(me, presets[i]);
                 midend_new_game(me);
-                resize();
+                resize(false);
                 midend_redraw(me);
                 update_undo_redo();
                 js_focus_canvas();
@@ -787,53 +849,12 @@ struct savefile_write_ctx {
     size_t pos;
 };
 
-static void savefile_write(void *vctx, const void *vbuf, int len)
+static void savefile_write(void *vctx, const void *buf, int len)
 {
-    static const unsigned char length[256] = {
-        /*
-         * Assign a length of 1 to any printable ASCII character that
-         * can be written literally in URI-encoding, i.e.
-         *
-         *    A-Z a-z 0-9 - _ . ! ~ * ' ( )
-         *
-         * Assign length 3 (for % and two hex digits) to all other
-         * byte values.
-         */
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 1, 3, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 1, 1, 3,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3,
-        3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 1,
-        3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 1, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-    };
-    static const char hexdigits[] = "0123456789ABCDEF";
-
     struct savefile_write_ctx *ctx = (struct savefile_write_ctx *)vctx;
-    const unsigned char *buf = (const unsigned char *)vbuf;
-    for (int i = 0; i < len; i++) {
-        unsigned char c = buf[i];
-        int clen = length[c];
-        if (ctx->buffer) {
-            if (clen == 1) {
-                ctx->buffer[ctx->pos] = c;
-            } else {
-                ctx->buffer[ctx->pos] = '%';
-                ctx->buffer[ctx->pos+1] = hexdigits[c >> 4];
-                ctx->buffer[ctx->pos+2] = hexdigits[c & 0xF];
-            }
-        }
-        ctx->pos += clen;
-    }
+    if (ctx->buffer)
+        memcpy(ctx->buffer + ctx->pos, buf, len);
+    ctx->pos += len;
 }
 
 char *get_save_file(void)
@@ -894,8 +915,10 @@ void load_game(const char *buffer, int len)
         js_error_box(err);
     } else {
         select_appropriate_preset();
-        resize();
+        resize(false);
         midend_redraw(me);
+        update_permalinks();
+        update_undo_redo();
     }
 }
 
@@ -934,7 +957,7 @@ int main(int argc, char **argv)
      * canvas size appropriately.
      */
     midend_new_game(me);
-    resize();
+    resize(true);
 
     /*
      * Create a status bar, if needed.
