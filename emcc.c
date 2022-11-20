@@ -82,7 +82,6 @@ extern void js_canvas_copy_from_blitter(int id, int x, int y, int w, int h);
 extern void js_canvas_make_statusbar(void);
 extern void js_canvas_set_statusbar(const char *text);
 extern void js_canvas_set_size(int w, int h);
-extern void js_canvas_set_nominal_size();
 extern double js_get_device_pixel_ratio();
 
 extern void js_dialog_init(const char *title);
@@ -184,42 +183,31 @@ void timer_callback(double tplus)
  */
 static int canvas_w, canvas_h;
 
-/* 
- * Called when we resize as a result of changing puzzle settings.
- * "initial" is true if this is the first call, or the first call
- * since a midend_reset_tilesize().  In that case, we might want to
- * adjust the size to compensate for the device pixel ratio.
+/*
+ * Called when we resize as a result of changing puzzle settings
+ * or device pixel ratio.
  */
-static void resize(bool initial)
+static void resize()
 {
     int w, h;
-    double dpr;
     w = h = INT_MAX;
-    midend_size(me, &w, &h, false);
-    if (initial) {
-        dpr = js_get_device_pixel_ratio();
-        if (dpr != 1.0) {
-            /*
-             * The default w and h are probably in units of
-             * sensible-sized pixels (~0.25 mm).  Scale them to the
-             * actual device pixels and then ask for a size near
-             * that.
-             */
-            w *= dpr;
-            h *= dpr;
-            midend_size(me, &w, &h, true);
-        }
-    }
+    midend_size(me, &w, &h, false, js_get_device_pixel_ratio());
     js_canvas_set_size(w, h);
-    js_canvas_set_nominal_size();
     canvas_w = w;
     canvas_h = h;
 }
 
 /* Called from JS when the device pixel ratio changes */
-void rescale_puzzle(int w, int h)
+void rescale_puzzle()
 {
-    midend_size(me, &w, &h, true);
+    resize();
+    midend_force_redraw(me);
+}
+
+/* Called from JS when the user uses the resize handle */
+void resize_puzzle(int w, int h)
+{
+    midend_size(me, &w, &h, true, js_get_device_pixel_ratio());
     if (canvas_w != w || canvas_h != h) { 
         js_canvas_set_size(w, h);
         canvas_w = w;
@@ -228,18 +216,11 @@ void rescale_puzzle(int w, int h)
     }
 }
 
-/* Called from JS when the user uses the resize handle */
-void resize_puzzle(int w, int h)
-{
-    rescale_puzzle(w, h);
-    js_canvas_set_nominal_size();
-}
-
 /* Called from JS when the user uses the restore button */
 void restore_puzzle_size(int w, int h)
 {
     midend_reset_tilesize(me);
-    resize(true);
+    resize();
     midend_force_redraw(me);
 }
 
@@ -265,28 +246,37 @@ static void update_undo_redo(void)
 /*
  * Mouse event handlers called from JS.
  */
-void mousedown(int x, int y, int button)
+bool mousedown(int x, int y, int button)
 {
+    bool handled;
+
     button = (button == 0 ? LEFT_BUTTON :
               button == 1 ? MIDDLE_BUTTON : RIGHT_BUTTON);
-    midend_process_key(me, x, y, button);
+    midend_process_key(me, x, y, button, &handled);
     update_undo_redo();
+    return handled;
 }
 
-void mouseup(int x, int y, int button)
+bool mouseup(int x, int y, int button)
 {
+    bool handled;
+
     button = (button == 0 ? LEFT_RELEASE :
               button == 1 ? MIDDLE_RELEASE : RIGHT_RELEASE);
-    midend_process_key(me, x, y, button);
+    midend_process_key(me, x, y, button, &handled);
     update_undo_redo();
+    return handled;
 }
 
-void mousemove(int x, int y, int buttons)
+bool mousemove(int x, int y, int buttons)
 {
     int button = (buttons & 2 ? MIDDLE_DRAG :
                   buttons & 4 ? RIGHT_DRAG : LEFT_DRAG);
-    midend_process_key(me, x, y, button);
+    bool handled;
+
+    midend_process_key(me, x, y, button, &handled);
     update_undo_redo();
+    return handled;
 }
 
 /*
@@ -302,6 +292,7 @@ bool key(int keycode, const char *key, const char *chr, int location,
     #define DOM_KEY_LOCATION_RIGHT    2
     #define DOM_KEY_LOCATION_NUMPAD   3
     int keyevent = -1;
+    bool handled;
 
     if (!strnullcmp(key, "Backspace") || !strnullcmp(key, "Delete") ||
         !strnullcmp(key, "Del"))
@@ -320,6 +311,9 @@ bool key(int keycode, const char *key, const char *chr, int location,
         keyevent = CURSOR_RIGHT;
     else if (!strnullcmp(key, "ArrowDown") || !strnullcmp(key, "Down"))
         keyevent = CURSOR_DOWN;
+    else if (!strnullcmp(key, "SoftLeft") || !strnullcmp(key, "SoftRight"))
+        /* Left and right soft key on KaiOS. */
+        keyevent = CURSOR_SELECT2;
     else if (!strnullcmp(key, "End"))
         /*
          * We interpret Home, End, PgUp and PgDn as numeric keypad
@@ -395,9 +389,9 @@ bool key(int keycode, const char *key, const char *chr, int location,
             location == DOM_KEY_LOCATION_NUMPAD)
             keyevent |= MOD_NUM_KEYPAD;
 
-        midend_process_key(me, 0, 0, keyevent);
+        midend_process_key(me, 0, 0, keyevent, &handled);
         update_undo_redo();
-        return true; /* We've probably handled the event. */
+        return handled;
     }
     return false; /* Event not handled, because we don't even recognise it. */
 }
@@ -734,7 +728,7 @@ static void cfg_end(bool use_results)
              */
             select_appropriate_preset();
             midend_new_game(me);
-            resize(false);
+            resize();
             midend_redraw(me);
             free_cfg(cfg);
             js_dialog_cleanup();
@@ -791,7 +785,7 @@ void command(int n)
                 assert(i < npresets);
                 midend_set_params(me, presets[i]);
                 midend_new_game(me);
-                resize(false);
+                resize();
                 midend_redraw(me);
                 update_undo_redo();
                 js_focus_canvas();
@@ -808,7 +802,7 @@ void command(int n)
         update_undo_redo();
         break;
       case 5:                          /* New Game */
-        midend_process_key(me, 0, 0, UI_NEWGAME);
+        midend_process_key(me, 0, 0, UI_NEWGAME, NULL);
         update_undo_redo();
         js_focus_canvas();
         break;
@@ -818,12 +812,12 @@ void command(int n)
         js_focus_canvas();
         break;
       case 7:                          /* Undo */
-        midend_process_key(me, 0, 0, UI_UNDO);
+        midend_process_key(me, 0, 0, UI_UNDO, NULL);
         update_undo_redo();
         js_focus_canvas();
         break;
       case 8:                          /* Redo */
-        midend_process_key(me, 0, 0, UI_REDO);
+        midend_process_key(me, 0, 0, UI_REDO, NULL);
         update_undo_redo();
         js_focus_canvas();
         break;
@@ -915,7 +909,7 @@ void load_game(const char *buffer, int len)
         js_error_box(err);
     } else {
         select_appropriate_preset();
-        resize(false);
+        resize();
         midend_redraw(me);
         update_permalinks();
         update_undo_redo();
@@ -957,7 +951,7 @@ int main(int argc, char **argv)
      * canvas size appropriately.
      */
     midend_new_game(me);
-    resize(true);
+    resize();
 
     /*
      * Create a status bar, if needed.
@@ -980,14 +974,17 @@ int main(int argc, char **argv)
         if (thegame.can_configure)
             js_add_preset(0, "Custom", -1);
 
-        have_presets_dropdown = true;
+        have_presets_dropdown = npresets > 0 || thegame.can_configure;
 
-        /*
-         * Now ensure the appropriate element of the presets menu
-         * starts off selected, in case it isn't the first one in the
-         * list (e.g. Slant).
-         */
-        select_appropriate_preset();
+        if (have_presets_dropdown)
+            /*
+             * Now ensure the appropriate element of the presets menu
+             * starts off selected, in case it isn't the first one in the
+             * list (e.g. Slant).
+             */
+            select_appropriate_preset();
+        else
+            js_remove_type_dropdown();
     }
 
     /*

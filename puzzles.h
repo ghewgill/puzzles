@@ -301,12 +301,13 @@ void midend_free(midend *me);
 const game *midend_which_game(midend *me);
 void midend_set_params(midend *me, game_params *params);
 game_params *midend_get_params(midend *me);
-void midend_size(midend *me, int *x, int *y, bool user_size);
+void midend_size(midend *me, int *x, int *y, bool user_size,
+                 double device_pixel_ratio);
 void midend_reset_tilesize(midend *me);
 void midend_new_game(midend *me);
 void midend_restart_game(midend *me);
 void midend_stop_anim(midend *me);
-bool midend_process_key(midend *me, int x, int y, int button);
+bool midend_process_key(midend *me, int x, int y, int button, bool *handled);
 key_label *midend_request_keys(midend *me, int *nkeys);
 void midend_force_redraw(midend *me);
 void midend_redraw(midend *me);
@@ -386,7 +387,7 @@ void game_mkhighlight_specific(frontend *fe, float *ret,
 /* Randomly shuffles an array of items. */
 void shuffle(void *array, int nelts, int eltsize, random_state *rs);
 
-/* Draw a rectangle outline, using the drawing API's draw_line. */
+/* Draw a rectangle outline, using the drawing API's draw_polygon. */
 void draw_rect_outline(drawing *dr, int x, int y, int w, int h,
                        int colour);
 

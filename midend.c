@@ -89,7 +89,8 @@ struct midend {
 
     int pressed_mouse_button;
 
-    int preferred_tilesize, tilesize, winwidth, winheight;
+    int preferred_tilesize, preferred_tilesize_dpr, tilesize;
+    int winwidth, winheight;
 
     void (*game_id_change_notify_function)(void *);
     void *game_id_change_notify_ctx;
@@ -130,11 +131,14 @@ static const char *midend_deserialise_internal(
 void midend_reset_tilesize(midend *me)
 {
     me->preferred_tilesize = me->ourgame->preferred_tilesize;
+    me->preferred_tilesize_dpr = 1.0;
     {
         /*
          * Allow an environment-based override for the default tile
          * size by defining a variable along the lines of
          * `NET_TILESIZE=15'.
+         *
+         * XXX How should this interact with DPR?
          */
 
 	char buf[80], *e;
@@ -306,7 +310,46 @@ static void midend_size_new_drawstate(midend *me)
     }
 }
 
-void midend_size(midend *me, int *x, int *y, bool user_size)
+/*
+ * There is no one correct way to convert tilesizes between device
+ * pixel ratios, because there's only a loosely-defined relationship
+ * between tilesize and the actual size of a puzzle.  We define this
+ * function as the canonical conversion function so everything in the
+ * midend will be consistent.
+ */
+static int convert_tilesize(midend *me, int old_tilesize,
+                            double old_dpr, double new_dpr)
+{
+    int x, y, rx, ry, min, max;
+    game_params *defaults = me->ourgame->default_params();
+
+    if (new_dpr == old_dpr)
+        return old_tilesize;
+    me->ourgame->compute_size(defaults, old_tilesize, &x, &y);
+    x *= new_dpr / old_dpr;
+    y *= new_dpr / old_dpr;
+
+    min = max = 1;
+    do {
+        max *= 2;
+        me->ourgame->compute_size(defaults, max, &rx, &ry);
+    } while (rx <= x && ry <= y);
+
+    while (max - min > 1) {
+	int mid = (max + min) / 2;
+	me->ourgame->compute_size(defaults, mid, &rx, &ry);
+	if (rx <= x && ry <= y)
+	    min = mid;
+	else
+	    max = mid;
+    }
+
+    me->ourgame->free_params(defaults);
+    return min;
+}
+
+void midend_size(midend *me, int *x, int *y, bool user_size,
+                 double device_pixel_ratio)
 {
     int min, max;
     int rx, ry;
@@ -339,7 +382,9 @@ void midend_size(midend *me, int *x, int *y, bool user_size)
 	    me->ourgame->compute_size(me->params, max, &rx, &ry);
 	} while (rx <= *x && ry <= *y);
     } else
-	max = me->preferred_tilesize + 1;
+	max = convert_tilesize(me, me->preferred_tilesize,
+                               me->preferred_tilesize_dpr,
+                               device_pixel_ratio) + 1;
     min = 1;
 
     /*
@@ -362,9 +407,11 @@ void midend_size(midend *me, int *x, int *y, bool user_size)
      */
 
     me->tilesize = min;
-    if (user_size)
+    if (user_size) {
         /* If the user requested a change in size, make it permanent. */
         me->preferred_tilesize = me->tilesize;
+        me->preferred_tilesize_dpr = device_pixel_ratio;
+    }
     midend_size_new_drawstate(me);
     *x = me->winwidth;
     *y = me->winheight;
@@ -887,7 +934,8 @@ void midend_restart_game(midend *me)
     midend_set_timer(me);
 }
 
-static bool midend_really_process_key(midend *me, int x, int y, int button)
+static bool midend_really_process_key(midend *me, int x, int y, int button,
+                                      bool *handled)
 {
     game_state *oldstate =
         me->ourgame->dup_game(me->states[me->statepos - 1].state);
@@ -908,8 +956,9 @@ static bool midend_really_process_key(midend *me, int x, int y, int button)
             button == UI_NEWGAME) {
 	    midend_new_game(me);
 	    midend_redraw(me);
+            *handled = true;
 	    goto done;		       /* never animate */
-	} else if (button == 'u' || button == 'U' ||
+	} else if (button == 'u' || button == 'U' || button == '*' ||
 		   button == '\x1A' || button == '\x1F' ||
                    button == UI_UNDO) {
 	    midend_stop_anim(me);
@@ -917,23 +966,28 @@ static bool midend_really_process_key(midend *me, int x, int y, int button)
 	    gottype = true;
 	    if (!midend_undo(me))
 		goto done;
-	} else if (button == 'r' || button == 'R' ||
+            *handled = true;
+	} else if (button == 'r' || button == 'R' || button == '#' ||
 		   button == '\x12' || button == '\x19' ||
                    button == UI_REDO) {
 	    midend_stop_anim(me);
 	    if (!midend_redo(me))
 		goto done;
+            *handled = true;
 	} else if ((button == '\x13' || button == UI_SOLVE) &&
                    me->ourgame->can_solve) {
+            *handled = true;
 	    if (midend_solve(me))
 		goto done;
 	} else if (button == 'q' || button == 'Q' || button == '\x11' ||
                    button == UI_QUIT) {
 	    ret = false;
+            *handled = true;
 	    goto done;
 	} else
 	    goto done;
     } else {
+        *handled = true;
 	if (movestr == UI_UPDATE)
 	    s = me->states[me->statepos-1].state;
 	else {
@@ -1004,10 +1058,12 @@ static bool midend_really_process_key(midend *me, int x, int y, int button)
     return ret;
 }
 
-bool midend_process_key(midend *me, int x, int y, int button)
+bool midend_process_key(midend *me, int x, int y, int button, bool *handled)
 {
-    bool ret = true;
+    bool ret = true, dummy_handled;
 
+    if (handled == NULL) handled = &dummy_handled;
+    *handled = false;
     /*
      * Harmonise mouse drag and release messages.
      * 
@@ -1107,7 +1163,7 @@ bool midend_process_key(midend *me, int x, int y, int button)
          */
         ret = ret && midend_really_process_key
             (me, x, y, (me->pressed_mouse_button +
-                        (LEFT_RELEASE - LEFT_BUTTON)));
+                        (LEFT_RELEASE - LEFT_BUTTON)), handled);
     }
 
     /*
@@ -1130,7 +1186,7 @@ bool midend_process_key(midend *me, int x, int y, int button)
     /*
      * Now send on the event we originally received.
      */
-    ret = ret && midend_really_process_key(me, x, y, button);
+    ret = ret && midend_really_process_key(me, x, y, button, handled);
 
     /*
      * And update the currently pressed button.

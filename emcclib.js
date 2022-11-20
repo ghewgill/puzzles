@@ -45,7 +45,9 @@ mergeInto(LibraryManager.library, {
      * provides neither presets nor configurability.
      */
     js_remove_type_dropdown: function() {
-        gametypelist.style.display = "none";
+        var gametypeitem = gametypelist.closest("li");
+        if (gametypeitem === null) return;
+        gametypeitem.parentNode.removeChild(gametypeitem);
     },
 
     /*
@@ -55,7 +57,11 @@ mergeInto(LibraryManager.library, {
      * time if the game doesn't support an in-game solve function.
      */
     js_remove_solve_button: function() {
-        document.getElementById("solve").style.display = "none";
+        var solvebutton = document.getElementById("solve");
+        if (solvebutton === null) return;
+        var solveitem = solvebutton.closest("li");
+        if (solveitem === null) return;
+        solveitem.parentNode.removeChild(solveitem);
     },
 
     /*
@@ -70,18 +76,19 @@ mergeInto(LibraryManager.library, {
     js_add_preset: function(menuid, ptr, value) {
         var name = UTF8ToString(ptr);
         var item = document.createElement("li");
-        item.setAttribute("data-index", value);
-        var tick = document.createElement("span");
+        var label = document.createElement("label");
+        var tick = document.createElement("input");
+        tick.type = "radio";
         tick.className = "tick";
-        tick.appendChild(document.createTextNode("\u2713"));
-        item.appendChild(tick);
-        item.appendChild(document.createTextNode(name));
+        tick.name = "preset";
+        tick.value = value;
+        label.appendChild(tick);
+        label.appendChild(document.createTextNode(" " + name));
+        item.appendChild(label);
         gametypesubmenus[menuid].appendChild(item);
-        gametypeitems.push(item);
 
-        item.onclick = function(event) {
+        tick.onclick = function(event) {
             if (dlg_dimmer === null) {
-                gametypeselectedindex = value;
                 command(2);
             }
         }
@@ -100,13 +107,14 @@ mergeInto(LibraryManager.library, {
         // We still create a transparent tick element, even though it
         // won't ever be selected, to make submenu titles line up
         // nicely with their neighbours.
+        var label = document.createElement("div");
         var tick = document.createElement("span");
-        tick.appendChild(document.createTextNode("\u2713"));
         tick.className = "tick";
-        item.appendChild(tick);
-        item.appendChild(document.createTextNode(name));
+        label.appendChild(tick);
+        label.appendChild(document.createTextNode(" " + name));
+        item.appendChild(label);
         var submenu = document.createElement("ul");
-        item.appendChild(submenu);
+        label.appendChild(submenu);
         gametypesubmenus[menuid].appendChild(item);
         var toret = gametypesubmenus.length;
         gametypesubmenus.push(submenu);
@@ -120,7 +128,7 @@ mergeInto(LibraryManager.library, {
      * dropdown.
      */
     js_get_selected_preset: function() {
-        return gametypeselectedindex;
+        return menuform.elements["preset"].value;
     },
 
     /*
@@ -131,16 +139,7 @@ mergeInto(LibraryManager.library, {
      * which turn out to exactly match a preset).
      */
     js_select_preset: function(n) {
-        gametypeselectedindex = n;
-        for (var i in gametypeitems) {
-            var item = gametypeitems[i];
-            var tick = item.firstChild;
-            if (item.getAttribute("data-index") == n) {
-                tick.classList.add("selected");
-            } else {
-                tick.classList.remove("selected");
-            }
-        }
+        menuform.elements["preset"].value = n;
     },
 
     /*
@@ -194,30 +193,28 @@ mergeInto(LibraryManager.library, {
     /*
      * void js_activate_timer();
      *
-     * Start calling the C timer_callback() function every 20ms.
+     * Start calling the C timer_callback() function every frame.
+     * The C code ensures that the activate and deactivate functions
+     * are called in a sensible order.
      */
     js_activate_timer: function() {
-        if (timer === null) {
-            timer_reference_date = (new Date()).valueOf();
-            timer = setInterval(function() {
-                var now = (new Date()).valueOf();
-                timer_callback((now - timer_reference_date) / 1000.0);
-                timer_reference_date = now;
-                return true;
-            }, 20);
-        }
+        timer_reference = performance.now();
+        var frame = function(now) {
+            timer = window.requestAnimationFrame(frame);
+            // The callback might call js_deactivate_timer() below.
+            timer_callback((now - timer_reference) / 1000.0);
+            timer_reference = now;
+        };
+        timer = window.requestAnimationFrame(frame);
     },
 
     /*
      * void js_deactivate_timer();
      *
-     * Stop calling the C timer_callback() function every 20ms.
+     * Stop calling the C timer_callback() function every frame.
      */
     js_deactivate_timer: function() {
-        if (timer !== null) {
-            clearInterval(timer);
-            timer = null;
-        }
+        window.cancelAnimationFrame(timer);
     },
 
     /*
@@ -559,22 +556,6 @@ mergeInto(LibraryManager.library, {
     },
 
     /*
-     * void js_canvas_set_nominal_size();
-     *
-     * Set the nominal size of the puzzle to the current canvas size
-     * scaled to CSS pixels.  This should be called whenever the
-     * canvas size is changed other than in response to a change of
-     * device pixel ratio.  This nominal size will then be used at
-     * every change of device pixel ratio to calculate the new
-     * physical size of the canvas.
-     */
-    js_canvas_set_nominal_size: function() {
-        var dpr = window.devicePixelRatio || 1;
-        nominal_width = onscreen_canvas.width / dpr;
-        nominal_height = onscreen_canvas.height / dpr;
-    },
-
-    /*
      * double js_get_device_pixel_ratio();
      *
      * Return the current device pixel ratio.
@@ -600,11 +581,13 @@ mergeInto(LibraryManager.library, {
      * construction.
      */
     js_dialog_string: function(index, title, initialtext) {
-        dlg_form.appendChild(document.createTextNode(UTF8ToString(title)));
+        var label = document.createElement("label");
+        label.textContent = UTF8ToString(title);
+        dlg_form.appendChild(label);
         var editbox = document.createElement("input");
         editbox.type = "text";
         editbox.value = UTF8ToString(initialtext);
-        dlg_form.appendChild(editbox);
+        label.appendChild(editbox);
         dlg_form.appendChild(document.createElement("br"));
 
         dlg_return_funcs.push(function() {
@@ -623,7 +606,9 @@ mergeInto(LibraryManager.library, {
      * gives the separator.
      */
     js_dialog_choices: function(index, title, choicelist, initvalue) {
-        dlg_form.appendChild(document.createTextNode(UTF8ToString(title)));
+        var label = document.createElement("label");
+        label.textContent = UTF8ToString(title);
+        dlg_form.appendChild(label);
         var dropdown = document.createElement("select");
         var choicestr = UTF8ToString(choicelist);
         var items = choicestr.slice(1).split(choicestr[0]);
@@ -636,7 +621,7 @@ mergeInto(LibraryManager.library, {
             dropdown.appendChild(option);
             options.push(option);
         }
-        dlg_form.appendChild(dropdown);
+        label.appendChild(dropdown);
         dlg_form.appendChild(document.createElement("br"));
 
         dlg_return_funcs.push(function() {
@@ -664,12 +649,10 @@ mergeInto(LibraryManager.library, {
     js_dialog_boolean: function(index, title, initvalue) {
         var checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.id = "cb" + String(dlg_next_id++);
         checkbox.checked = (initvalue != 0);
-        dlg_form.appendChild(checkbox);
         var checkboxlabel = document.createElement("label");
-        checkboxlabel.setAttribute("for", checkbox.id);
-        checkboxlabel.textContent = UTF8ToString(title);
+        checkboxlabel.appendChild(checkbox);
+        checkboxlabel.appendChild(document.createTextNode(UTF8ToString(title)));
         dlg_form.appendChild(checkboxlabel);
         dlg_form.appendChild(document.createElement("br"));
 

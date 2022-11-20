@@ -30,12 +30,6 @@ var ctx;
 // by js_canvas_end_draw.
 var update_xmin, update_xmax, update_ymin, update_ymax;
 
-// Nominal size of the canvas in CSS pixels.  This is set when the
-// canvas is explicitly resized, and used as the basis of calls to
-// midend_size whenever the device pixel ratio changes.  That way
-// changes of zoom levels in browsers will generally be reversible.
-var nominal_width, nominal_height;
-
 // Module object for Emscripten. We fill in these parameters to ensure
 // that Module.run() won't be called until we're ready (we want to do
 // our own init stuff first), and that when main() returns nothing
@@ -96,8 +90,8 @@ var midpoint_test_str = "ABCDEFGHIKLMNOPRSTUVWXYZ0123456789";
 var midpoint_cache = [];
 
 // Variables used by js_activate_timer() and js_deactivate_timer().
-var timer = null;
-var timer_reference_date;
+var timer;
+var timer_reference;
 
 // void timer_callback(double tplus);
 //
@@ -115,12 +109,9 @@ var blitters = [];
 
 // State for the dialog-box mechanism. dlg_dimmer and dlg_form are the
 // page-darkening overlay and the actual dialog box respectively;
-// dlg_next_id is used to allocate each checkbox a unique id to use
-// for linking its label to it (see js_dialog_boolean);
 // dlg_return_funcs is a list of JS functions to be called when the OK
 // button is pressed, to pass the results back to C.
 var dlg_dimmer = null, dlg_form = null;
-var dlg_next_id = 0;
 var dlg_return_funcs = null;
 
 // void dlg_return_sval(int index, const char *val);
@@ -131,11 +122,16 @@ var dlg_return_funcs = null;
 var dlg_return_sval, dlg_return_ival;
 
 // The <ul> object implementing the game-type drop-down, and a list of
-// the <li> objects inside it. Used by js_add_preset(),
-// js_get_selected_preset() and js_select_preset().
-var gametypelist = null, gametypeitems = [];
-var gametypeselectedindex = null;
+// the sub-lists inside it. Used by js_add_preset().
+var gametypelist = null;
 var gametypesubmenus = [];
+
+// C entry point for miscellaneous events.
+var command;
+
+// The <form> encapsulating the menus.  Used by
+// js_get_selected_preset() and js_select_preset().
+var menuform = null;
 
 // The two anchors used to give permalinks to the current puzzle. Used
 // by js_update_permalinks().
@@ -189,10 +185,7 @@ function canvas_mouse_coords(event, element) {
 
 // Enable and disable items in the CSS menus.
 function disable_menu_item(item, disabledFlag) {
-    if (disabledFlag)
-        item.className = "disabled";
-    else
-        item.className = "";
+    item.disabled = disabledFlag;
 }
 
 // Dialog-box functions called from both C and JS.
@@ -211,7 +204,6 @@ function dialog_init(titletext) {
     dlg_form.appendChild(title);
 
     dlg_return_funcs = [];
-    dlg_next_id = 0;
 }
 
 function dialog_launch(ok_function, cancel_function) {
@@ -260,11 +252,11 @@ function initPuzzle() {
     // Set up mouse handlers. We do a bit of tracking of the currently
     // pressed mouse buttons, to avoid sending mousemoves with no
     // button down (our puzzles don't want those events).
-    mousedown = Module.cwrap('mousedown', 'void',
-                             ['number', 'number', 'number']);
+    var mousedown = Module.cwrap('mousedown', 'boolean',
+                                 ['number', 'number', 'number']);
 
-    button_phys2log = [null, null, null];
-    buttons_down = function() {
+    var button_phys2log = [null, null, null];
+    var buttons_down = function() {
         var i, toret = 0;
         for (i = 0; i < 3; i++)
             if (button_phys2log[i] !== null)
@@ -283,29 +275,32 @@ function initPuzzle() {
         else if (event.ctrlKey)
             logbutton = 2;   // Ctrl-click overrides to right button
 
-        mousedown(xy.x, xy.y, logbutton);
+        if (mousedown(xy.x, xy.y, logbutton))
+            event.preventDefault();
         button_phys2log[event.button] = logbutton;
 
         onscreen_canvas.setCapture(true);
     };
-    mousemove = Module.cwrap('mousemove', 'void',
-                             ['number', 'number', 'number']);
+    var mousemove = Module.cwrap('mousemove', 'boolean',
+                                 ['number', 'number', 'number']);
     onscreen_canvas.onmousemove = function(event) {
         var down = buttons_down();
         if (down) {
             var xy = canvas_mouse_coords(event, onscreen_canvas);
-            mousemove(xy.x, xy.y, down);
+            if (mousemove(xy.x, xy.y, down))
+                event.preventDefault();
         }
     };
-    mouseup = Module.cwrap('mouseup', 'void',
-                           ['number', 'number', 'number']);
+    var mouseup = Module.cwrap('mouseup', 'boolean',
+                               ['number', 'number', 'number']);
     onscreen_canvas.onmouseup = function(event) {
         if (event.button >= 3)
             return;
 
         if (button_phys2log[event.button] !== null) {
             var xy = canvas_mouse_coords(event, onscreen_canvas);
-            mouseup(xy.x, xy.y, button_phys2log[event.button]);
+            if (mouseup(xy.x, xy.y, button_phys2log[event.button]))
+                event.preventDefault();
             button_phys2log[event.button] = null;
         }
     };
@@ -316,8 +311,8 @@ function initPuzzle() {
     // of this puzzle collection in other media
     // can indulge their instinct to press ^R for redo, for example,
     // without accidentally reloading the page.
-    key = Module.cwrap('key', 'boolean', ['number', 'string', 'string',
-                                          'number', 'number', 'number']);
+    var key = Module.cwrap('key', 'boolean', ['number', 'string', 'string',
+                                              'number', 'number', 'number']);
     onscreen_canvas.onkeydown = function(event) {
         if (key(event.keyCode, event.key, event.char, event.location,
                 event.shiftKey ? 1 : 0, event.ctrlKey ? 1 : 0))
@@ -366,9 +361,9 @@ function initPuzzle() {
     };
 
     // 'number' is used for C pointers
-    get_save_file = Module.cwrap('get_save_file', 'number', []);
-    free_save_file = Module.cwrap('free_save_file', 'void', ['number']);
-    load_game = Module.cwrap('load_game', 'void', ['string', 'number']);
+    var get_save_file = Module.cwrap('get_save_file', 'number', []);
+    var free_save_file = Module.cwrap('free_save_file', 'void', ['number']);
+    var load_game = Module.cwrap('load_game', 'void', ['string', 'number']);
 
     document.getElementById("save").onclick = function(event) {
         if (dlg_dimmer === null) {
@@ -419,6 +414,7 @@ function initPuzzle() {
 
     gametypelist = document.getElementById("gametype");
     gametypesubmenus.push(gametypelist);
+    menuform = document.getElementById("gamemenu");
 
     // In IE, the canvas doesn't automatically gain focus on a mouse
     // click, so make sure it does
@@ -451,14 +447,13 @@ function initPuzzle() {
     permalink_desc = document.getElementById("permalink-desc");
     permalink_seed = document.getElementById("permalink-seed");
 
-    // Default to giving keyboard focus to the puzzle.
-    onscreen_canvas.focus();
+    resizable_div = document.getElementById("resizable");
+    if (resizable_div !== null) {
+        // Create the resize handle.
+        var resize_handle = document.createElement("canvas");
+        resize_handle.width = 10;
+        resize_handle.height = 10;
 
-    // Create the resize handle.
-    var resize_handle = document.createElement("canvas");
-    resize_handle.width = 10;
-    resize_handle.height = 10;
-    {
         var ctx = resize_handle.getContext("2d");
         ctx.beginPath();
         for (var i = 1; i <= 7; i += 3) {
@@ -470,9 +465,7 @@ function initPuzzle() {
         ctx.lineJoin = 'round';
         ctx.strokeStyle = '#000000';
         ctx.stroke();
-    }
-    resizable_div = document.getElementById("resizable");
-    if (resizable_div !== null) {
+
         resizable_div.appendChild(resize_handle);
         resize_handle.id = "resizehandle";
         resize_handle.title = "Drag to resize the puzzle. Right-click to restore the default size.";
@@ -540,17 +533,29 @@ function initPuzzle() {
      * <https://developer.mozilla.org/en-US/docs/Web/API/Window/
      * devicePixelRatio> (CC0) to work on older browsers.
      */
-    var rescale_puzzle = Module.cwrap('rescale_puzzle',
-                                      'void', ['number', 'number']);
+    var rescale_puzzle = Module.cwrap('rescale_puzzle', 'void', []);
     var mql = null;
     var update_pixel_ratio = function() {
         var dpr = window.devicePixelRatio;
         if (mql !== null)
             mql.removeListener(update_pixel_ratio);
-        rescale_puzzle(nominal_width * dpr, nominal_height * dpr);
         mql = window.matchMedia(`(resolution: ${dpr}dppx)`);
         mql.addListener(update_pixel_ratio);
+        rescale_puzzle();
     }
+
+    Module.preRun = function() {
+        // Merge environment variables from HTML script element.
+        // This means you can add something like this to the HTML:
+        // <script id="environment" type="application/json">
+        //   { "LOOPY_DEFAULT": "20x10t11dh" }
+        // </script>
+        var envscript = document.getElementById("environment");
+        if (envscript !== null)
+            for (var [k, v] of
+                 Object.entries(JSON.parse(envscript.textContent)))
+                ENV[k] = v;
+    };
 
     Module.onRuntimeInitialized = function() {
         // Run the C setup function, passing argv[1] as the fragment
@@ -566,5 +571,8 @@ function initPuzzle() {
         var apology = document.getElementById("apology");
         if (apology !== null) apology.style.display = "none";
         document.getElementById("puzzle").style.display = "";
+
+        // Default to giving keyboard focus to the puzzle.
+        onscreen_canvas.focus();
     };
 }
