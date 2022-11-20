@@ -160,7 +160,6 @@ puzzle(mathrax
   DISPLAYNAME "Mathrax"
   DESCRIPTION "Latin square puzzle"
   OBJECTIVE "Place each number according to the arithmetic clues.")
-solver(mathrax ${CMAKE_SOURCE_DIR}/latin.c)
 
 puzzle(mines
   DISPLAYNAME "Mines"
