@@ -436,7 +436,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     int fh = usable_height * self.contentScaleFactor;
     int w = fw;
     int h = fh;
-    midend_size(me, &w, &h, FALSE);
+    midend_size(me, &w, &h, FALSE, 1.0);
     game_rect = CGRectMake((fw - w)/2/self.contentScaleFactor, (fh - h)/2/self.contentScaleFactor, w/self.contentScaleFactor, h/self.contentScaleFactor);
     game_rect.origin.y += top_margin;
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
@@ -484,7 +484,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     [self adjust_drag_position:&touchXpixels ypixels:&touchYpixels];
     touchButton = 0;
     if (self.net_centre_mode) {
-        midend_process_key(me, touchXpixels, touchYpixels, 0x03);
+        midend_process_key(me, touchXpixels, touchYpixels, 0x03, NULL);
     }
 }
 
@@ -500,23 +500,23 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     int ypixels = ypoints * self.contentScaleFactor;
     [self adjust_drag_position:&xpixels ypixels:&ypixels];
     if (self.net_centre_mode) {
-        midend_process_key(me, xpixels, ypixels, 0x03);
+        midend_process_key(me, xpixels, ypixels, 0x03, NULL);
     } else if (self.net_shift_mode) {
         int tilesize = midend_tilesize(me);
         while (touchXpixels <= xpixels - tilesize) {
-            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_LEFT);
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_LEFT, NULL);
             touchXpixels += tilesize;
         }
         while (touchXpixels >= xpixels + tilesize) {
-            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_RIGHT);
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_RIGHT, NULL);
             touchXpixels -= tilesize;
         }
         while (touchYpixels <= ypixels - tilesize) {
-            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_UP);
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_UP, NULL);
             touchYpixels += tilesize;
         }
         while (touchYpixels >= ypixels + tilesize) {
-            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_DOWN);
+            midend_process_key(me, -1, -1, MOD_SHFT | CURSOR_DOWN, NULL);
             touchYpixels -= tilesize;
         }
     } else {
@@ -524,12 +524,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             if (abs(xpoints - touchXpoints) >= 10 || abs(ypoints - touchYpoints) >= 10) {
                 [touchTimer invalidate];
                 touchTimer = nil;
-                midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+                midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton], NULL);
                 touchState = 2;
             }
         }
         if (touchState == 2) {
-            midend_process_key(me, xpixels, ypixels, ButtonDrag[touchButton]);
+            midend_process_key(me, xpixels, ypixels, ButtonDrag[touchButton], NULL);
         }
     }
 }
@@ -549,9 +549,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         // nothing
     } else {
         if (touchState == 1) {
-            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton], NULL);
         }
-        midend_process_key(me, xpixels, ypixels, ButtonUp[touchButton]);
+        midend_process_key(me, xpixels, ypixels, ButtonUp[touchButton], NULL);
     }
     touchState = 0;
     [touchTimer invalidate];
@@ -576,7 +576,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             } else {
                 touchButton = 1; // right button
             }
-            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton]);
+            midend_process_key(me, touchXpixels, touchYpixels, ButtonDown[touchButton], NULL);
             touchState = 2;
             AudioServicesPlaySystemSound(0x450); // standard key click
         }
@@ -609,7 +609,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)keyButton:(UIBarButtonItem *)sender
 {
-    midend_process_key(me, -1, -1, [sender.title characterAtIndex:0]);
+    midend_process_key(me, -1, -1, [sender.title characterAtIndex:0], NULL);
 }
 
 - (void)activateTimer
@@ -706,12 +706,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doUndo
 {
-    midend_process_key(me, -1, -1, 'u');
+    midend_process_key(me, -1, -1, 'u', NULL);
 }
 
 - (void)doRedo
 {
-    midend_process_key(me, -1, -1, 'r'&0x1F);
+    midend_process_key(me, -1, -1, 'r'&0x1F, NULL);
 }
 
 - (void)doRestart
