@@ -85,6 +85,10 @@ EOF
     text-align: center
 }
 
+main {
+    text-align: center;
+}
+
 /* Inside that form, the main menu bar and every submenu inside it is a <ul> */
 #gamemenu ul {
     list-style: none;  /* get rid of the normal unordered-list bullets */
@@ -93,7 +97,10 @@ EOF
     flex-wrap: wrap;
     justify-content: center;
     margin: 0;
-    padding: 0;
+    /* Compensate for the negative margins on menu items by adding a
+     * little bit of padding so that the borders of the items don't protrude
+     * beyond the menu. */
+    padding: 0.5px;
 }
 
 /* Individual menu items are <li> elements within such a <ul> */
@@ -127,7 +134,8 @@ EOF
     color: rgba(0,0,0,0.5);
 }
 
-#gamemenu li > :hover:not(:disabled) {
+#gamemenu li > :hover:not(:disabled),
+#gamemenu li > .focus-within {
     /* When the mouse is over a menu item, highlight it */
     background: rgba(0,0,0,0.3);
 }
@@ -184,7 +192,8 @@ EOF
     left: inherit; right: 100%;
 }
 
-#gamemenu :hover > ul {
+#gamemenu :hover > ul,
+#gamemenu .focus-within > ul {
     /* Last but by no means least, the all-important line that makes
      * submenus be displayed! Any <ul> whose parent <li> is being
      * hovered over gets display:flex overriding the display:none
@@ -226,10 +235,24 @@ EOF
     color: transparent;
 }
 
+#gamemenu li > div:after {
+    /* Downward arrow for submenu headings at the top level. */
+    content: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='10'%20height='10'%3E%3Cpolygon%20points='0,5,10,5,5,10'/%3E%3C/svg%3E");
+    margin-left: 0.5em;
+}
+
+#gamemenu li li > div:after {
+    /* Rightward arrow marker for submenus on lower-level menus. */
+    content: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='10'%20height='10'%3E%3Cpolygon%20points='0,0,10,5,0,10'/%3E%3C/svg%3E");
+    float: right;
+}
+
+
 #statusbar {
     overflow: hidden;
-    height: 1.2em;
     text-align: left;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     background: #d8d8d8;
     border-left: 2px solid #c8c8c8;
     border-top: 2px solid #c8c8c8;
@@ -275,17 +298,13 @@ EOF
 
 #resizable {
     position: relative;
-    left: 0;
-    top: 0;
+    margin: 0 auto;
 }
 
 #puzzlecanvas {
     display: block;
     width: 100%;
-}
-
-#statusbarholder {
-    display: block;
+    font-family: sans-serif;
 }
 
 #apology {
@@ -297,6 +316,11 @@ EOF
 .apology-title {
     text-align: center;
 }
+
+\@media print {
+    /* Interactive controls should be hidden when printing. */
+    #gamemenu, #resizehandle { display: none; }
+}
 </style>
 </head>
 <body>
@@ -307,15 +331,15 @@ ${unfinishedheading}
 ${unfinishedpara}
 
 <hr>
-<div id="puzzle" style="display: none">
+<main id="puzzle" style="display: none">
 <form id="gamemenu"><ul>
-  <li><div>Game...<ul>
-    <li><button type="button" id="specific">Enter game ID</button></li>
-    <li><button type="button" id="random">Enter random seed</button></li>
-    <li><button type="button" id="save">Download save file</button></li>
-    <li><button type="button" id="load">Upload save file</button></li>
+  <li><div tabindex="0">Game<ul>
+    <li><button type="button" id="specific">Enter game ID...</button></li>
+    <li><button type="button" id="random">Enter random seed...</button></li>
+    <li><button type="button" id="save">Download save file...</button></li>
+    <li><button type="button" id="load">Upload save file...</button></li>
   </ul></div></li>
-  <li><div>Type...<ul id="gametype"></ul></div></li>
+  <li><div tabindex="0">Type<ul role="menu" id="gametype"></ul></div></li>
   <li role="separator"></li>
   <li><button type="button" id="new">
     New<span class="verbiage"> game</span>
@@ -333,20 +357,19 @@ ${unfinishedpara}
     Solve<span class="verbiage"> game</span>
   </button></li>
 </ul></form>
-<div align=center>
   <div id="resizable">
-  <canvas id="puzzlecanvas" width="1px" height="1px" tabindex="1">
-  </canvas>
-  <div id="statusbarholder">
-  </div>
+  <canvas id="puzzlecanvas" tabindex="0"></canvas>
+  <div id="statusbar"></div>
+  <img id="resizehandle" alt="resize"
+       title="Drag to resize the puzzle. Right-click to restore the default size."
+       src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='10'%20height='10'%3E%3Cpath%20d='M8.5,1.5l-7,7m7,-4l-4,4m4,-1l-1,1'%20stroke='black'%20stroke-linecap='round'/%3E%3C/svg%3E">
   </div>
   <p>
     Link to this puzzle:
     <a id="permalink-desc">by game ID</a>
     <a id="permalink-seed">by random seed</a>
   </p>
-</div>
-</div>
+</main>
 <div id="apology">
 <p class="apology-title">If you've been reading this message for more
 than a second or two, then <strong>this WebAssembly puzzle doesn't

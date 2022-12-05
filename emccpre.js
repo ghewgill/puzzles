@@ -22,7 +22,7 @@
 var onscreen_canvas, offscreen_canvas;
 
 // A persistent drawing context for the offscreen canvas, to save
-// constructing one per individual graphics operation.
+// requesting it for each individual graphics operation.
 var ctx;
 
 // Bounding rectangle for the copy to the onscreen canvas that will be
@@ -95,10 +95,10 @@ var timer_reference;
 
 // void timer_callback(double tplus);
 //
-// Called every 20ms while timing is active.
+// Called every frame while timing is active.
 var timer_callback;
 
-// The status bar object, if we create one.
+// The status bar object, if we have one.
 var statusbar = null;
 
 // Currently live blitters. We keep an integer id for each one on the
@@ -173,14 +173,10 @@ function relative_mouse_coords(event, element) {
 // This depends on the details of how a canvas gets scaled by CSS.
 function canvas_mouse_coords(event, element) {
     var rcoords = relative_mouse_coords(event, element);
-    // Assume that the canvas is as large as possible within its CSS
-    // box without changing its aspect ratio.
-    var scale = Math.max(element.width / element.offsetWidth,
-			 element.height / element.offsetHeight);
-    var xoffset = (element.offsetWidth - element.width / scale) / 2;
-    var yoffset = (element.offsetHeight - element.height / scale) / 2;
-    return {x: (rcoords.x - xoffset) * scale,
-	    y: (rcoords.y - yoffset) * scale}
+    // Assume that the CSS object-fit property is "fill" (the default).
+    var xscale = element.width / element.offsetWidth;
+    var yscale = element.height / element.offsetHeight;
+    return {x: rcoords.x * xscale, y: rcoords.y * yscale}
 }
 
 // Enable and disable items in the CSS menus.
@@ -190,6 +186,13 @@ function disable_menu_item(item, disabledFlag) {
 
 // Dialog-box functions called from both C and JS.
 function dialog_init(titletext) {
+    // Forward compatibility: Delete form and dimmer if they already
+    // exist.
+    dlg_dimmer = document.getElementById("dlgdimmer");
+    if (dlg_dimmer) dlg_dimmer.parentElement.removeChild(dlg_dimmer);
+    dlg_form = document.getElementById("dlgform");
+    if (dlg_form) dlg_form.parentElement.removeChild(dlg_form);
+
     // Create an overlay on the page which darkens everything
     // beneath it.
     dlg_dimmer = document.createElement("div");
@@ -242,8 +245,7 @@ function initPuzzle() {
     // Construct the off-screen canvas used for double buffering.
     onscreen_canvas = document.getElementById("puzzlecanvas");
     offscreen_canvas = document.createElement("canvas");
-    offscreen_canvas.width = onscreen_canvas.width;
-    offscreen_canvas.height = onscreen_canvas.height;
+    ctx = offscreen_canvas.getContext('2d', { alpha: false });
 
     // Stop right-clicks on the puzzle from popping up a context menu.
     // We need those right-clicks!
@@ -389,13 +391,10 @@ function initPuzzle() {
 
     document.getElementById("load").onclick = function(event) {
         if (dlg_dimmer === null) {
-            dialog_init("Upload saved-game file");
             var input = document.createElement("input");
             input.type = "file";
             input.multiple = false;
-            dlg_form.appendChild(input);
-            dlg_form.appendChild(document.createElement("br"));
-            dialog_launch(function(event) {
+            input.addEventListener("change", function(event) {
                 if (input.files.length == 1) {
                     var file = input.files.item(0);
                     var reader = new FileReader();
@@ -405,16 +404,113 @@ function initPuzzle() {
                     });
                     reader.readAsText(file);
                 }
-                dialog_cleanup();
-            }, function(event) {
-                dialog_cleanup();
             });
+            input.click();
+            onscreen_canvas.focus();
         }
     };
 
     gametypelist = document.getElementById("gametype");
     gametypesubmenus.push(gametypelist);
     menuform = document.getElementById("gamemenu");
+
+    // Find the next or previous item in a menu, or null if there
+    // isn't one.  Skip list items that don't have a child (i.e.
+    // separators) or whose child is disabled.
+    function isuseful(item) {
+        return item.querySelector(":scope > :not(:disabled)");
+    }
+    function nextmenuitem(item) {
+        do item = item.nextElementSibling;
+        while (item !== null && !isuseful(item));
+        return item;
+    }
+    function prevmenuitem(item) {
+        do item = item.previousElementSibling;
+        while (item !== null && !isuseful(item));
+        return item;
+    }
+    function firstmenuitem(menu) {
+        var item = menu && menu.firstElementChild;
+        while (item !== null && !isuseful(item))
+            item = item.nextElementSibling;
+        return item;
+    }
+    function lastmenuitem(menu) {
+        var item = menu && menu.lastElementChild;
+        while (item !== null && !isuseful(item))
+            item = item.previousElementSibling;
+        return item;
+    }
+    // Keyboard handlers for the menus.
+    function menukey(event) {
+        var thisitem = event.target.closest("li");
+        var thismenu = thisitem.closest("ul");
+        var targetitem = null;
+        var parentitem;
+        var parentitem_up = null;
+        var parentitem_sideways = null;
+        var submenu;
+        function ishorizontal(menu) {
+            // Which direction does this menu go in?
+            var cs = window.getComputedStyle(menu);
+            return cs.display == "flex" && cs.flexDirection == "row";
+        }
+        if (dlg_dimmer !== null)
+            return;
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter",
+              "Escape", "Backspace", "SoftRight"]
+            .includes(event.key))
+            return;
+        if (ishorizontal(thismenu)) {
+            // Top-level menu bar.
+            if (event.key == "ArrowLeft")
+                targetitem = prevmenuitem(thisitem) || lastmenuitem(thismenu);
+            else if (event.key == "ArrowRight")
+                targetitem = nextmenuitem(thisitem) || firstmenuitem(thismenu);
+            else if (event.key == "ArrowUp")
+                targetitem = lastmenuitem(thisitem.querySelector("ul"));
+            else if (event.key == "ArrowDown" || event.key == "Enter")
+                targetitem = firstmenuitem(thisitem.querySelector("ul"));
+        } else {
+            // Ordinary vertical menu.
+            parentitem = thismenu.closest("li");
+            if (parentitem) {
+                if (ishorizontal(parentitem.closest("ul")))
+                    parentitem_up = parentitem;
+                else
+                    parentitem_sideways = parentitem;
+            }
+            if (event.key == "ArrowUp")
+                targetitem = prevmenuitem(thisitem) || parentitem_up ||
+                    lastmenuitem(thismenu);
+            else if (event.key == "ArrowDown")
+                targetitem = nextmenuitem(thisitem) || parentitem_up ||
+                    firstmenuitem(thismenu);
+            else if (event.key == "ArrowRight")
+                targetitem = thisitem.querySelector("li") ||
+                    (parentitem_up && nextmenuitem(parentitem_up));
+            else if (event.key == "Enter")
+                targetitem = thisitem.querySelector("li");
+            else if (event.key == "ArrowLeft")
+                targetitem = parentitem_sideways ||
+                    (parentitem_up && prevmenuitem(parentitem_up));
+            else if (event.key == "Backspace")
+                targetitem = parentitem;
+        }
+        if (targetitem)
+            targetitem.firstElementChild.focus();
+        else if (event.key == "Enter")
+            event.target.click();
+        else if (event.key == "Escape" || event.key == "SoftRight" ||
+                 event.key == "Backspace")
+            // Leave the menu entirely.
+            onscreen_canvas.focus();
+        // Prevent default even if we didn't do anything, as long as this
+        // was an interesting key.
+        event.preventDefault();
+    }
+    menuform.addEventListener("keydown", menukey);
 
     // In IE, the canvas doesn't automatically gain focus on a mouse
     // click, so make sure it does
@@ -430,11 +526,32 @@ function initPuzzle() {
             for (var i in dlg_return_funcs)
                 dlg_return_funcs[i]();
             command(3);
+            event.preventDefault();
+            event.stopPropagation();
         }
 
-        if (dlg_dimmer !== null && event.keyCode == 27)
+        if (dlg_dimmer !== null && event.keyCode == 27) {
             command(4);
-    });
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, true);
+
+    // Event handler to fake :focus-within on browsers too old for
+    // it (like KaiOS 2.5).  Browsers without :focus-within are also
+    // too old for focusin/out events, so we have to use focus events
+    // which don't bubble but can be captured.
+    //
+    // A button losing focus because it was disabled doesn't generate
+    // a blur event, so we do this entirely in the focus handler.
+    document.documentElement.addEventListener("focus", function(event) {
+        for (var elem = event.target; elem; elem = elem.parentElement)
+            elem.classList.add("focus-within");
+        for (elem of
+             Array.from(document.getElementsByClassName("focus-within")))
+            if (!elem.contains(event.target))
+                elem.classList.remove("focus-within");
+    }, true);
 
     // Set up the function pointers we haven't already grabbed. 
     dlg_return_sval = Module.cwrap('dlg_return_sval', 'void',
@@ -443,32 +560,14 @@ function initPuzzle() {
                                    ['number','number']);
     timer_callback = Module.cwrap('timer_callback', 'void', ['number']);
 
-    // Save references to the two permalinks.
+    // Save references to the two permalinks and the status bar.
     permalink_desc = document.getElementById("permalink-desc");
     permalink_seed = document.getElementById("permalink-seed");
+    statusbar = document.getElementById("statusbar");
 
     resizable_div = document.getElementById("resizable");
     if (resizable_div !== null) {
-        // Create the resize handle.
-        var resize_handle = document.createElement("canvas");
-        resize_handle.width = 10;
-        resize_handle.height = 10;
-
-        var ctx = resize_handle.getContext("2d");
-        ctx.beginPath();
-        for (var i = 1; i <= 7; i += 3) {
-            ctx.moveTo(8.5, i + 0.5);
-            ctx.lineTo(i + 0.5, 8.5);
-        }
-        ctx.lineWidth = '1px';
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#000000';
-        ctx.stroke();
-
-        resizable_div.appendChild(resize_handle);
-        resize_handle.id = "resizehandle";
-        resize_handle.title = "Drag to resize the puzzle. Right-click to restore the default size.";
+        var resize_handle = document.getElementById("resizehandle");
         var resize_xbase = null, resize_ybase = null, restore_pending = false;
         var resize_xoffset = null, resize_yoffset = null;
         var resize_puzzle = Module.cwrap('resize_puzzle',
@@ -551,8 +650,9 @@ function initPuzzle() {
         //   { "LOOPY_DEFAULT": "20x10t11dh" }
         // </script>
         var envscript = document.getElementById("environment");
+        var k, v;
         if (envscript !== null)
-            for (var [k, v] of
+            for ([k, v] of
                  Object.entries(JSON.parse(envscript.textContent)))
                 ENV[k] = v;
     };

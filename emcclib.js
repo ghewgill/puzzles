@@ -111,6 +111,7 @@ mergeInto(LibraryManager.library, {
         var tick = document.createElement("span");
         tick.className = "tick";
         label.appendChild(tick);
+        label.tabIndex = 0;
         label.appendChild(document.createTextNode(" " + name));
         item.appendChild(label);
         var submenu = document.createElement("ul");
@@ -223,7 +224,6 @@ mergeInto(LibraryManager.library, {
      * Prepare to do some drawing on the canvas.
      */
     js_canvas_start_draw: function() {
-        ctx = offscreen_canvas.getContext('2d');
         update_xmin = update_xmax = update_ymin = update_ymax = undefined;
     },
 
@@ -256,7 +256,8 @@ mergeInto(LibraryManager.library, {
      */
     js_canvas_end_draw: function() {
         if (update_xmin !== undefined) {
-            var onscreen_ctx = onscreen_canvas.getContext('2d');
+            var onscreen_ctx =
+                onscreen_canvas.getContext('2d', { alpha: false });
             onscreen_ctx.drawImage(offscreen_canvas,
                                    update_xmin, update_ymin,
                                    update_xmax - update_xmin,
@@ -265,7 +266,6 @@ mergeInto(LibraryManager.library, {
                                    update_xmax - update_xmin,
                                    update_ymax - update_ymin);
         }
-        ctx = null;
     },
 
     /*
@@ -402,14 +402,14 @@ mergeInto(LibraryManager.library, {
             return midpoint_cache[font];
 
         // Find the width of the string
-        var ctx1 = onscreen_canvas.getContext('2d');
+        var ctx1 = onscreen_canvas.getContext('2d', { alpha: false });
         ctx1.font = font;
         var width = (ctx1.measureText(midpoint_test_str).width + 1) | 0;
 
         // Construct a test canvas of appropriate size, initialise it to
         // black, and draw the string on it in white
         var measure_canvas = document.createElement('canvas');
-        var ctx2 = measure_canvas.getContext('2d');
+        var ctx2 = measure_canvas.getContext('2d', { alpha: false });
         ctx2.canvas.width = width;
         ctx2.canvas.height = 2*height;
         ctx2.fillStyle = "#000000";
@@ -492,7 +492,7 @@ mergeInto(LibraryManager.library, {
      * the screen.
      */
     js_canvas_copy_to_blitter: function(id, x, y, w, h) {
-        var blitter_ctx = blitters[id].getContext('2d');
+        var blitter_ctx = blitters[id].getContext('2d', { alpha: false });
         blitter_ctx.drawImage(offscreen_canvas,
                               x, y, w, h,
                               0, 0, w, h);
@@ -512,17 +512,15 @@ mergeInto(LibraryManager.library, {
     },
 
     /*
-     * void js_canvas_make_statusbar(void);
-     * 
-     * Cause a status bar to exist. Called at setup time if the puzzle
-     * back end turns out to want one.
+     * void js_canvas_remove_statusbar(void);
+     *
+     * Cause a status bar not to exist. Called at setup time if the
+     * puzzle back end turns out not to want one.
      */
-    js_canvas_make_statusbar: function() {
-        var statusholder = document.getElementById("statusbarholder");
-        statusbar = document.createElement("div");
-        statusbar.id = "statusbar";
-        statusbar.appendChild(document.createTextNode(" "));
-        statusholder.appendChild(statusbar);
+    js_canvas_remove_statusbar: function() {
+        if (statusbar !== null)
+            statusbar.parentNode.removeChild(statusbar);
+        statusbar = null;
     },
 
     /*
@@ -531,9 +529,7 @@ mergeInto(LibraryManager.library, {
      * Set the text in the status bar.
      */
     js_canvas_set_statusbar: function(ptr) {
-        var text = UTF8ToString(ptr);
-        statusbar.replaceChild(document.createTextNode(text),
-                               statusbar.lastChild);
+        statusbar.textContent = UTF8ToString(ptr);
     },
 
     /*

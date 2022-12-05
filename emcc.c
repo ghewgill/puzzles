@@ -79,7 +79,7 @@ extern int js_canvas_new_blitter(int w, int h);
 extern void js_canvas_free_blitter(int id);
 extern void js_canvas_copy_to_blitter(int id, int x, int y, int w, int h);
 extern void js_canvas_copy_from_blitter(int id, int x, int y, int w, int h);
-extern void js_canvas_make_statusbar(void);
+extern void js_canvas_remove_statusbar(void);
 extern void js_canvas_set_statusbar(const char *text);
 extern void js_canvas_set_size(int w, int h);
 extern double js_get_device_pixel_ratio();
@@ -954,10 +954,10 @@ int main(int argc, char **argv)
     resize();
 
     /*
-     * Create a status bar, if needed.
+     * Remove the status bar, if not needed.
      */
-    if (midend_wants_statusbar(me))
-        js_canvas_make_statusbar();
+    if (!midend_wants_statusbar(me))
+        js_canvas_remove_statusbar();
 
     /*
      * Set up the game-type dropdown with presets and/or the Custom
@@ -972,7 +972,7 @@ int main(int argc, char **argv)
         populate_js_preset_menu(0, menu);
 
         if (thegame.can_configure)
-            js_add_preset(0, "Custom", -1);
+            js_add_preset(0, "Custom...", -1);
 
         have_presets_dropdown = npresets > 0 || thegame.can_configure;
 
