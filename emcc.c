@@ -51,6 +51,7 @@ extern void js_add_preset(int menuid, const char *name, int value);
 extern int js_add_preset_submenu(int menuid, const char *name);
 extern int js_get_selected_preset(void);
 extern void js_select_preset(int n);
+extern void js_default_colour(float *output);
 extern void js_set_background_colour(const char *bg);
 extern void js_get_date_64(unsigned *p);
 extern void js_update_permalinks(const char *desc, const char *seed);
@@ -72,16 +73,17 @@ extern void js_canvas_draw_poly(const int *points, int npoints,
 extern void js_canvas_draw_circle(int x, int y, int r,
                                   const char *fillcolour,
                                   const char *outlinecolour);
-extern int js_canvas_find_font_midpoint(int height, const char *fontptr);
+extern int js_canvas_find_font_midpoint(int height, bool monospaced);
 extern void js_canvas_draw_text(int x, int y, int halign,
-                                const char *colptr, const char *fontptr,
-                                const char *text);
+                                const char *colptr, int height,
+                                bool monospaced, const char *text);
 extern int js_canvas_new_blitter(int w, int h);
 extern void js_canvas_free_blitter(int id);
 extern void js_canvas_copy_to_blitter(int id, int x, int y, int w, int h);
 extern void js_canvas_copy_from_blitter(int id, int x, int y, int w, int h);
 extern void js_canvas_remove_statusbar(void);
 extern void js_canvas_set_statusbar(const char *text);
+extern bool js_canvas_get_preferred_size(int *wp, int *hp);
 extern void js_canvas_set_size(int w, int h);
 extern double js_get_device_pixel_ratio();
 
@@ -191,8 +193,10 @@ static int canvas_w, canvas_h;
 static void resize()
 {
     int w, h;
+    bool user;
     w = h = INT_MAX;
-    midend_size(me, &w, &h, false, js_get_device_pixel_ratio());
+    user = js_canvas_get_preferred_size(&w, &h);
+    midend_size(me, &w, &h, user, js_get_device_pixel_ratio());
     js_canvas_set_size(w, h);
     canvas_w = w;
     canvas_h = h;
@@ -226,12 +230,13 @@ void restore_puzzle_size(int w, int h)
 }
 
 /*
- * HTML doesn't give us a default frontend colour of its own, so we
- * just make up a lightish grey ourselves.
+ * Try to extract a background colour from the canvas's CSS.  In case
+ * it doesn't have a usable one, make up a lightish grey ourselves.
  */
 void frontend_default_colour(frontend *fe, float *output)
 {
     output[0] = output[1] = output[2] = 0.9F;
+    js_default_colour(output);
 }
 
 /*
@@ -312,8 +317,8 @@ bool key(int keycode, const char *key, const char *chr, int location,
         keyevent = CURSOR_RIGHT;
     else if (!strnullcmp(key, "ArrowDown") || !strnullcmp(key, "Down"))
         keyevent = CURSOR_DOWN;
-    else if (!strnullcmp(key, "SoftLeft") || !strnullcmp(key, "SoftRight"))
-        /* Left and right soft key on KaiOS. */
+    else if (!strnullcmp(key, "SoftLeft"))
+        /* Left soft key on KaiOS. */
         keyevent = CURSOR_SELECT2;
     else if (!strnullcmp(key, "End"))
         /*
@@ -444,14 +449,10 @@ static void js_draw_text(void *handle, int x, int y, int fonttype,
                          int fontsize, int align, int colour,
                          const char *text)
 {
-    char fontstyle[80];
     int halign;
 
-    sprintf(fontstyle, "%dpx %s", fontsize,
-            fonttype == FONT_FIXED ? "monospace" : "sans-serif");
-
     if (align & ALIGN_VCENTRE)
-	y += js_canvas_find_font_midpoint(fontsize, fontstyle);
+	y += js_canvas_find_font_midpoint(fontsize, fonttype == FONT_FIXED);
 
     if (align & ALIGN_HCENTRE)
 	halign = 1;
@@ -460,7 +461,8 @@ static void js_draw_text(void *handle, int x, int y, int fonttype,
     else
         halign = 0;
 
-    js_canvas_draw_text(x, y, halign, colour_strings[colour], fontstyle, text);
+    js_canvas_draw_text(x, y, halign, colour_strings[colour],
+                        fontsize, fonttype == FONT_FIXED, text);
 }
 
 static void js_draw_rect(void *handle, int x, int y, int w, int h, int colour)

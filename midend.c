@@ -1220,6 +1220,15 @@ key_label *midend_request_keys(midend *me, int *n)
     return keys;
 }
 
+/* Return a good label to show next to a key right now. */
+const char *midend_current_key_label(midend *me, int button)
+{
+    assert(IS_CURSOR_SELECT(button));
+    if (!me->ourgame->current_key_label) return "";
+    return me->ourgame->current_key_label(
+        me->ui, me->states[me->statepos-1].state, button);
+}
+
 void midend_redraw(midend *me)
 {
     assert(me->drawing);
@@ -1339,6 +1348,9 @@ float *midend_colours(midend *me, int *ncolours)
                 ret[i*3 + 1] = g / 255.0F;
                 ret[i*3 + 2] = b / 255.0F;
             }
+            assert(0.0F <= ret[i*3 + 0] && ret[i*3 + 0] <= 1.0F);
+            assert(0.0F <= ret[i*3 + 1] && ret[i*3 + 1] <= 1.0F);
+            assert(0.0F <= ret[i*3 + 2] && ret[i*3 + 2] <= 1.0F);
         }
     }
 

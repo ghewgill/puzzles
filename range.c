@@ -1245,6 +1245,27 @@ static void decode_ui(game_ui *ui, const char *encoding)
 {
 }
 
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    int cell;
+
+    if (IS_CURSOR_SELECT(button)) {
+        cell = state->grid[idx(ui->r, ui->c, state->params.w)];
+        if (!ui->cursor_show || cell > 0) return "";
+        switch (cell) {
+          case EMPTY:
+            return button == CURSOR_SELECT ? "Fill" : "Dot";
+          case WHITE:
+            return button == CURSOR_SELECT ? "Empty" : "Fill";
+          case BLACK:
+            return button == CURSOR_SELECT ? "Dot" : "Empty";
+        }
+    }
+    return "";
+
+}
+
 typedef struct drawcell {
     puzzle_size value;
     bool error, cursor, flash;
@@ -1603,7 +1624,6 @@ enum {
     COL_USER = COL_GRID,
     COL_ERROR,
     COL_LOWLIGHT,
-    COL_HIGHLIGHT = COL_ERROR, /* mkhighlight needs it, I don't */
     COL_CURSOR = COL_LOWLIGHT,
     NCOLOURS
 };
@@ -1628,7 +1648,7 @@ static float *game_colours(frontend *fe, int *ncolours)
 {
     float *ret = snewn(3 * NCOLOURS, float);
 
-    game_mkhighlight(fe, ret, COL_BACKGROUND, COL_HIGHLIGHT, COL_LOWLIGHT);
+    game_mkhighlight(fe, ret, COL_BACKGROUND, -1, COL_LOWLIGHT);
     COLOUR(ret, COL_GRID,  0.0F, 0.0F, 0.0F);
     COLOUR(ret, COL_ERROR, 1.0F, 0.0F, 0.0F);
 
@@ -1818,6 +1838,7 @@ struct game const thegame = {
     decode_ui,
     NULL, /* game_request_keys */
     game_changed_state,
+    current_key_label,
     interpret_move,
     execute_move,
     PREFERRED_TILE_SIZE, game_compute_size, game_set_size,
