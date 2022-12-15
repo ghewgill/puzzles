@@ -1926,6 +1926,7 @@ const struct game thegame = {
 	decode_ui,
 	game_request_keys,
 	game_changed_state,
+	NULL,
 	interpret_move,
 	execute_move,
 	48, game_compute_size, game_set_size,
