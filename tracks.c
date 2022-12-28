@@ -242,6 +242,7 @@ static const int nbits[] = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
 #define S_CLUE 8
 #define S_MARK 16
 
+#define S_FLASH_SHIFT   8  /* Position of tile in solved track, 8 bits */
 #define S_TRACK_SHIFT   16 /* U/D/L/R flags for edge track indicators */
 #define S_NOTRACK_SHIFT 20 /* U/D/L/R flags for edge no-track indicators */
 
@@ -1820,10 +1821,33 @@ static int tracks_neighbour(int vertex, void *vctx)
         return -1;
 }
 
+/*
+ * The completion flash moves along the track, so we want to label
+ * each tile with how far along the track it is.  This is represented
+ * as an eight-bit field, which is more than enough when the
+ * completion flash is only 0.5 s long.
+ */
+static void set_flash_data(game_state *state)
+{
+    int ntrack = 0, x, y, n, d;
+    const int w = state->p.w;
+
+    for (x = 0; x < w; x++)
+        ntrack += state->numbers->numbers[x];
+    n = 0; x = 0; y = state->numbers->row_s; d = R;
+    do {
+        /* Don't bother clearing; this only runs at completion. */
+        state->sflags[y*w + x] |= (n++ * 255 / (ntrack - 1)) << S_FLASH_SHIFT;
+        d = F(d); /* Find the direction we just arrived from. */
+        d = S_E_DIRS(state, x, y, E_TRACK) & ~d; /* Other track from here. */
+        x += DX(d); y += DY(d); /* Move to the next tile. */
+    } while (INGRID(state, x, y));
+}
+
 static bool check_completion(game_state *state, bool mark)
 {
     int w = state->p.w, h = state->p.h, x, y, i, target;
-    bool ret = true;
+    bool ret = true, pathret;
     int ntrack, nnotrack, ntrackcomplete;
     int *dsf, pathclass;
     struct findloopstate *fls;
@@ -1842,58 +1866,6 @@ static bool check_completion(game_state *state, bool mark)
                 }
             }
         }
-    }
-
-    /* A cell is 'complete', for the purposes of marking the game as
-     * finished, if it has two edges marked as TRACK. But it only has
-     * to have one edge marked as TRACK, or be filled in as trackful
-     * without any specific edges known, to count towards checking
-     * row/column clue errors. */
-    for (x = 0; x < w; x++) {
-        target = state->numbers->numbers[x];
-        ntrack = nnotrack = ntrackcomplete = 0;
-        for (y = 0; y < h; y++) {
-            if (S_E_COUNT(state, x, y, E_TRACK) > 0 ||
-                state->sflags[y*w+x] & S_TRACK)
-                ntrack++;
-            if (S_E_COUNT(state, x, y, E_TRACK) == 2)
-                ntrackcomplete++;
-            if (state->sflags[y*w+x] & S_NOTRACK)
-                nnotrack++;
-        }
-        if (mark) {
-            if (ntrack > target || nnotrack > (h-target)) {
-                debug(("col %d error: target %d, track %d, notrack %d",
-                       x, target, ntrack, nnotrack));
-                state->num_errors[x] = 1;
-                ret = false;
-            }
-        }
-        if (ntrackcomplete != target)
-            ret = false;
-    }
-    for (y = 0; y < h; y++) {
-        target = state->numbers->numbers[w+y];
-        ntrack = nnotrack = ntrackcomplete = 0;
-        for (x = 0; x < w; x++) {
-            if (S_E_COUNT(state, x, y, E_TRACK) > 0 ||
-                state->sflags[y*w+x] & S_TRACK)
-                ntrack++;
-            if (S_E_COUNT(state, x, y, E_TRACK) == 2)
-                ntrackcomplete++;
-            if (state->sflags[y*w+x] & S_NOTRACK)
-                nnotrack++;
-        }
-        if (mark) {
-            if (ntrack > target || nnotrack > (w-target)) {
-                debug(("row %d error: target %d, track %d, notrack %d",
-                       y, target, ntrack, nnotrack));
-                state->num_errors[w+y] = 1;
-                ret = false;
-            }
-        }
-        if (ntrackcomplete != target)
-            ret = false;
     }
 
     dsf = snewn(w*h, int);
@@ -1949,8 +1921,74 @@ static bool check_completion(game_state *state, bool mark)
         }
     }
 
-    if (mark)
+    /*
+     * A cell is 'complete', for the purposes of marking the game as
+     * finished, if it has two edges marked as TRACK. But it only has
+     * to have one edge marked as TRACK, or be filled in as trackful
+     * without any specific edges known, to count towards checking
+     * row/column clue errors.
+     *
+     * This changes if we haven't found any other errors by this
+     * point, so the player has constructed a route from A to B.  In
+     * that case, we highlight any row/column where the actually laid
+     * tracks don't match the clue.
+     */
+    pathret = ret; /* Do we have a plausible solution so far? */
+    for (x = 0; x < w; x++) {
+        target = state->numbers->numbers[x];
+        ntrack = nnotrack = ntrackcomplete = 0;
+        for (y = 0; y < h; y++) {
+            if (S_E_COUNT(state, x, y, E_TRACK) > 0 ||
+                state->sflags[y*w+x] & S_TRACK)
+                ntrack++;
+            if (S_E_COUNT(state, x, y, E_TRACK) == 2)
+                ntrackcomplete++;
+            if (state->sflags[y*w+x] & S_NOTRACK)
+                nnotrack++;
+        }
+        if (mark) {
+            if (ntrack > target || nnotrack > (h-target) ||
+                (pathret && ntrackcomplete != target)) {
+                debug(("col %d error: target %d, track %d, notrack %d, "
+                       "pathret %d, trackcomplete %d",
+                       x, target, ntrack, nnotrack, pathret, ntrackcomplete));
+                state->num_errors[x] = 1;
+                ret = false;
+            }
+        }
+        if (ntrackcomplete != target)
+            ret = false;
+    }
+    for (y = 0; y < h; y++) {
+        target = state->numbers->numbers[w+y];
+        ntrack = nnotrack = ntrackcomplete = 0;
+        for (x = 0; x < w; x++) {
+            if (S_E_COUNT(state, x, y, E_TRACK) > 0 ||
+                state->sflags[y*w+x] & S_TRACK)
+                ntrack++;
+            if (S_E_COUNT(state, x, y, E_TRACK) == 2)
+                ntrackcomplete++;
+            if (state->sflags[y*w+x] & S_NOTRACK)
+                nnotrack++;
+        }
+        if (mark) {
+            if (ntrack > target || nnotrack > (w-target) ||
+                (pathret && ntrackcomplete != target)) {
+                debug(("row %d error: target %d, track %d, notrack %d, "
+                       "pathret %d, trackcomplete %d",
+                       y, target, ntrack, nnotrack, pathret, ntrackcomplete));
+                state->num_errors[w+y] = 1;
+                ret = false;
+            }
+        }
+        if (ntrackcomplete != target)
+            ret = false;
+    }
+
+    if (mark) {
         state->completed = ret;
+        if (ret) set_flash_data(state);
+    }
     sfree(dsf);
     return ret;
 }
@@ -2817,7 +2855,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
                         const game_state *state, int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
-    int i, x, y, flashing = 0, w = ds->w, h = ds->h;
+    int i, x, y, flashing, w = ds->w, h = ds->h;
     bool force = false;
     game_state *drag_state = NULL;
 
@@ -2843,17 +2881,21 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
         }
     }
 
-    if (flashtime > 0 &&
-            (flashtime <= FLASH_TIME/3 ||
-             flashtime >= FLASH_TIME*2/3))
-        flashing = DS_FLASH;
-
     if (ui->dragging)
         drag_state = copy_and_apply_drag(state, ui);
 
     for (x = 0; x < w; x++) {
         for (y = 0; y < h; y++) {
             unsigned int f, f_d;
+
+            flashing = 0;
+            if (flashtime > 0) {
+                float flashpos =
+                    (state->sflags[y*w+x] >> S_FLASH_SHIFT & 0xff) / 255.0F;
+                if (flashtime > FLASH_TIME / 2 * flashpos &&
+                    flashtime <= FLASH_TIME / 2 * (flashpos + 1.0F))
+                    flashing = DS_FLASH;
+            }
 
             f = s2d_flags(state, x, y, ui) | flashing;
             f_d = drag_state ? s2d_flags(drag_state, x, y, ui) : f;

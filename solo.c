@@ -3654,10 +3654,11 @@ static char *new_game_desc(const game_params *params, random_state *rs,
      * the puzzle size: all 2x2 puzzles appear to be Trivial
      * (DIFF_BLOCK) so we cannot hold out for even a Basic
      * (DIFF_SIMPLE) one.
+     * Jigsaw puzzles of size 2 and 3 are also all trivial.
      */
     dlev.maxdiff = params->diff;
     dlev.maxkdiff = params->kdiff;
-    if (c == 2 && r == 2)
+    if ((c == 2 && r == 2) || (r == 1 && c < 4))
         dlev.maxdiff = DIFF_BLOCK;
 
     grid = snewn(area, digit);
@@ -4708,6 +4709,26 @@ static char *interpret_move(const game_state *state, game_ui *ui,
          */
         if (ui->hpencil && state->grid[ui->hy*cr+ui->hx])
             return NULL;
+
+        /*
+         * If you ask to fill a square with what it already contains,
+         * or blank it when it's already empty, that has no effect...
+         */
+        if ((!ui->hpencil || n == 0) && state->grid[ui->hy*cr+ui->hx] == n) {
+            bool anypencil = false;
+            int i;
+            for (i = 0; i < cr; i++)
+                anypencil = anypencil ||
+                    state->pencil[(ui->hy*cr+ui->hx) * cr + i];
+            if (!anypencil) {
+                /* ... expect to remove the cursor in mouse mode. */
+                if (!ui->hcursor) {
+                    ui->hshow = false;
+                    return UI_UPDATE;
+                }
+                return NULL;
+            }
+        }
 
 	sprintf(buf, "%c%d,%d,%d",
 		(char)(ui->hpencil && n > 0 ? 'P' : 'R'), ui->hx, ui->hy, n);
