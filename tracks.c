@@ -242,7 +242,9 @@ static const int nbits[] = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
 #define S_CLUE 8
 #define S_MARK 16
 
-#define S_FLASH_SHIFT   8  /* Position of tile in solved track, 8 bits */
+#define S_FLASH_SHIFT   8  /* Position of tile in solved track */
+#define S_FLASH_WIDTH   8  /* Width of above sub-field */
+#define S_FLASH_MASK    ((1 << S_FLASH_WIDTH) - 1)
 #define S_TRACK_SHIFT   16 /* U/D/L/R flags for edge track indicators */
 #define S_NOTRACK_SHIFT 20 /* U/D/L/R flags for edge no-track indicators */
 
@@ -1836,8 +1838,9 @@ static void set_flash_data(game_state *state)
         ntrack += state->numbers->numbers[x];
     n = 0; x = 0; y = state->numbers->row_s; d = R;
     do {
-        /* Don't bother clearing; this only runs at completion. */
-        state->sflags[y*w + x] |= (n++ * 255 / (ntrack - 1)) << S_FLASH_SHIFT;
+        state->sflags[y*w + x] &= ~(S_FLASH_MASK << S_FLASH_SHIFT);
+        state->sflags[y*w + x] |=
+            n++ * (S_FLASH_MASK / (ntrack - 1)) << S_FLASH_SHIFT;
         d = F(d); /* Find the direction we just arrived from. */
         d = S_E_DIRS(state, x, y, E_TRACK) & ~d; /* Other track from here. */
         x += DX(d); y += DY(d); /* Move to the next tile. */
@@ -2515,12 +2518,13 @@ static float *game_colours(frontend *fe, int *ncolours)
     int i;
 
     game_mkhighlight(fe, ret, COL_BACKGROUND, -1, COL_TRACK_BACKGROUND);
+    colour_mix(&ret[COL_BACKGROUND*3], &ret[COL_TRACK_BACKGROUND*3], 0.5F,
+               &ret[COL_GRID*3]);
 
     for (i = 0; i < 3; i++) {
         ret[COL_TRACK_CLUE       * 3 + i] = 0.0F;
         ret[COL_TRACK            * 3 + i] = 0.5F;
         ret[COL_CLUE             * 3 + i] = 0.0F;
-        ret[COL_GRID             * 3 + i] = 0.75F;
         ret[COL_CURSOR           * 3 + i] = 0.3F;
         ret[COL_ERROR_BACKGROUND * 3 + i] = 1.0F;
     }
@@ -2891,7 +2895,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
             flashing = 0;
             if (flashtime > 0) {
                 float flashpos =
-                    (state->sflags[y*w+x] >> S_FLASH_SHIFT & 0xff) / 255.0F;
+                    (state->sflags[y*w+x] >> S_FLASH_SHIFT & S_FLASH_MASK) /
+                    (float)S_FLASH_MASK;
                 if (flashtime > FLASH_TIME / 2 * flashpos &&
                     flashtime <= FLASH_TIME / 2 * (flashpos + 1.0F))
                     flashing = DS_FLASH;
