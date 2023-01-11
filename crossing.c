@@ -1251,6 +1251,14 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 {
 }
 
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    if (ui->cshow && (button == CURSOR_SELECT))
+        return ui->cpencil ? "Ink" : "Pencil";
+    return "";
+}
+
 #define FE_LEFT   0x01
 #define FE_RIGHT  0x02
 #define FE_CENTER (FE_LEFT|FE_RIGHT)
@@ -1904,7 +1912,7 @@ const struct game thegame = {
 	decode_ui,
 	game_request_keys,
 	game_changed_state,
-	NULL,
+	current_key_label,
 	interpret_move,
 	execute_move,
 	40, game_compute_size, game_set_size,
