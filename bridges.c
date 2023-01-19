@@ -72,6 +72,7 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <math.h>
 
 #include "puzzles.h"
@@ -803,6 +804,8 @@ static const char *validate_params(const game_params *params, bool full)
 {
     if (params->w < 3 || params->h < 3)
         return "Width and height must be at least 3";
+    if (params->w > INT_MAX / params->h)
+        return "Width times height must not be unreasonably large";
     if (params->maxb < 1 || params->maxb > MAX_BRIDGES)
         return "Too many bridges.";
     if (full) {
@@ -2012,11 +2015,6 @@ static const char *validate_desc(const game_params *params, const char *desc)
         else if (*desc >= 'a' && *desc <= 'z')
             i += *desc - 'a'; /* plus the i++ */
         else if (*desc >= 'A' && *desc <= 'G')
-            /* OK */;
-        else if (*desc == 'V' || *desc == 'W' ||
-                 *desc == 'X' || *desc == 'Y' ||
-                 *desc == 'H' || *desc == 'I' ||
-                 *desc == 'J' || *desc == 'K')
             /* OK */;
         else if (!*desc)
             return "Game description shorter than expected";

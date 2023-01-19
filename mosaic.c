@@ -241,7 +241,7 @@ static const char *validate_params(const game_params *params, bool full)
     if (params->height < 3 || params->width < 3) {
         return "Minimal size is 3x3";
     }
-    if (params->height * params->width > MAX_TILES) {
+    if (params->height > MAX_TILES / params->width) {
         return MAX_TILES_ERROR;
     }
     return NULL;
@@ -840,7 +840,8 @@ static const char *validate_desc(const game_params *params,
     while (*curr_desc != '\0') {
         if (*curr_desc >= 'a' && *curr_desc <= 'z') {
             length += *curr_desc - 'a';
-        }
+        } else if (*curr_desc < '0' || *curr_desc > '9')
+            return "Invalid character in game description";
         length++;
         curr_desc++;
     }
@@ -1296,6 +1297,10 @@ static game_state *execute_move(const game_state *state, const char *move)
             return new_state;
         }
         cell = get_coords(new_state, new_state->cells_contents, x, y);
+        if (cell == NULL) {
+            sfree(new_state);
+            return NULL;
+        }
         if (*cell >= STATE_OK_NUM) {
             *cell &= STATE_OK_NUM;
         }
@@ -1362,6 +1367,10 @@ static game_state *execute_move(const game_state *state, const char *move)
         for (i = 0; i < diff; i++) {
             cell = get_coords(new_state, new_state->cells_contents,
                               x + (dirX * i), y + (dirY * i));
+            if (cell == NULL) {
+                sfree(new_state);
+                return NULL;
+            }
             if ((*cell & STATE_OK_NUM) == 0) {
                 *cell = last_state;
                 update_board_state_around(new_state, x + (dirX * i),

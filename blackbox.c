@@ -305,7 +305,7 @@ struct game_state {
 
 #define GRID(s,x,y) ((s)->grid[(y)*((s)->w+2) + (x)])
 
-#define RANGECHECK(s,x) ((x) >= 0 && (x) <= (s)->nlasers)
+#define RANGECHECK(s,x) ((x) >= 0 && (x) < (s)->nlasers)
 
 /* specify numbers because they must match array indexes. */
 enum { DIR_UP = 0, DIR_RIGHT = 1, DIR_DOWN = 2, DIR_LEFT = 3 };
@@ -1067,9 +1067,9 @@ static game_state *execute_move(const game_state *from, const char *move)
 
     case 'F':
         sscanf(move+1, "%d", &rangeno);
-        if (ret->exits[rangeno] != LASER_EMPTY)
-            goto badmove;
         if (!RANGECHECK(ret, rangeno))
+            goto badmove;
+        if (ret->exits[rangeno] != LASER_EMPTY)
             goto badmove;
         fire_laser(ret, rangeno);
         break;

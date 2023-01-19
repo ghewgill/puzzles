@@ -321,10 +321,13 @@ static int convert_tilesize(midend *me, int old_tilesize,
                             double old_dpr, double new_dpr)
 {
     int x, y, rx, ry, min, max;
-    game_params *defaults = me->ourgame->default_params();
+    game_params *defaults;
 
     if (new_dpr == old_dpr)
         return old_tilesize;
+
+    defaults = me->ourgame->default_params();
+
     me->ourgame->compute_size(defaults, old_tilesize, &x, &y);
     x *= new_dpr / old_dpr;
     y *= new_dpr / old_dpr;
@@ -2310,7 +2313,7 @@ static const char *midend_deserialise_internal(
 
             if (c == ':') {
                 break;
-            } else if (c >= '0' && c <= '9') {
+            } else if (c >= '0' && c <= '9' && len < (INT_MAX - 10) / 10) {
                 len = (len * 10) + (c - '0');
             } else {
                 if (started)
@@ -2418,7 +2421,12 @@ static const char *midend_deserialise_internal(
                     ret = "No state count provided in save file";
                     goto cleanup;
                 }
+                if (data.statepos < 0) {
+                    ret = "No game position provided in save file";
+                    goto cleanup;
+                }
                 gotstates++;
+                assert(gotstates < data.nstates);
                 if (!strcmp(key, "MOVE"))
                     data.states[gotstates].movetype = MOVE;
                 else if (!strcmp(key, "SOLVE"))
@@ -2511,7 +2519,8 @@ static const char *midend_deserialise_internal(
     }
 
     data.ui = me->ourgame->new_ui(data.states[0].state);
-    me->ourgame->decode_ui(data.ui, data.uistr);
+    if (data.uistr)
+        me->ourgame->decode_ui(data.ui, data.uistr);
 
     /*
      * Run the externally provided check function, and abort if it
@@ -2704,7 +2713,7 @@ const char *identify_game(char **name,
 
             if (c == ':') {
                 break;
-            } else if (c >= '0' && c <= '9') {
+            } else if (c >= '0' && c <= '9' && len < (INT_MAX - 10) / 10) {
                 len = (len * 10) + (c - '0');
             } else {
                 if (started)

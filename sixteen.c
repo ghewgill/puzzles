@@ -9,6 +9,7 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <math.h>
 
 #include "puzzles.h"
@@ -173,6 +174,8 @@ static const char *validate_params(const game_params *params, bool full)
 {
     if (params->w < 2 || params->h < 2)
 	return "Width and height must both be at least two";
+    if (params->w > INT_MAX / params->h)
+        return "Width times height must not be unreasonably large";
 
     return NULL;
 }
@@ -762,11 +765,11 @@ static game_state *execute_move(const game_state *from, const char *move)
     }
 
     if (move[0] == 'R' && sscanf(move+1, "%d,%d", &cy, &dx) == 2 &&
-	cy >= 0 && cy < from->h) {
+	cy >= 0 && cy < from->h && -from->h <= dx && dx <= from->w ) {
 	cx = dy = 0;
 	n = from->w;
     } else if (move[0] == 'C' && sscanf(move+1, "%d,%d", &cx, &dy) == 2 &&
-	       cx >= 0 && cx < from->w) {
+	       cx >= 0 && cx < from->w && -from->h <= dy && dy <= from->h) {
 	cy = dx = 0;
 	n = from->h;
     } else

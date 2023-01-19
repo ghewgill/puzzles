@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -156,13 +157,15 @@ static game_params *custom_params(const config_item *cfg)
 
 static const char *validate_params(const game_params *params, bool full)
 {
-    int w = params->w, h = params->h, k = params->k, wh = w * h;
+    int w = params->w, h = params->h, k = params->k, wh;
 
     if (k < 1) return "Region size must be at least one";
     if (w < 1) return "Width must be at least one";
     if (h < 1) return "Height must be at least one";
+    if (w > INT_MAX / h)
+        return "Width times height must not be unreasonably large";
+    wh = w * h;
     if (wh % k) return "Region size must divide grid area";
-
     if (!full) return NULL; /* succeed partial validation */
 
     /* MAYBE FIXME: we (just?) don't have the UI for winning these. */
@@ -891,7 +894,6 @@ static char *encode_ui(const game_ui *ui)
 
 static void decode_ui(game_ui *ui, const char *encoding)
 {
-    assert (encoding == NULL);
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -1020,15 +1022,14 @@ static game_state *execute_move(const game_state *state, const char *move)
 {
     int w = state->shared->params.w, h = state->shared->params.h, wh = w * h;
     game_state *ret = dup_game(state);
-    int nchars, x, y, flag;
+    int nchars, x, y, flag, i;
 
     if (*move == 'S') {
-        int i;
         ++move;
         for (i = 0; i < wh && move[i]; ++i)
             ret->borders[i] =
                 (move[i] & BORDER_MASK) | DISABLED(~move[i] & BORDER_MASK);
-        if (i < wh || move[i]) return NULL; /* leaks `ret', then we die */
+        if (i < wh || move[i]) goto badmove;
         ret->cheated = ret->completed = true;
         return ret;
     }
@@ -1036,16 +1037,25 @@ static game_state *execute_move(const game_state *state, const char *move)
     while (sscanf(move, "F%d,%d,%d%n", &x, &y, &flag, &nchars) == 3 &&
            !OUT_OF_BOUNDS(x, y, w, h)) {
         move += nchars;
+        for (i = 0; i < 4; i++)
+            if ((flag & BORDER(i)) &&
+                OUT_OF_BOUNDS(x+dx[i], y+dy[i], w, h))
+                /* No toggling the borders of the grid! */
+                goto badmove;
         ret->borders[y*w + x] ^= flag;
     }
 
-    if (*move) return NULL; /* leaks `ret', then we die */
+    if (*move) goto badmove;
 
     if (!ret->completed)
         ret->completed = is_solved(&ret->shared->params, ret->shared->clues,
                                    ret->borders);
 
     return ret;
+
+  badmove:
+    free_game(ret);
+    return NULL;
 }
 
 /* --- Drawing routines --------------------------------------------- */
