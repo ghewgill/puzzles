@@ -2006,6 +2006,8 @@ static const char *validate_desc(const game_params *params, const char *desc)
         desc++;
 	if (!*desc || !isdigit((unsigned char)*desc))
 	    return "No initial mine count in game description";
+	if (atoi(desc) > wh - 9)
+            return "Too many mines for grid size";
 	while (*desc && isdigit((unsigned char)*desc))
 	    desc++;		       /* skip over mine count */
 	if (*desc != ',')
@@ -2637,6 +2639,7 @@ static game_state *execute_move(const game_state *from, const char *move)
     if (!strcmp(move, "S")) {
 	int yy, xx;
 
+        if (!from->layout->mines) return NULL; /* Game not started. */
 	ret = dup_game(from);
         if (!ret->dead) {
             /*
