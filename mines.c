@@ -2146,6 +2146,8 @@ static int open_square(game_state *state, int x, int y)
 	    break;
     }
 
+    /* If the player has already lost, don't let them win as well. */
+    if (state->dead) return 0;
     /*
      * Finally, scan the grid and see if exactly as many squares
      * are still covered as there are mines. If so, set the `won'
@@ -2701,7 +2703,9 @@ static game_state *execute_move(const game_state *from, const char *move)
 	while (*move) {
 	    if (move[0] == 'F' &&
 		sscanf(move+1, "%d,%d", &cx, &cy) == 2 &&
-		cx >= 0 && cx < from->w && cy >= 0 && cy < from->h) {
+		cx >= 0 && cx < from->w && cy >= 0 && cy < from->h &&
+                (ret->grid[cy * from->w + cx] == -1 ||
+                 ret->grid[cy * from->w + cx] == -2)) {
 		ret->grid[cy * from->w + cx] ^= (-2 ^ -1);
 	    } else if (move[0] == 'O' &&
 		       sscanf(move+1, "%d,%d", &cx, &cy) == 2 &&
@@ -3215,14 +3219,6 @@ static bool game_timing_state(const game_state *state, game_ui *ui)
     return true;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
-{
-}
-
-static void game_print(drawing *dr, const game_state *state, int tilesize)
-{
-}
-
 #ifdef COMBINED
 #define thegame mines
 #endif
@@ -3262,7 +3258,7 @@ const struct game thegame = {
     game_flash_length,
     game_get_cursor_location,
     game_status,
-    false, false, game_print_size, game_print,
+    false, false, NULL, NULL,          /* print_size, print */
     true,			       /* wants_statusbar */
     true, game_timing_state,
     BUTTON_BEATS(LEFT_BUTTON, RIGHT_BUTTON) | REQUIRE_RBUTTON,
