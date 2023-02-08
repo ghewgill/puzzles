@@ -263,6 +263,8 @@ static const char *validate_params(const game_params *params, bool full)
 	return "Width and height must both be greater than two";
     if (params->w < 1 || params->h < 1)
 	return "Width and height must both be at least one";
+    if (params->w > SHRT_MAX || params->h > SHRT_MAX)
+        return "Neither width nor height may be unreasonably large";
     if (params->w > INT_MAX / params->h)
         return "Width times height must not be unreasonably large";
     if (params->n < 0)
@@ -433,7 +435,9 @@ static void ss_add(struct setstore *ss, int x, int y, int mask, int mines)
      * Create a set structure and add it to the tree.
      */
     s = snew(struct set);
+    assert(SHRT_MIN <= x && x <= SHRT_MAX);
     s->x = x;
+    assert(SHRT_MIN <= y && y <= SHRT_MAX);
     s->y = y;
     s->mask = mask;
     s->mines = mines;
@@ -504,7 +508,9 @@ static struct set **ss_overlap(struct setstore *ss, int x, int y, int mask)
 	    /*
 	     * Find the first set with these top left coordinates.
 	     */
+            assert(SHRT_MIN <= xx && xx <= SHRT_MAX);
 	    stmp.x = xx;
+            assert(SHRT_MIN <= yy && yy <= SHRT_MAX);
 	    stmp.y = yy;
 	    stmp.mask = 0;
 
