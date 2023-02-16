@@ -5139,7 +5139,7 @@ static void draw_number(drawing *dr, game_drawstate *ds,
 		fw = (pr - pl) / (float)pw;
 		fh = (pb - pt) / (float)ph;
 		fs = min(fw, fh);
-		if (fs > bestsize) {
+		if (fs >= bestsize) {
 		    bestsize = fs;
 		    pbest = pw;
 		}

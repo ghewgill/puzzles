@@ -777,10 +777,13 @@ static const char *validate_desc(const game_params *params, const char *desc)
      * know is the precise number of faces. */
     grid_desc = extract_grid_desc(&desc);
     ret = grid_validate_desc(grid_types[params->type], params->w, params->h, grid_desc);
-    if (ret) return ret;
+    if (ret) {
+        sfree(grid_desc);
+        return ret;
+    }
 
     g = loopy_generate_grid(params, grid_desc);
-    if (grid_desc) sfree(grid_desc);
+    sfree(grid_desc);
 
     for (; *desc; ++desc) {
         if ((*desc >= '0' && *desc <= '9') || (*desc >= 'A' && *desc <= 'Z')) {
@@ -791,13 +794,18 @@ static const char *validate_desc(const game_params *params, const char *desc)
             count += *desc - 'a' + 1;
             continue;
         }
+        grid_free(g);
         return "Unknown character in description";
     }
 
-    if (count < g->num_faces)
+    if (count < g->num_faces) {
+        grid_free(g);
         return "Description too short for board size";
-    if (count > g->num_faces)
+    }
+    if (count > g->num_faces) {
+        grid_free(g);
         return "Description too long for board size";
+    }
 
     grid_free(g);
 

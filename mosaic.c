@@ -832,21 +832,18 @@ static const char *validate_desc(const game_params *params,
                                  const char *desc)
 {
     int size_dest = params->height * params->width;
-    char *curr_desc = dupstr(desc);
-    char *desc_base = curr_desc;
     int length;
     length = 0;
 
-    while (*curr_desc != '\0') {
-        if (*curr_desc >= 'a' && *curr_desc <= 'z') {
-            length += *curr_desc - 'a';
-        } else if (*curr_desc < '0' || *curr_desc > '9')
+    while (*desc != '\0') {
+        if (*desc >= 'a' && *desc <= 'z') {
+            length += *desc - 'a';
+        } else if (*desc < '0' || *desc > '9')
             return "Invalid character in game description";
         length++;
-        curr_desc++;
+        desc++;
     }
 
-    sfree(desc_base);
     if (length != size_dest) {
         return "Desc size mismatch";
     }
@@ -925,6 +922,7 @@ static void free_game(game_state *state)
     sfree(state->cells_contents);
     state->cells_contents = NULL;
     if (state->board->references <= 1) {
+        sfree(state->board->actual_board);
         sfree(state->board);
         state->board = NULL;
     } else {
@@ -1281,8 +1279,10 @@ static game_state *execute_move(const game_state *state, const char *move)
         move_params[i] = atoi(p);
         while (*p && isdigit((unsigned char)*p)) p++;
         if (i+1 < nparams) {
-            if (*p != ',')
+            if (*p != ',') {
+                free_game(new_state);
                 return NULL;
+            }
             p++;
         }
     }
@@ -1298,7 +1298,7 @@ static game_state *execute_move(const game_state *state, const char *move)
         }
         cell = get_coords(new_state, new_state->cells_contents, x, y);
         if (cell == NULL) {
-            sfree(new_state);
+            free_game(new_state);
             return NULL;
         }
         if (*cell >= STATE_OK_NUM) {
@@ -1368,7 +1368,7 @@ static game_state *execute_move(const game_state *state, const char *move)
             cell = get_coords(new_state, new_state->cells_contents,
                               x + (dirX * i), y + (dirY * i));
             if (cell == NULL) {
-                sfree(new_state);
+                free_game(new_state);
                 return NULL;
             }
             if ((*cell & STATE_OK_NUM) == 0) {

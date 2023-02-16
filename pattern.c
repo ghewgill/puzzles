@@ -1740,6 +1740,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 {
     sfree(ds->visible);
+    sfree(ds->numcolours);
     sfree(ds->strbuf);
     sfree(ds);
 }
