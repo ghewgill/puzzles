@@ -2627,8 +2627,8 @@ static void draw_wires(drawing *dr, int cx, int cy, int radius,
 
     for (i = 0; i < npoints; i++) {
         rotated_coords(&xf, &yf, matrix, cx, cy, fpoints[2*i], fpoints[2*i+1]);
-        points[2*i] = 0.5 + xf;
-        points[2*i+1] = 0.5 + yf;
+        points[2*i] = 0.5F + xf;
+        points[2*i+1] = 0.5F + yf;
     }
 
     draw_polygon(dr, points, npoints, colour, colour);
@@ -2768,8 +2768,8 @@ static void draw_tile(drawing *dr, game_drawstate *ds, int x, int y,
      * rotated by an arbitrary angle about that centre point.
      */
     if (tile & TILE_ROTATING) {
-        matrix[0] = (float)cos(angle * PI / 180.0);
-        matrix[2] = (float)sin(angle * PI / 180.0);
+        matrix[0] = (float)cos(angle * (float)PI / 180.0F);
+        matrix[2] = (float)sin(angle * (float)PI / 180.0F);
     } else {
         matrix[0] = 1.0F;
         matrix[2] = 0.0F;
@@ -2808,8 +2808,8 @@ static void draw_tile(drawing *dr, game_drawstate *ds, int x, int y,
                 float x, y;
                 rotated_coords(&x, &y, matrix, cx, cy,
                                boxr * points[i], boxr * points[i+1]);
-                points[i] = x + 0.5;
-                points[i+1] = y + 0.5;
+                points[i] = x + 0.5F;
+                points[i+1] = y + 0.5F;
             }
 
             draw_polygon(dr, points, 4, col, COL_WIRE);

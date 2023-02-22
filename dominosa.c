@@ -259,9 +259,9 @@ static const char *validate_params(const game_params *params, bool full)
 
 #ifdef STANDALONE_SOLVER
 #define SOLVER_DIAGNOSTICS
-bool solver_diagnostics = false;
+static bool solver_diagnostics = false;
 #elif defined SOLVER_DIAGNOSTICS
-const bool solver_diagnostics = true;
+static const bool solver_diagnostics = true;
 #endif
 
 struct solver_domino;
@@ -930,7 +930,7 @@ struct parity_findloop_ctx {
     int i;
 };
 
-int parity_neighbour(int vertex, void *vctx)
+static int parity_neighbour(int vertex, void *vctx)
 {
     struct parity_findloop_ctx *ctx = (struct parity_findloop_ctx *)vctx;
     struct solver_placement *p;

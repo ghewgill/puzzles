@@ -42,7 +42,7 @@
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-bool verbose = 0;
+static bool verbose = false;
 #endif
 
 enum {
@@ -551,7 +551,7 @@ static const char *validate_desc(const game_params *params, const char *desc)
 {
     const char *prob;
     game_state *st = new_game_int(params, desc, &prob);
-    if (!st) return (char*)prob;
+    if (!st) return prob;
     free_game(st);
     return NULL;
 }
@@ -2489,14 +2489,14 @@ const struct game thegame = {
 #include <time.h>
 #include <stdarg.h>
 
-const char *quis = NULL;
-bool csv = false;
+static const char *quis = NULL;
+static bool csv = false;
 
-void usage(FILE *out) {
+static void usage(FILE *out) {
     fprintf(out, "usage: %s [-v] [--print] <params>|<game id>\n", quis);
 }
 
-void doprint(game_state *state)
+static void doprint(game_state *state)
 {
     char *fmt = game_text_format(state);
     printf("%s", fmt);
@@ -2590,7 +2590,7 @@ static void start_soak(game_params *p, random_state *rs)
     sfree(aux);
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
     bool print = false, soak = false, solved = false;
     int ret;

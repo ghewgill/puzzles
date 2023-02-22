@@ -1075,7 +1075,7 @@ static int gg_best_clue(game_state *state, int *scratch, digit *latin)
 }
 
 #ifdef STANDALONE_SOLVER
-int maxtries;
+static int maxtries;
 #define MAXTRIES maxtries
 #else
 #define MAXTRIES 50
@@ -1589,10 +1589,10 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		self = (GRID(state, flags, ui->hx, ui->hy) & adjthan[i].f);
 
 	    if (self)
-		sprintf(buf, "F%d,%d,%d", ui->hx, ui->hy,
+		sprintf(buf, "F%d,%d,%u", ui->hx, ui->hy,
 			ADJ_TO_SPENT(adjthan[i].f));
 	    else
-		sprintf(buf, "F%d,%d,%d", nx, ny,
+		sprintf(buf, "F%d,%d,%u", nx, ny,
 			ADJ_TO_SPENT(adjthan[i].fo));
 
 	    return dupstr(buf);
@@ -2200,7 +2200,7 @@ const struct game thegame = {
 #include <time.h>
 #include <stdarg.h>
 
-const char *quis = NULL;
+static const char *quis = NULL;
 
 #if 0 /* currently unused */
 

@@ -1031,8 +1031,8 @@ static void connect_numbers(game_state *state)
 
 static int compare_heads(const void *a, const void *b)
 {
-    struct head_meta *ha = (struct head_meta *)a;
-    struct head_meta *hb = (struct head_meta *)b;
+    const struct head_meta *ha = (const struct head_meta *)a;
+    const struct head_meta *hb = (const struct head_meta *)b;
 
     /* Heads with preferred colours first... */
     if (ha->preference && !hb->preference) return -1;
@@ -2318,10 +2318,9 @@ const struct game thegame = {
 #include <time.h>
 #include <stdarg.h>
 
-const char *quis = NULL;
-int verbose = 0;
+static const char *quis = NULL;
 
-void usage(FILE *out) {
+static void usage(FILE *out) {
     fprintf(out, "usage: %s [--stdin] [--soak] [--seed SEED] <params>|<game id>\n", quis);
 }
 
@@ -2422,7 +2421,7 @@ static void process_desc(char *id)
     thegame.free_params(p);
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
     char *id = NULL, *desc, *aux = NULL;
     const char *err;

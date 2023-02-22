@@ -1321,7 +1321,7 @@ bool latin_check(digit *sq, int order)
 #include <stdio.h>
 #include <time.h>
 
-const char *quis;
+static const char *quis;
 
 static void latin_print(digit *sq, int order)
 {
@@ -1352,7 +1352,7 @@ static void gen(int order, random_state *rs, int debug)
     sfree(sq);
 }
 
-void test_soak(int order, random_state *rs)
+static void test_soak(int order, random_state *rs)
 {
     digit *sq;
     int n = 0;
@@ -1375,7 +1375,7 @@ void test_soak(int order, random_state *rs)
     }
 }
 
-void usage_exit(const char *msg)
+static void usage_exit(const char *msg)
 {
     if (msg)
         fprintf(stderr, "%s: %s\n", quis, msg);

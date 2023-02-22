@@ -1370,7 +1370,7 @@ static bool game_has_unique_soln(const game_state *state, int diff)
 {
     bool ret;
     solver_state *sstate_new;
-    solver_state *sstate = new_solver_state((game_state *)state, diff);
+    solver_state *sstate = new_solver_state(state, diff);
 
     sstate_new = solve_game_rec(sstate);
 
@@ -2713,7 +2713,6 @@ static int loop_deductions(solver_state *sstate)
     game_state *state = sstate->state;
     grid *g = state->game_grid;
     int shortest_chainlen = g->num_dots;
-    bool loop_found = false;
     int dots_connected;
     bool progress = false;
     int i;
@@ -2726,7 +2725,7 @@ static int loop_deductions(solver_state *sstate)
      */
     for (i = 0; i < g->num_edges; i++) {
         if (state->lines[i] == LINE_YES) {
-            loop_found |= merge_dots(sstate, i);
+            merge_dots(sstate, i);
             edgecount++;
         }
     }

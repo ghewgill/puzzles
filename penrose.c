@@ -509,10 +509,10 @@ void penrose_calculate_size(int which, int tilesize, int w, int h,
 #include <stdio.h>
 #include <string.h>
 
-int show_recursion = 0;
-int ntiles, nfinal;
+static int show_recursion = 0;
+static int ntiles, nfinal;
 
-int test_cb(penrose_state *state, vector *vs, int n, int depth)
+static int test_cb(penrose_state *state, vector *vs, int n, int depth)
 {
     int i, xoff = 0, yoff = 0;
     double l = penrose_side_length(state->start_size, depth);
@@ -542,7 +542,7 @@ int test_cb(penrose_state *state, vector *vs, int n, int depth)
     return 0;
 }
 
-void usage_exit(void)
+static void usage_exit(void)
 {
     fprintf(stderr, "Usage: penrose-test [--recursion] P2|P3 SIZE DEPTH\n");
     exit(1);
