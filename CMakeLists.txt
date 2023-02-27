@@ -357,9 +357,16 @@ if(build_cli_programs)
   write_generated_games_header()
   include(CheckFunctionExists)
   check_function_exists(HF_ITER HAVE_HF_ITER)
+  set(WITH_LIBFUZZER OFF
+    CACHE BOOL "Build fuzzpuzz using Clang's libFuzzer")
   cliprogram(fuzzpuzz fuzzpuzz.c list.c ${puzzle_sources}
-    COMPILE_DEFINITIONS COMBINED $<$<BOOL:${HAVE_HF_ITER}>:HAVE_HF_ITER>)
+    COMPILE_DEFINITIONS COMBINED $<$<BOOL:${WITH_LIBFUZZER}>:OMIT_MAIN>
+    $<$<BOOL:${HAVE_HF_ITER}>:HAVE_HF_ITER>)
   target_include_directories(fuzzpuzz PRIVATE ${generated_include_dir})
+  if(WITH_LIBFUZZER)
+    target_compile_options(fuzzpuzz PRIVATE -fsanitize=fuzzer)
+    set_target_properties(fuzzpuzz PROPERTIES LINK_FLAGS -fsanitize=fuzzer)
+  endif()
 endif()
 
 build_extras()
