@@ -1393,7 +1393,7 @@ static game_ui *new_ui(const game_state *state)
      * copy to clone, there's code that needs fixing in game_redraw too. */
 
     ui->cx = ui->cy = 0;
-    ui->cshow = false;
+    ui->cshow = getenv_bool("PUZZLES_SHOW_CURSOR", false);
 
     ui->dragging = false;
     ui->sx = ui->sy = ui->dx = ui->dy = 0;
@@ -2161,10 +2161,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                      * yourself which is more brain-twisting :-)
                      */
                     static int gear_mode = -1;
-                    if (gear_mode < 0) {
-                        char *env = getenv("SIGNPOST_GEARS");
-                        gear_mode = (env && (env[0] == 'y' || env[0] == 'Y'));
-                    }
+                    if (gear_mode < 0)
+                        gear_mode = getenv_bool("SIGNPOST_GEARS", false);
                     if (gear_mode)
                         sign = 1 - 2 * ((x ^ y) & 1);
                     else

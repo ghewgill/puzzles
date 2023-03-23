@@ -1835,7 +1835,7 @@ static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->cur_x = ui->cur_y = 0;
-    ui->cur_visible = false;
+    ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
     return ui;
 }
 
@@ -2168,11 +2168,8 @@ static void tile_redraw(drawing *dr, game_drawstate *ds,
                         lcol, COL_BLACK);
         } else if ((ds_flags & DF_IMPOSSIBLE)) {
             static int draw_blobs_when_lit = -1;
-            if (draw_blobs_when_lit < 0) {
-		char *env = getenv("LIGHTUP_LIT_BLOBS");
-		draw_blobs_when_lit = (!env || (env[0] == 'y' ||
-                                                env[0] == 'Y'));
-            }
+            if (draw_blobs_when_lit < 0)
+		draw_blobs_when_lit = getenv_bool("LIGHTUP_LIT_BLOBS", true);
             if (!(ds_flags & DF_LIT) || draw_blobs_when_lit) {
                 int rlen = TILE_SIZE / 4;
                 draw_rect(dr, dx + TILE_SIZE/2 - rlen/2,

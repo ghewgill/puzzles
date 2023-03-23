@@ -1862,7 +1862,7 @@ static game_ui *new_ui(const game_state *state)
 
     ui->ndragcoords = -1;
     ui->dragcoords = snewn(sz, int);
-    ui->cursor_active = false;
+    ui->cursor_active = getenv_bool("PUZZLES_SHOW_CURSOR", false);
     ui->curx = ui->cury = 0;
 
     return ui;
@@ -1929,8 +1929,7 @@ static int get_gui_style(void)
     static int gui_style = -1;
 
     if (gui_style == -1) {
-        char *env = getenv("PEARL_GUI_LOOPY");
-        if (env && (env[0] == 'y' || env[0] == 'Y'))
+        if (getenv_bool("PEARL_GUI_LOOPY", false))
             gui_style = GUI_LOOPY;
         else
             gui_style = GUI_MASYU;

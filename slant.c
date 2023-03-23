@@ -1582,7 +1582,7 @@ static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->cur_x = ui->cur_y = 0;
-    ui->cur_visible = false;
+    ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
     return ui;
 }
 
@@ -1681,10 +1681,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 */
 	{
 	    static int swap_buttons = -1;
-	    if (swap_buttons < 0) {
-		char *env = getenv("SLANT_SWAP_BUTTONS");
-		swap_buttons = (env && (env[0] == 'y' || env[0] == 'Y'));
-	    }
+	    if (swap_buttons < 0)
+                swap_buttons = getenv_bool("SLANT_SWAP_BUTTONS", false);
 	    if (swap_buttons) {
 		if (button == LEFT_BUTTON)
 		    button = RIGHT_BUTTON;
