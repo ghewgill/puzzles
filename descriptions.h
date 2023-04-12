@@ -23,6 +23,7 @@ NSString *GameDescriptions[][2] = {
     {@"Map", @"Colour the map so that adjacent regions are never the same colour."},
     {@"Mathrax", @"Latin square with intersection clues indicating diagonal operation results."},
     {@"Mines", @"Find all the mines without treading on any of them."},
+    {@"Mosaic", @"Fill in the grid given clues about number of nearby black squares."},
     {@"Net", @"Rotate each tile to reassemble the network."},
     {@"Netslide", @"Slide a row at a time to reassemble the network."},
     {@"Palisade", @"Divide the grid into equal-sized areas in accordance with the clues."},
@@ -47,7 +48,7 @@ NSString *GameDescriptions[][2] = {
     {@"Tracks", @"Fill in the railway track according to the clues."},
     {@"Twiddle", @"Rotate the tiles around themselves to arrange them into order."},
     {@"Undead", @"Place ghosts, vampires and zombies so that the right numbers of them can be seen in mirrors."},
-    {@"Unequal", @"Complete the latin square in accordance with the > signs."},
+    {@"Unequal", @"Complete the latin square in accordance with the &gt; signs."},
     {@"Unruly", @"Fill in the black and white grid to avoid runs of three."},
     {@"Untangle", @"Reposition the points so that the lines do not cross."},
 };
