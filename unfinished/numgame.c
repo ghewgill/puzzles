@@ -40,7 +40,11 @@
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
-#include <math.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 #include "tree234.h"

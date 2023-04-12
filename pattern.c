@@ -8,7 +8,11 @@
 #include <assert.h>
 #include <ctype.h>
 #include <limits.h>
-#include <math.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 
@@ -915,8 +919,8 @@ static const char *validate_desc(const game_params *params, const char *desc)
                 p = desc;
                 while (*desc && isdigit((unsigned char)*desc)) desc++;
                 n = atoi(p);
-                if (n < 0)
-                    return "at least one clue is negative";
+                if (n <= 0)
+                    return "all clues must be positive";
                 if (n > INT_MAX - 1)
                     return "at least one clue is grossly excessive";
                 rowspace -= n+1;
@@ -1246,15 +1250,6 @@ static game_ui *new_ui(const game_state *state)
 static void free_ui(game_ui *ui)
 {
     sfree(ui);
-}
-
-static char *encode_ui(const game_ui *ui)
-{
-    return NULL;
-}
-
-static void decode_ui(game_ui *ui, const char *encoding)
-{
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -2085,8 +2080,8 @@ const struct game thegame = {
     true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
-    encode_ui,
-    decode_ui,
+    NULL, /* encode_ui */
+    NULL, /* decode_ui */
     NULL, /* game_request_keys */
     game_changed_state,
     current_key_label,
