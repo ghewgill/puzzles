@@ -192,7 +192,7 @@ struct game_state {
                            or -1 if stale. */
 };
 
-static bool check_complete(const game_state *state, int *dsf, int *colours);
+static bool check_complete(const game_state *state, DSF *dsf, int *colours);
 static int solver_state_inner(game_state *state, int maxdiff, int depth);
 static int solver_state(game_state *state, int maxdiff);
 static int solver_obvious(game_state *state);
@@ -1799,7 +1799,7 @@ typedef struct solver_ctx {
     game_state *state;
     int sz;             /* state->sx * state->sy */
     space **scratch;    /* size sz */
-    int *dsf;           /* size sz */
+    DSF *dsf;           /* size sz */
     int *iscratch;      /* size sz */
 } solver_ctx;
 
@@ -1809,7 +1809,7 @@ static solver_ctx *new_solver(game_state *state)
     sctx->state = state;
     sctx->sz = state->sx*state->sy;
     sctx->scratch = snewn(sctx->sz, space *);
-    sctx->dsf = snew_dsf(sctx->sz);
+    sctx->dsf = dsf_new(sctx->sz);
     sctx->iscratch = snewn(sctx->sz, int);
     return sctx;
 }
@@ -1817,7 +1817,7 @@ static solver_ctx *new_solver(game_state *state)
 static void free_solver(solver_ctx *sctx)
 {
     sfree(sctx->scratch);
-    sfree(sctx->dsf);
+    dsf_free(sctx->dsf);
     sfree(sctx->iscratch);
     sfree(sctx);
 }
@@ -2283,7 +2283,7 @@ static int solver_extend_exclaves(game_state *state, solver_ctx *sctx)
      * doesn't contain its own dot is an 'exclave', and will need some
      * kind of path of tiles to connect it back to the dot.
      */
-    dsf_init(sctx->dsf, sctx->sz);
+    dsf_reinit(sctx->dsf);
     for (x = 1; x < state->sx; x += 2) {
         for (y = 1; y < state->sy; y += 2) {
             int dotx, doty;
@@ -3066,7 +3066,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 }
 #endif
 
-static bool check_complete(const game_state *state, int *dsf, int *colours)
+static bool check_complete(const game_state *state, DSF *dsf, int *colours)
 {
     int w = state->w, h = state->h;
     int x, y, i;
@@ -3081,10 +3081,10 @@ static bool check_complete(const game_state *state, int *dsf, int *colours)
     } *sqdata;
 
     if (!dsf) {
-	dsf = snew_dsf(w*h);
+	dsf = dsf_new(w*h);
 	free_dsf = true;
     } else {
-	dsf_init(dsf, w*h);
+	dsf_reinit(dsf);
 	free_dsf = false;
     }
 
@@ -3240,7 +3240,7 @@ static bool check_complete(const game_state *state, int *dsf, int *colours)
 
     sfree(sqdata);
     if (free_dsf)
-	sfree(dsf);
+	dsf_free(dsf);
 
     return ret;
 }
@@ -3944,7 +3944,8 @@ static void game_print(drawing *dr, const game_state *state, int sz)
     int w = state->w, h = state->h;
     int white, black, blackish;
     int x, y, i, j;
-    int *colours, *dsf;
+    int *colours;
+    DSF *dsf;
     int *coords = NULL;
     int ncoords = 0, coordsize = 0;
 
@@ -3959,7 +3960,7 @@ static void game_print(drawing *dr, const game_state *state, int sz)
     /*
      * Get the completion information.
      */
-    dsf = snewn(w * h, int);
+    dsf = dsf_new(w * h);
     colours = snewn(w * h, int);
     check_complete(state, dsf, colours);
 
@@ -4095,7 +4096,7 @@ static void game_print(drawing *dr, const game_state *state, int sz)
 			     black : white), black);
 	    }
 
-    sfree(dsf);
+    dsf_free(dsf);
     sfree(colours);
     sfree(coords);
 }

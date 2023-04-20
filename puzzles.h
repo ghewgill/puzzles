@@ -428,25 +428,38 @@ char *button2label(int button);
 /*
  * dsf.c
  */
-int *snew_dsf(int size);
+typedef struct DSF DSF;
+DSF *dsf_new(int size);
+void dsf_free(DSF *dsf);
 
-void print_dsf(int *dsf, int size);
+void dsf_copy(DSF *to, DSF *from);
 
-/* Return the canonical element of the equivalence class containing element
- * val.  If 'inverse' is non-NULL, this function will put into it a flag
- * indicating whether the canonical element is inverse to val. */
-int edsf_canonify(int *dsf, int val, bool *inverse);
-int dsf_canonify(int *dsf, int val);
-int dsf_size(int *dsf, int val);
+/* Basic dsf operations, return the canonical element of a class,
+ * check if two elements are in the same class, and return the size of
+ * a class. These work on all types of dsf. */
+int dsf_canonify(DSF *dsf, int n);
+bool dsf_equivalent(DSF *dsf, int n1, int n2);
+int dsf_size(DSF *dsf, int n);
 
-/* Allow the caller to specify that two elements should be in the same
- * equivalence class.  If 'inverse' is true, the elements are actually opposite
- * to one another in some sense.  This function will fail an assertion if the
- * caller gives it self-contradictory data, ie if two elements are claimed to
- * be both opposite and non-opposite. */
-void edsf_merge(int *dsf, int v1, int v2, bool inverse);
-void dsf_merge(int *dsf, int v1, int v2);
-void dsf_init(int *dsf, int len);
+/* Merge two elements and their classes. Not legal on a flip dsf. */
+void dsf_merge(DSF *dsf, int n1, int n2);
+
+/* Special dsf that tracks the minimal element of every equivalence
+ * class, and a function to query it. */
+DSF *dsf_new_min(int size);
+int dsf_minimal(DSF *dsf, int n);
+
+/* Special dsf that tracks whether pairs of elements in the same class
+ * have flipped sense relative to each other. Merge function takes an
+ * argument saying whether n1 and n2 are opposite to each other;
+ * canonify function will report whether n is opposite to the returned
+ * element. */
+DSF *dsf_new_flip(int size);
+void dsf_merge_flip(DSF *dsf, int n1, int n2, bool flip);
+int dsf_canonify_flip(DSF *dsf, int n, bool *flip);
+
+/* Reinitialise a dsf to the starting 'all elements distinct' state. */
+void dsf_reinit(DSF *dsf);
 
 /*
  * tdq.c
@@ -564,9 +577,9 @@ void free_combi(combi_ctx *combi);
  * divvy.c
  */
 /* divides w*h rectangle into pieces of size k. Returns w*h dsf. */
-int *divvy_rectangle(int w, int h, int k, random_state *rs);
+DSF *divvy_rectangle(int w, int h, int k, random_state *rs);
 /* Same, but only tries once, and may fail. (Exposed for test program.) */
-int *divvy_rectangle_attempt(int w, int h, int k, random_state *rs);
+DSF *divvy_rectangle_attempt(int w, int h, int k, random_state *rs);
 
 /*
  * findloop.c

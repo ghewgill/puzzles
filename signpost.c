@@ -62,7 +62,7 @@ struct game_state {
     int *nums;                  /* numbers, size n */
     unsigned int *flags;        /* flags, size n */
     int *next, *prev;           /* links to other cell indexes, size n (-1 absent) */
-    int *dsf;                   /* connects regions with a dsf. */
+    DSF *dsf;                   /* connects regions with a dsf. */
     int *numsi;                 /* for each number, which index is it in? (-1 absent) */
 };
 
@@ -173,7 +173,7 @@ static bool isvalidmove(const game_state *state, bool clever,
 
     /* can't create a new connection between cells in the same region
      * as that would create a loop. */
-    if (dsf_canonify(state->dsf, from) == dsf_canonify(state->dsf, to))
+    if (dsf_equivalent(state->dsf, from, to))
         return false;
 
     /* if both cells are actual numbers, can't drag if we're not
@@ -282,7 +282,7 @@ static void strip_nums(game_state *state) {
     memset(state->next, -1, state->n*sizeof(int));
     memset(state->prev, -1, state->n*sizeof(int));
     memset(state->numsi, -1, (state->n+1)*sizeof(int));
-    dsf_init(state->dsf, state->n);
+    dsf_reinit(state->dsf);
 }
 
 static bool check_nums(game_state *orig, game_state *copy, bool only_immutable)
@@ -461,7 +461,7 @@ static game_state *blank_game(int w, int h)
     state->flags = snewn(state->n, unsigned int);
     state->next  = snewn(state->n, int);
     state->prev  = snewn(state->n, int);
-    state->dsf = snew_dsf(state->n);
+    state->dsf = dsf_new(state->n);
     state->numsi  = snewn(state->n+1, int);
 
     blank_game_into(state);
@@ -482,7 +482,7 @@ static void dup_game_to(game_state *to, const game_state *from)
     memcpy(to->next, from->next, to->n*sizeof(int));
     memcpy(to->prev, from->prev, to->n*sizeof(int));
 
-    memcpy(to->dsf, from->dsf, to->n*sizeof(int));
+    dsf_copy(to->dsf, from->dsf);
     memcpy(to->numsi, from->numsi, (to->n+1)*sizeof(int));
 }
 
@@ -500,7 +500,7 @@ static void free_game(game_state *state)
     sfree(state->flags);
     sfree(state->next);
     sfree(state->prev);
-    sfree(state->dsf);
+    dsf_free(state->dsf);
     sfree(state->numsi);
     sfree(state);
 }
@@ -1018,7 +1018,7 @@ static void connect_numbers(game_state *state)
 {
     int i, di, dni;
 
-    dsf_init(state->dsf, state->n);
+    dsf_reinit(state->dsf);
     for (i = 0; i < state->n; i++) {
         if (state->next[i] != -1) {
             assert(state->prev[state->next[i]] == i);

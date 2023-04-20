@@ -2006,7 +2006,8 @@ static int *find_errors(const game_state *state, char *grid)
 {
     int w = state->p.w, h = state->p.h;
     int *ret = snewn(w*h + w + h, int);
-    int *tmp = snewn(w*h*2, int), *dsf = tmp + w*h;
+    int *tmp = snewn(w*h, int);
+    DSF *dsf;
     int x, y;
 
     /*
@@ -2223,7 +2224,7 @@ static int *find_errors(const game_state *state, char *grid)
      * all the tents in any component which has a smaller tree
      * count.
      */
-    dsf_init(dsf, w*h);
+    dsf = dsf_new(w*h);
     /* Construct the equivalence classes. */
     for (y = 0; y < h; y++) {
 	for (x = 0; x < w-1; x++) {
@@ -2266,7 +2267,7 @@ static int *find_errors(const game_state *state, char *grid)
      * start of the game, before the user had done anything wrong!)
      */
 #define TENT(x) ((x)==TENT || (x)==BLANK)
-    dsf_init(dsf, w*h);
+    dsf_reinit(dsf);
     /* Construct the equivalence classes. */
     for (y = 0; y < h; y++) {
 	for (x = 0; x < w-1; x++) {
@@ -2302,6 +2303,7 @@ static int *find_errors(const game_state *state, char *grid)
 #undef TENT
 
     sfree(tmp);
+    dsf_free(dsf);
     return ret;
 }
 

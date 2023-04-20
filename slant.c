@@ -244,7 +244,7 @@ struct solver_scratch {
      * Disjoint set forest which tracks the connected sets of
      * points.
      */
-    int *connected;
+    DSF *connected;
 
     /*
      * Counts the number of possible exits from each connected set
@@ -265,7 +265,7 @@ struct solver_scratch {
      * Another disjoint set forest. This one tracks _squares_ which
      * are known to slant in the same direction.
      */
-    int *equiv;
+    DSF *equiv;
 
     /*
      * Stores slash values which we know for an equivalence class.
@@ -312,10 +312,10 @@ static struct solver_scratch *new_scratch(int w, int h)
 {
     int W = w+1, H = h+1;
     struct solver_scratch *ret = snew(struct solver_scratch);
-    ret->connected = snewn(W*H, int);
+    ret->connected = dsf_new(W*H);
     ret->exits = snewn(W*H, int);
     ret->border = snewn(W*H, bool);
-    ret->equiv = snewn(w*h, int);
+    ret->equiv = dsf_new(w*h);
     ret->slashval = snewn(w*h, signed char);
     ret->vbitmap = snewn(w*h, unsigned char);
     return ret;
@@ -325,10 +325,10 @@ static void free_scratch(struct solver_scratch *sc)
 {
     sfree(sc->vbitmap);
     sfree(sc->slashval);
-    sfree(sc->equiv);
+    dsf_free(sc->equiv);
     sfree(sc->border);
     sfree(sc->exits);
-    sfree(sc->connected);
+    dsf_free(sc->connected);
     sfree(sc);
 }
 
@@ -336,7 +336,7 @@ static void free_scratch(struct solver_scratch *sc)
  * Wrapper on dsf_merge() which updates the `exits' and `border'
  * arrays.
  */
-static void merge_vertices(int *connected,
+static void merge_vertices(DSF *connected,
 			   struct solver_scratch *sc, int i, int j)
 {
     int exits = -1;
@@ -382,7 +382,7 @@ static void decr_exits(struct solver_scratch *sc, int i)
 
 static void fill_square(int w, int h, int x, int y, int v,
 			signed char *soln,
-			int *connected, struct solver_scratch *sc)
+			DSF *connected, struct solver_scratch *sc)
 {
     int W = w+1 /*, H = h+1 */;
 
@@ -472,13 +472,13 @@ static int slant_solve(int w, int h, const signed char *clues,
      * Establish a disjoint set forest for tracking connectedness
      * between grid points.
      */
-    dsf_init(sc->connected, W*H);
+    dsf_reinit(sc->connected);
 
     /*
      * Establish a disjoint set forest for tracking which squares
      * are known to slant in the same direction.
      */
-    dsf_init(sc->equiv, w*h);
+    dsf_reinit(sc->equiv);
 
     /*
      * Clear the slashval array.
@@ -997,7 +997,8 @@ static void slant_generate(int w, int h, signed char *soln, random_state *rs)
 {
     int W = w+1, H = h+1;
     int x, y, i;
-    int *connected, *indices;
+    DSF *connected;
+    int *indices;
 
     /*
      * Clear the output.
@@ -1008,7 +1009,7 @@ static void slant_generate(int w, int h, signed char *soln, random_state *rs)
      * Establish a disjoint set forest for tracking connectedness
      * between grid points.
      */
-    connected = snew_dsf(W*H);
+    connected = dsf_new(W*H);
 
     /*
      * Prepare a list of the squares in the grid, and fill them in
@@ -1064,7 +1065,7 @@ static void slant_generate(int w, int h, signed char *soln, random_state *rs)
     }
 
     sfree(indices);
-    sfree(connected);
+    dsf_free(connected);
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,

@@ -296,7 +296,8 @@ static int pearl_solve(int w, int h, char *clues, char *result,
 {
     int W = 2*w+1, H = 2*h+1;
     short *workspace;
-    int *dsf, *dsfsize;
+    DSF *dsf;
+    int *dsfsize;
     int x, y, b, d;
     int ret = -1;
 
@@ -349,7 +350,7 @@ static int pearl_solve(int w, int h, char *clues, char *result,
      * We maintain a dsf of connected squares, together with a
      * count of the size of each equivalence class.
      */
-    dsf = snewn(w*h, int);
+    dsf = dsf_new(w*h);
     dsfsize = snewn(w*h, int);
 
     /*
@@ -592,7 +593,7 @@ static int pearl_solve(int w, int h, char *clues, char *result,
 	{
 	    int nonblanks, loopclass;
 
-	    dsf_init(dsf, w*h);
+	    dsf_reinit(dsf);
 	    for (x = 0; x < w*h; x++)
 		dsfsize[x] = 1;
 
@@ -891,7 +892,7 @@ cleanup:
     }
 
     sfree(dsfsize);
-    sfree(dsf);
+    dsf_free(dsf);
     sfree(workspace);
     assert(ret >= 0);
     return ret;
@@ -1531,7 +1532,7 @@ static char nbits[16] = { 0, 1, 1, 2,
 
 /* Returns false if the state is invalid. */
 static bool dsf_update_completion(game_state *state, int ax, int ay, char dir,
-                                 int *dsf)
+                                 DSF *dsf)
 {
     int w = state->shared->w /*, h = state->shared->h */;
     int ac = ay*w+ax, bx, by, bc;
@@ -1556,7 +1557,8 @@ static bool check_completion(game_state *state, bool mark)
 {
     int w = state->shared->w, h = state->shared->h, x, y, i, d;
     bool had_error = false;
-    int *dsf, *component_state;
+    DSF *dsf;
+    int *component_state;
     int nsilly, nloop, npath, largest_comp, largest_size, total_pathsize;
     enum { COMP_NONE, COMP_LOOP, COMP_PATH, COMP_SILLY, COMP_EMPTY };
 
@@ -1575,14 +1577,14 @@ static bool check_completion(game_state *state, bool mark)
      * same reasons, since Loopy and Pearl have basically the same
      * form of expected solution.
      */
-    dsf = snew_dsf(w*h);
+    dsf = dsf_new(w*h);
 
     /* Build the dsf. */
     for (x = 0; x < w; x++) {
         for (y = 0; y < h; y++) {
             if (!dsf_update_completion(state, x, y, R, dsf) ||
                 !dsf_update_completion(state, x, y, D, dsf)) {
-                sfree(dsf);
+                dsf_free(dsf);
                 return false;
             }
         }
@@ -1665,7 +1667,7 @@ static bool check_completion(game_state *state, bool mark)
      * part of a single loop, for which our counter variables
      * nsilly,nloop,npath are enough. */
     sfree(component_state);
-    sfree(dsf);
+    dsf_free(dsf);
 
     /*
      * Check that no clues are contradicted. This code is similar to

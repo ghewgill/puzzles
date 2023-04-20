@@ -25,28 +25,28 @@
  *    outside respectively. So if you can track this for all
  *    faces, you figure out the state of the line between a pair
  *    once their relative insideness is known.
- *     + The way I envisage this working is simply to keep an edsf
+ *     + The way I envisage this working is simply to keep a flip dsf
  * 	 of all _faces_, which indicates whether they're on
  * 	 opposite sides of the loop from one another. We also
- * 	 include a special entry in the edsf for the infinite
+ * 	 include a special entry in the dsf for the infinite
  * 	 exterior "face".
  *     + So, the simple way to do this is to just go through the
  * 	 edges: every time we see an edge in a state other than
  * 	 LINE_UNKNOWN which separates two faces that aren't in the
- * 	 same edsf class, we can rectify that by merging the
+ * 	 same dsf class, we can rectify that by merging the
  * 	 classes. Then, conversely, an edge in LINE_UNKNOWN state
- * 	 which separates two faces that _are_ in the same edsf
+ * 	 which separates two faces that _are_ in the same dsf
  * 	 class can immediately have its state determined.
  *     + But you can go one better, if you're prepared to loop
  * 	 over all _pairs_ of edges. Suppose we have edges A and B,
  * 	 which respectively separate faces A1,A2 and B1,B2.
- * 	 Suppose that A,B are in the same edge-edsf class and that
- * 	 A1,B1 (wlog) are in the same face-edsf class; then we can
- * 	 immediately place A2,B2 into the same face-edsf class (as
+ * 	 Suppose that A,B are in the same edge-dsf class and that
+ * 	 A1,B1 (wlog) are in the same face-dsf class; then we can
+ * 	 immediately place A2,B2 into the same face-dsf class (as
  * 	 each other, not as A1 and A2) one way round or the other.
- * 	 And conversely again, if A1,B1 are in the same face-edsf
+ * 	 And conversely again, if A1,B1 are in the same face-dsf
  * 	 class and so are A2,B2, then we can put A,B into the same
- * 	 face-edsf class.
+ * 	 face-dsf class.
  * 	  * Of course, this deduction requires a quadratic-time
  * 	    loop over all pairs of edges in the grid, so it should
  * 	    be reserved until there's nothing easier left to be
@@ -157,7 +157,7 @@ typedef struct solver_state {
     char *face_yes_count;
     char *face_no_count;
     bool *dot_solved, *face_solved;
-    int *dotdsf;
+    DSF *dotdsf;
 
     /* Information for Normal level deductions:
      * For each dline, store a bitmask for whether we know:
@@ -166,7 +166,7 @@ typedef struct solver_state {
     char *dlines;
 
     /* Hard level information */
-    int *linedsf;
+    DSF *linedsf;
 } solver_state;
 
 /*
@@ -386,7 +386,7 @@ static solver_state *new_solver_state(const game_state *state, int diff) {
     ret->solver_status = SOLVER_INCOMPLETE;
     ret->diff = diff;
 
-    ret->dotdsf = snew_dsf(num_dots);
+    ret->dotdsf = dsf_new(num_dots);
     ret->looplen = snewn(num_dots, int);
 
     for (i = 0; i < num_dots; i++) {
@@ -417,7 +417,7 @@ static solver_state *new_solver_state(const game_state *state, int diff) {
     if (diff < DIFF_HARD) {
         ret->linedsf = NULL;
     } else {
-        ret->linedsf = snew_dsf(state->game_grid->num_edges);
+        ret->linedsf = dsf_new_flip(state->game_grid->num_edges);
     }
 
     return ret;
@@ -426,7 +426,7 @@ static solver_state *new_solver_state(const game_state *state, int diff) {
 static void free_solver_state(solver_state *sstate) {
     if (sstate) {
         free_game(sstate->state);
-        sfree(sstate->dotdsf);
+        dsf_free(sstate->dotdsf);
         sfree(sstate->looplen);
         sfree(sstate->dot_solved);
         sfree(sstate->face_solved);
@@ -437,7 +437,7 @@ static void free_solver_state(solver_state *sstate) {
 
         /* OK, because sfree(NULL) is a no-op */
         sfree(sstate->dlines);
-        sfree(sstate->linedsf);
+        dsf_free(sstate->linedsf);
 
         sfree(sstate);
     }
@@ -455,10 +455,9 @@ static solver_state *dup_solver_state(const solver_state *sstate) {
     ret->solver_status = sstate->solver_status;
     ret->diff = sstate->diff;
 
-    ret->dotdsf = snewn(num_dots, int);
+    ret->dotdsf = dsf_new(num_dots);
     ret->looplen = snewn(num_dots, int);
-    memcpy(ret->dotdsf, sstate->dotdsf,
-           num_dots * sizeof(int));
+    dsf_copy(ret->dotdsf, sstate->dotdsf);
     memcpy(ret->looplen, sstate->looplen,
            num_dots * sizeof(int));
 
@@ -486,9 +485,8 @@ static solver_state *dup_solver_state(const solver_state *sstate) {
     }
 
     if (sstate->linedsf) {
-        ret->linedsf = snewn(num_edges, int);
-        memcpy(ret->linedsf, sstate->linedsf,
-               num_edges * sizeof(int));
+        ret->linedsf = dsf_new_flip(num_edges);
+        dsf_copy(ret->linedsf, sstate->linedsf);
     } else {
         ret->linedsf = NULL;
     }
@@ -1217,12 +1215,12 @@ static bool merge_lines(solver_state *sstate, int i, int j, bool inverse
     assert(i < sstate->state->game_grid->num_edges);
     assert(j < sstate->state->game_grid->num_edges);
 
-    i = edsf_canonify(sstate->linedsf, i, &inv_tmp);
+    i = dsf_canonify_flip(sstate->linedsf, i, &inv_tmp);
     inverse ^= inv_tmp;
-    j = edsf_canonify(sstate->linedsf, j, &inv_tmp);
+    j = dsf_canonify_flip(sstate->linedsf, j, &inv_tmp);
     inverse ^= inv_tmp;
 
-    edsf_merge(sstate->linedsf, i, j, inverse);
+    dsf_merge_flip(sstate->linedsf, i, j, inverse);
 
 #ifdef SHOW_WORKING
     if (i != j) {
@@ -1547,7 +1545,8 @@ static bool check_completion(game_state *state)
     grid *g = state->game_grid;
     int i;
     bool ret;
-    int *dsf, *component_state;
+    DSF *dsf;
+    int *component_state;
     int nsilly, nloop, npath, largest_comp, largest_size, total_pathsize;
     enum { COMP_NONE, COMP_LOOP, COMP_PATH, COMP_SILLY, COMP_EMPTY };
 
@@ -1632,7 +1631,7 @@ static bool check_completion(game_state *state)
      *    leave that one unhighlighted, and light the rest up in red.
      */
 
-    dsf = snew_dsf(g->num_dots);
+    dsf = dsf_new(g->num_dots);
 
     /* Build the dsf. */
     for (i = 0; i < g->num_edges; i++) {
@@ -1769,7 +1768,7 @@ static bool check_completion(game_state *state)
     }
 
     sfree(component_state);
-    sfree(dsf);
+    dsf_free(dsf);
 
     return ret;
 }
@@ -1788,7 +1787,7 @@ static bool check_completion(game_state *state)
  *   know both or neither is on that's already stored more directly.)
  *
  *   Advanced Mode
- *   Use edsf data structure to make equivalence classes of lines that are
+ *   Use flip dsf data structure to make equivalence classes of lines that are
  *   known identical to or opposite to one another.
  */
 
@@ -1953,8 +1952,8 @@ static bool face_setall_identical(solver_state *sstate, int face_index,
                 continue;
 
             /* Found two UNKNOWNS */
-            can1 = edsf_canonify(sstate->linedsf, line1_index, &inv1);
-            can2 = edsf_canonify(sstate->linedsf, line2_index, &inv2);
+            can1 = dsf_canonify_flip(sstate->linedsf, line1_index, &inv1);
+            can2 = dsf_canonify_flip(sstate->linedsf, line2_index, &inv2);
             if (can1 == can2 && inv1 == inv2) {
                 solver_set_line(sstate, line1_index, line_new);
                 solver_set_line(sstate, line2_index, line_new);
@@ -1995,7 +1994,7 @@ static int parity_deductions(solver_state *sstate,
 {
     game_state *state = sstate->state;
     int diff = DIFF_MAX;
-    int *linedsf = sstate->linedsf;
+    DSF *linedsf = sstate->linedsf;
 
     if (unknown_count == 2) {
         /* Lines are known alike/opposite, depending on inv. */
@@ -2008,9 +2007,9 @@ static int parity_deductions(solver_state *sstate,
         int can[3]; /* canonical edges */
         bool inv[3]; /* whether can[x] is inverse to e[x] */
         find_unknowns(state, edge_list, 3, e);
-        can[0] = edsf_canonify(linedsf, e[0], inv);
-        can[1] = edsf_canonify(linedsf, e[1], inv+1);
-        can[2] = edsf_canonify(linedsf, e[2], inv+2);
+        can[0] = dsf_canonify_flip(linedsf, e[0], inv);
+        can[1] = dsf_canonify_flip(linedsf, e[1], inv+1);
+        can[2] = dsf_canonify_flip(linedsf, e[2], inv+2);
         if (can[0] == can[1]) {
             if (solver_set_line(sstate, e[2], (total_parity^inv[0]^inv[1]) ?
 				LINE_YES : LINE_NO))
@@ -2031,10 +2030,10 @@ static int parity_deductions(solver_state *sstate,
         int can[4]; /* canonical edges */
         bool inv[4]; /* whether can[x] is inverse to e[x] */
         find_unknowns(state, edge_list, 4, e);
-        can[0] = edsf_canonify(linedsf, e[0], inv);
-        can[1] = edsf_canonify(linedsf, e[1], inv+1);
-        can[2] = edsf_canonify(linedsf, e[2], inv+2);
-        can[3] = edsf_canonify(linedsf, e[3], inv+3);
+        can[0] = dsf_canonify_flip(linedsf, e[0], inv);
+        can[1] = dsf_canonify_flip(linedsf, e[1], inv+1);
+        can[2] = dsf_canonify_flip(linedsf, e[2], inv+2);
+        can[3] = dsf_canonify_flip(linedsf, e[3], inv+3);
         if (can[0] == can[1]) {
             if (merge_lines(sstate, e[2], e[3], total_parity^inv[0]^inv[1]))
                 diff = min(diff, DIFF_HARD);
@@ -2649,8 +2648,8 @@ static int linedsf_deductions(solver_state *sstate)
             if (state->lines[line2_index] != LINE_UNKNOWN)
                 continue;
             /* Infer dline flags from linedsf */
-            can1 = edsf_canonify(sstate->linedsf, line1_index, &inv1);
-            can2 = edsf_canonify(sstate->linedsf, line2_index, &inv2);
+            can1 = dsf_canonify_flip(sstate->linedsf, line1_index, &inv1);
+            can2 = dsf_canonify_flip(sstate->linedsf, line2_index, &inv2);
             if (can1 == can2 && inv1 != inv2) {
                 /* These are opposites, so set dline atmostone/atleastone */
                 if (set_atmostone(dlines, dline_index))
@@ -2685,7 +2684,7 @@ static int linedsf_deductions(solver_state *sstate)
         int can;
         bool inv;
         enum line_state s;
-        can = edsf_canonify(sstate->linedsf, i, &inv);
+        can = dsf_canonify_flip(sstate->linedsf, i, &inv);
         if (can == i)
             continue;
         s = sstate->state->lines[can];
@@ -3292,7 +3291,10 @@ static void game_redraw_line(drawing *dr, game_drawstate *ds,
 	if (draw_faint_lines < 0)
 	    draw_faint_lines = getenv_bool("LOOPY_FAINT_LINES", true);
 	if (draw_faint_lines)
-	    draw_line(dr, x1, y1, x2, y2, line_colour);
+            draw_thick_line(dr, ds->tilesize/24.0,
+                            x1 + 0.5, y1 + 0.5,
+                            x2 + 0.5, y2 + 0.5,
+                            line_colour);
     } else {
 	draw_thick_line(dr, ds->tilesize*3/32.0,
 			x1 + 0.5, y1 + 0.5,

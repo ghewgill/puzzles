@@ -1421,7 +1421,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 static bool find_errors(const game_state *state, bool *report)
 {
     int const w = state->params.w, h = state->params.h, n = w * h;
-    int *dsf;
+    DSF *dsf;
 
     int r, c, i;
 
@@ -1476,7 +1476,7 @@ static bool find_errors(const game_state *state, bool *report)
     /*
      * Check that all the white cells form a single connected component.
      */
-    dsf = snew_dsf(n);
+    dsf = dsf_new(n);
     for (r = 0; r < h-1; ++r)
         for (c = 0; c < w; ++c)
             if (state->grid[r*w+c] != BLACK &&
@@ -1492,7 +1492,7 @@ static bool find_errors(const game_state *state, bool *report)
         int biggest, canonical;
 
         if (!report) {
-            sfree(dsf);
+            dsf_free(dsf);
             goto found_error;
         }
 
@@ -1517,7 +1517,7 @@ static bool find_errors(const game_state *state, bool *report)
             if (state->grid[i] != BLACK && dsf_canonify(dsf, i) != canonical)
                 report[i] = true;
     }
-    sfree(dsf);
+    dsf_free(dsf);
 
     free_game(dup);
     return false; /* if report != NULL, this is ignored */
