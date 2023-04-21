@@ -105,7 +105,7 @@ struct game_state {
 	int w, h;
 	
 	/* region layout */
-	int *dsf;
+	DSF *dsf;
 	
 	cell *grid;
 	cell *marks;
@@ -261,7 +261,7 @@ static const char *validate_params(const game_params *params, bool full)
 
 static void free_game(game_state *state)
 {
-	sfree(state->dsf);
+	dsf_free(state->dsf);
 	sfree(state->grid);
 	sfree(state->marks);
 	sfree(state);
@@ -274,7 +274,7 @@ static void free_game(game_state *state)
 enum { STATUS_COMPLETE, STATUS_INCOMPLETE, STATUS_INVALID };
 enum { VALID, INVALID_WALLS, INVALID_CLUES, INVALID_REGIONS, INVALID_GOALS };
 
-static char rome_validate_game(game_state *state, bool fullerrors, int *dsf, cell *sets)
+static char rome_validate_game(game_state *state, bool fullerrors, DSF *dsf, cell *sets)
 {
 	int w = state->w;
 	int h = state->h;
@@ -288,8 +288,8 @@ static char rome_validate_game(game_state *state, bool fullerrors, int *dsf, cel
 		state->grid[i] &= ~(FE_MASK|FD_TOGOAL);
 	
 	if(!hasdsf)
-		dsf = snewn(w*h, int);
-	dsf_init(dsf, w*h);
+		dsf = dsf_new(w*h);
+	dsf_reinit(dsf);
 	if(!hassets)
 		sets = snewn(w*h, cell);
 	seterrs = snewn(w*h, cell);
@@ -408,7 +408,7 @@ static char rome_validate_game(game_state *state, bool fullerrors, int *dsf, cel
 	}
 	
 	if(!hasdsf)
-		sfree(dsf);
+		dsf_free(dsf);
 	if(!hassets)
 		sfree(sets);
 	sfree(seterrs);
@@ -439,7 +439,7 @@ static int rome_read_desc(const game_params *params, const char *desc, game_stat
 	
 	state->w = w;
 	state->h = h;
-	state->dsf = snew_dsf(w*h);
+	state->dsf = dsf_new(w*h);
 	
 	state->completed = state->cheated = false;
 	
@@ -619,14 +619,14 @@ static game_state *dup_game(const game_state *state)
 
 	ret->w = w;
 	ret->h = h;
-	ret->dsf = snewn(w*h, int);
+	ret->dsf = dsf_new(w*h);
 	ret->grid = snewn(w*h, cell);
 	ret->marks = snewn(w*h, cell);
 	
 	ret->completed = state->completed;
 	ret->cheated = state->cheated;
 
-	memcpy(ret->dsf, state->dsf, w*h*sizeof(int));
+	dsf_copy(ret->dsf, state->dsf);
 	memcpy(ret->grid, state->grid, w*h*sizeof(cell));
 	memcpy(ret->marks, state->marks, w*h*sizeof(cell));
 	
@@ -695,7 +695,7 @@ static int rome_solver_doubles(game_state *state, cell *sets)
 	return ret;
 }
 
-static int rome_solver_loops(game_state *state, int *dsf)
+static int rome_solver_loops(game_state *state, DSF *dsf)
 {
 	/* Find nearby squares that would form a loop */
 	int w = state->w;
@@ -828,7 +828,7 @@ static int rome_naked_pairs(game_state *state)
 	return ret;
 }
 
-static int rome_solver_expand(game_state *state, int *dsf)
+static int rome_solver_expand(game_state *state, DSF *dsf)
 {
 	/* Check if there is one single possibility to expand the area pointing
 	   to a goal. */
@@ -966,7 +966,7 @@ static char rome_solve(game_state *state, int maxdiff)
 	int i;
 	char status;
 	
-	int *dsf = snewn(w*h, int);
+	DSF *dsf = dsf_new(w*h);
 	cell *sets = snewn(w*h, cell);
 	
 	/* Initialize all marks */
@@ -1026,7 +1026,7 @@ static char rome_solve(game_state *state, int maxdiff)
 		break;
 	}
 	
-	sfree(dsf);
+	dsf_free(dsf);
 	sfree(sets);
 	
 	return status;
@@ -1067,7 +1067,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
  * Generator *
  * ********* */
  
-static void rome_join_arrows(game_state *state, int *arrdsf, cell *suggest)
+static void rome_join_arrows(game_state *state, DSF *arrdsf, cell *suggest)
 {
 	/*
 	 * This function detects clusters of identical arrows, and gives
@@ -1126,7 +1126,7 @@ static bool rome_generate_arrows(game_state *state, random_state *rs)
 	int i, j, k;
 	
 	int *spaces = snewn(w*h, int);
-	int *arrdsf = snew_dsf(w*h);
+	DSF *arrdsf = dsf_new(w*h);
 	cell *suggest = snewn(w*h, cell);
 	
 	cell *arrows = snewn(4, cell);
@@ -1179,7 +1179,7 @@ static bool rome_generate_arrows(game_state *state, random_state *rs)
 	}
 	
 	sfree(spaces);
-	sfree(arrdsf);
+	dsf_free(arrdsf);
 	sfree(suggest);
 	sfree(arrows);
 	
@@ -1360,13 +1360,13 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	
 	state->w = w;
 	state->h = h;
-	state->dsf = snewn(w*h, int);
+	state->dsf = dsf_new(w*h);
 	state->grid = snewn(w*h, cell);
 	state->marks = snewn(w*h, cell);
 	
 	do
 	{
-		dsf_init(state->dsf, w*h);
+		dsf_reinit(state->dsf);
 		memset(state->grid, EMPTY, w*h*sizeof(cell));
 		memset(state->marks, EMPTY, w*h*sizeof(cell));
 	} while(!rome_generate(state, rs, params->diff));
@@ -1979,7 +1979,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int h = state->h;
 	int x, y, i1, i2, cx, cy, cw, ch;
 	int tilesize = ds->tilesize;
-	int *dsf = state->dsf;
+	DSF *dsf = state->dsf;
 	int color;
 	int kmode = ui->kmode;
 	cell c, p;

@@ -934,7 +934,7 @@ static bool crossing_gen_walls_checkpool(int w, int h, char *walls)
 
 static bool crossing_gen_walls_checkdsf(int w, int h, char *walls)
 {
-	int *dsf = snew_dsf(w*h);
+	DSF *dsf = dsf_new(w*h);
 	int i, s, i1, i2, x, y;
 	int maxsize, maxcell, total;
 	
@@ -978,7 +978,7 @@ static bool crossing_gen_walls_checkdsf(int w, int h, char *walls)
 			maxcell = dsf_canonify(dsf, i);
 		}
 	}
-	sfree(dsf);
+	dsf_free(dsf);
 	return maxsize == total;
 }
 

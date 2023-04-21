@@ -447,7 +447,7 @@ struct spokes_scratch {
 	int *lines;
 	int *marked;
 	
-	int *dsf;
+	DSF *dsf;
 	int *open;
 };
 
@@ -491,7 +491,7 @@ static void spokes_solver_recount(const game_state *state, struct spokes_scratch
 		}
 	}
 	
-	dsf_init(solver->dsf, w*h);
+	dsf_reinit(solver->dsf);
 	
 	/* If the top-left square is empty, connect it to the first non-empty square. */
 	if(!state->numbers[0])
@@ -674,7 +674,7 @@ static struct spokes_scratch *spokes_new_scratch(const game_state *state)
 	solver->nodes = snewn(w*h, int);
 	solver->lines = snewn(w*h, int);
 	solver->marked = snewn(w*h, int);
-	solver->dsf = snewn(w*h, int);
+	solver->dsf = dsf_new(w*h);
 	solver->open = snewn(w*h, int);
 	
 	return solver;
@@ -685,7 +685,7 @@ static void spokes_free_scratch(struct spokes_scratch *solver)
 	sfree(solver->nodes);
 	sfree(solver->lines);
 	sfree(solver->marked);
-	sfree(solver->dsf);
+	dsf_free(solver->dsf);
 	sfree(solver->open);
 	sfree(solver);
 }
