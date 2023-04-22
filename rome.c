@@ -398,7 +398,7 @@ static char rome_validate_game(game_state *state, bool fullerrors, DSF *dsf, cel
 			if(state->grid[i] & FM_GOAL)
 			{
 				c = dsf_canonify(dsf, i);
-				for(x = c; x < w*h; x++)
+				for(x = 0; x < w*h; x++)
 				{
 					if(c == dsf_canonify(dsf, x))
 						state->grid[x] |= FD_TOGOAL;
