@@ -288,7 +288,7 @@ static char rome_validate_game(game_state *state, bool fullerrors, DSF *dsf, cel
 		state->grid[i] &= ~(FE_MASK|FD_TOGOAL);
 	
 	if(!hasdsf)
-		dsf = dsf_new(w*h);
+		dsf = dsf_new_min(w*h);
 	dsf_reinit(dsf);
 	if(!hassets)
 		sets = snewn(w*h, cell);
@@ -397,10 +397,10 @@ static char rome_validate_game(game_state *state, bool fullerrors, DSF *dsf, cel
 		{
 			if(state->grid[i] & FM_GOAL)
 			{
-				c = dsf_canonify(dsf, i);
-				for(x = 0; x < w*h; x++)
+				c = dsf_minimal(dsf, i);
+				for(x = c; x < w*h; x++)
 				{
-					if(c == dsf_canonify(dsf, x))
+					if(c == dsf_minimal(dsf, x))
 						state->grid[x] |= FD_TOGOAL;
 				}
 			}
@@ -439,7 +439,7 @@ static int rome_read_desc(const game_params *params, const char *desc, game_stat
 	
 	state->w = w;
 	state->h = h;
-	state->dsf = dsf_new(w*h);
+	state->dsf = dsf_new_min(w*h);
 	
 	state->completed = state->cheated = false;
 	
@@ -619,7 +619,7 @@ static game_state *dup_game(const game_state *state)
 
 	ret->w = w;
 	ret->h = h;
-	ret->dsf = dsf_new(w*h);
+	ret->dsf = dsf_new_min(w*h);
 	ret->grid = snewn(w*h, cell);
 	ret->marks = snewn(w*h, cell);
 	
@@ -966,7 +966,7 @@ static char rome_solve(game_state *state, int maxdiff)
 	int i;
 	char status;
 	
-	DSF *dsf = dsf_new(w*h);
+	DSF *dsf = dsf_new_min(w*h);
 	cell *sets = snewn(w*h, cell);
 	
 	/* Initialize all marks */
@@ -1126,7 +1126,7 @@ static bool rome_generate_arrows(game_state *state, random_state *rs)
 	int i, j, k;
 	
 	int *spaces = snewn(w*h, int);
-	DSF *arrdsf = dsf_new(w*h);
+	DSF *arrdsf = dsf_new_min(w*h);
 	cell *suggest = snewn(w*h, cell);
 	
 	cell *arrows = snewn(4, cell);
@@ -1360,7 +1360,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	
 	state->w = w;
 	state->h = h;
-	state->dsf = dsf_new(w*h);
+	state->dsf = dsf_new_min(w*h);
 	state->grid = snewn(w*h, cell);
 	state->marks = snewn(w*h, cell);
 	

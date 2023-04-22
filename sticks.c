@@ -754,14 +754,19 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 			}
 			else if (dsf_canonify(dsf, i) == i)
 			{
-				int n = dsf_size(dsf, i);
-
-				if (n == 1)
-					state->numbers[i] = 1;
-				else if (state->grid[i] & F_HOR)
-					state->numbers[i + random_upto(rs, n)] = n;
-				else if (state->grid[i] & F_VER)
-					state->numbers[i + (w*random_upto(rs, n))] = n;
+                state->numbers[i] = dsf_size(dsf, i);
+                // Alternatively:
+                //  - change all `dsf_new` into `dsf_new_min`
+                //  - call `dsf_minimal` just above instead of `dsf_canonify`
+                //  - restore logic below
+//				int n = dsf_size(dsf, i);
+//
+//				if (n == 1)
+//					state->numbers[i] = 1;
+//				else if (state->grid[i] & F_HOR)
+//					state->numbers[i + random_upto(rs, n)] = n;
+//				else if (state->grid[i] & F_VER)
+//					state->numbers[i + (w*random_upto(rs, n))] = n;
 			}
 		}
 	} while (sticks_solve_game(state) != STATUS_COMPLETE);
