@@ -952,7 +952,7 @@ static char *encode_ui(const game_ui *ui)
 	return NULL;
 }
 
-static void decode_ui(game_ui *ui, const char *encoding)
+static void decode_ui(game_ui *ui, const char *encoding, const game_state *state)
 {
 }
 

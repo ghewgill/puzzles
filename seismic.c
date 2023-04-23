@@ -247,7 +247,7 @@ struct game_state {
 	char *grid;
 	char *flags;
 	int *marks;
-	int *dsf;
+	DSF *dsf;
 	
 	bool completed, cheated;
 };
@@ -263,14 +263,13 @@ static game_state *blank_state(int w, int h, int mode)
 	state->grid = snewn(s, char);
 	state->flags = snewn(s, char);
 	state->marks = snewn(s, int);
-	state->dsf = snewn(s, int);
+	state->dsf = dsf_new(s);
 	
 	state->completed = state->cheated = false;
 
 	memset(state->grid, 0, s*sizeof(char));
 	memset(state->flags, 0, s*sizeof(char));
 	memset(state->marks, 0, s*sizeof(int));
-	memset(state->dsf, 0, s*sizeof(int));
 
 	return state;
 }
@@ -285,7 +284,7 @@ static game_state *dup_game(const game_state *state)
 	memcpy(ret->grid, state->grid, s*sizeof(char));
 	memcpy(ret->flags, state->flags, s*sizeof(char));
 	memcpy(ret->marks, state->marks, s*sizeof(int));
-	memcpy(ret->dsf, state->dsf, s*sizeof(int));
+	dsf_copy(ret->dsf, state->dsf);
 	
 	ret->completed = state->completed;
 	ret->cheated = state->cheated;
@@ -298,7 +297,7 @@ static void free_game(game_state *state)
 	sfree(state->grid);
 	sfree(state->flags);
 	sfree(state->marks);
-	sfree(state->dsf);
+	dsf_free(state->dsf);
 	sfree(state);
 }
 
@@ -940,7 +939,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	do
 	{
 		memset(state->grid, 0, w*h*sizeof(char));
-		dsf_init(state->dsf, w*h);
+		dsf_reinit(state->dsf);
 	}while(!seismic_gen_puzzle(state, rs, diff));
 	
 	/* Generate wall list */
@@ -1046,7 +1045,7 @@ static int seismic_read_desc(const game_params *params, const char *desc, game_s
 	char *walls = snewn(ws, char);
 	game_state *state = blank_state(w, h, params->mode);
 	
-	dsf_init(state->dsf, w*h);
+	dsf_reinit(state->dsf);
 	
 	memset(walls, false, ws*sizeof(char));
 	
@@ -1317,7 +1316,7 @@ static char *encode_ui(const game_ui *ui)
 	return NULL;
 }
 
-static void decode_ui(game_ui *ui, const char *encoding)
+static void decode_ui(game_ui *ui, const char *encoding, const game_state *state)
 {
 }
 
@@ -1654,7 +1653,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds, const game_state *oldst
 	int x, y, i1, i2, tx, ty;
 	int cx, cy, cw, ch;
 	int tilesize = ds->tilesize;
-	int *dsf = state->dsf;
+	DSF *dsf = state->dsf;
 	int color;
 	char c, p;
 	char buf[2];

@@ -2208,7 +2208,7 @@ static const char *decode_ui_item(int *arr, int s, char stop, const char *p)
 	return p;
 }
 
-static void decode_ui(game_ui *ui, const char *encoding)
+static void decode_ui(game_ui *ui, const char *encoding, const game_state *state)
 {
 	if(!encoding || encoding[0] != 'P') return;
 	
