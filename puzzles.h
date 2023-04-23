@@ -129,8 +129,13 @@ typedef struct psdata psdata;
  */
 enum { C_STRING, C_CHOICES, C_BOOLEAN, C_END };
 struct config_item {
-    /* Not dynamically allocated */
+    /* Not dynamically allocated: the GUI display name for the option */
     const char *name;
+    /* Not dynamically allocated: the keyword identifier for the
+     * option. Only examined in the case where this structure is being
+     * used for options that appear in config files, i.e. the
+     * get_prefs method fills this in but configure does not. */
+    const char *kw;
     /* Value from the above C_* enum */
     int type;
     union {
@@ -147,6 +152,13 @@ struct config_item {
              * options `Foo', `Bar' and `Baz'.
              */
             const char *choicenames;
+            /*
+             * choicekws is non-NULL, not dynamically allocated, and
+             * contains a parallel list of keyword strings used to
+             * represent the enumeration in config files. As with 'kw'
+             * above, this is only expected to be set by get_prefs.
+             */
+            const char *choicekws;
             /*
              * Indicates the chosen index from the options in
              * choicenames. In the above example, 0==Foo, 1==Bar and
@@ -321,7 +333,7 @@ void midend_timer(midend *me, float tplus);
 struct preset_menu *midend_get_presets(midend *me, int *id_limit);
 int midend_which_preset(midend *me);
 bool midend_wants_statusbar(midend *me);
-enum { CFG_SETTINGS, CFG_SEED, CFG_DESC, CFG_FRONTEND_SPECIFIC };
+enum { CFG_SETTINGS, CFG_SEED, CFG_DESC, CFG_PREFS, CFG_FRONTEND_SPECIFIC };
 config_item *midend_get_config(midend *me, int which, char **wintitle);
 const char *midend_set_config(midend *me, int which, config_item *cfg);
 const char *midend_game_id(midend *me, const char *id);
@@ -342,6 +354,11 @@ void midend_serialise(midend *me,
 const char *midend_deserialise(midend *me,
                                bool (*read)(void *ctx, void *buf, int len),
                                void *rctx);
+const char *midend_load_prefs(
+    midend *me, bool (*read)(void *ctx, void *buf, int len), void *rctx);
+void midend_save_prefs(midend *me,
+                       void (*write)(void *ctx, const void *buf, int len),
+                       void *wctx);
 const char *identify_game(char **name,
                           bool (*read)(void *ctx, void *buf, int len),
                           void *rctx);
@@ -373,13 +390,17 @@ void free_cfg(config_item *cfg);
 void free_keys(key_label *keys, int nkeys);
 void obfuscate_bitmap(unsigned char *bmp, int bits, bool decode);
 char *fgetline(FILE *fp);
+char *make_prefs_path(const char *dir, const char *sep,
+                      const game *game, const char *suffix);
 
 /* allocates output each time. len is always in bytes of binary data.
  * May assert (or just go wrong) if lengths are unchecked. */
 char *bin2hex(const unsigned char *in, int inlen);
 unsigned char *hex2bin(const char *in, int outlen);
 
-bool getenv_bool(const char *name, bool dflt);
+/* Returns 0 or 1 if the environment variable is set, or dflt if not.
+ * dflt may be a third value if it needs to be. */
+int getenv_bool(const char *name, int dflt);
 
 /* Mixes two colours in specified proportions. */
 void colour_mix(const float src1[3], const float src2[3], float p,
@@ -545,7 +566,7 @@ void SHA_Simple(const void *p, int len, unsigned char *output);
 document *document_new(int pw, int ph, float userscale);
 void document_free(document *doc);
 void document_add_puzzle(document *doc, const game *game, game_params *par,
-			 game_state *st, game_state *st2);
+			 game_ui *ui, game_state *st, game_state *st2);
 int document_npages(const document *doc);
 void document_begin(const document *doc, drawing *dr);
 void document_end(const document *doc, drawing *dr);
@@ -676,6 +697,8 @@ struct game {
     bool can_format_as_text_ever;
     bool (*can_format_as_text_now)(const game_params *params);
     char *(*text_format)(const game_state *state);
+    config_item *(*get_prefs)(game_ui *ui);
+    void (*set_prefs)(game_ui *ui, const config_item *cfg);
     game_ui *(*new_ui)(const game_state *state);
     void (*free_ui)(game_ui *ui);
     char *(*encode_ui)(const game_ui *ui);
@@ -691,7 +714,7 @@ struct game {
     game_state *(*execute_move)(const game_state *state, const char *move);
     int preferred_tilesize;
     void (*compute_size)(const game_params *params, int tilesize,
-                         int *x, int *y);
+                         const game_ui *ui, int *x, int *y);
     void (*set_size)(drawing *dr, game_drawstate *ds,
 		     const game_params *params, int tilesize);
     float *(*colours)(frontend *fe, int *ncolours);
@@ -711,8 +734,10 @@ struct game {
                                 int *x, int *y, int *w, int *h);
     int (*status)(const game_state *state);
     bool can_print, can_print_in_colour;
-    void (*print_size)(const game_params *params, float *x, float *y);
-    void (*print)(drawing *dr, const game_state *state, int tilesize);
+    void (*print_size)(const game_params *params, const game_ui *ui,
+                       float *x, float *y);
+    void (*print)(drawing *dr, const game_state *state, const game_ui *ui,
+                  int tilesize);
     bool wants_statusbar;
     bool is_timed;
     bool (*timing_state)(const game_state *state, game_ui *ui);

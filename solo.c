@@ -4816,7 +4816,7 @@ static game_state *execute_move(const game_state *from, const char *move)
 #define GETTILESIZE(cr, w) ( (double)(w-1) / (double)(cr+1) )
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     /* Ick: fake up `ds->tilesize' for macro expansion purposes */
     struct { int tilesize; } ads, *ds = &ads;
@@ -5336,7 +5336,8 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
@@ -5345,7 +5346,7 @@ static void game_print_size(const game_params *params, float *x, float *y)
      * for this game, because players will want to jot down no end
      * of pencil marks in the squares.
      */
-    game_compute_size(params, 900, &pw, &ph);
+    game_compute_size(params, 900, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
@@ -5519,7 +5520,8 @@ static void outline_block_structure(drawing *dr, game_drawstate *ds,
     sfree(coords);
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int cr = state->cr;
     int ink = print_mono_colour(dr, 0);
@@ -5634,6 +5636,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
     NULL, /* encode_ui */

@@ -1183,7 +1183,7 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     *x = *y = COORDLIMIT(params->n) * tilesize;
 }
@@ -1341,7 +1341,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     ds->dragpoint = ui->dragpoint;
     ds->bg = bg;
 
-    game_compute_size(&state->params, ds->tilesize, &w, &h);
+    game_compute_size(&state->params, ds->tilesize, ui, &w, &h);
     draw_rect(dr, 0, 0, w, h, bg);
 
     /*
@@ -1454,6 +1454,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     false, NULL, NULL, /* can_format_as_text_now, text_format */
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
     NULL, /* encode_ui */

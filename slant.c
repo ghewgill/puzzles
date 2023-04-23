@@ -1581,14 +1581,64 @@ static char *game_text_format(const game_state *state)
 struct game_ui {
     int cur_x, cur_y;
     bool cur_visible;
+
+    /*
+     * User preference option to swap the left and right mouse
+     * buttons. There isn't a completely obvious mapping of left and
+     * right buttons to the two directions of slash, and at least one
+     * player turned out not to have the same intuition as me.
+     */
+    bool swap_buttons;
 };
+
+static void legacy_prefs_override(struct game_ui *ui_out)
+{
+    static bool initialised = false;
+    static int swap_buttons = -1;
+
+    if (!initialised) {
+        initialised = true;
+        swap_buttons = getenv_bool("SLANT_SWAP_BUTTONS", -1);
+    }
+
+    if (swap_buttons != -1)
+        ui_out->swap_buttons = swap_buttons;
+}
 
 static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->cur_x = ui->cur_y = 0;
     ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
+
+    ui->swap_buttons = false;
+    legacy_prefs_override(ui);
+
     return ui;
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *ret;
+
+    ret = snewn(2, config_item);
+
+    ret[0].name = "Mouse button order";
+    ret[0].kw = "left-button";
+    ret[0].type = C_CHOICES;
+    ret[0].u.choices.choicenames = ":Left \\, right /:Left /, right \\";
+    ret[0].u.choices.choicekws = ":\\:/";
+    ret[0].u.choices.selected = ui->swap_buttons;
+
+    ret[1].name = NULL;
+    ret[1].type = C_END;
+
+    return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->swap_buttons = cfg[0].u.choices.selected;
 }
 
 static void free_ui(game_ui *ui)
@@ -1785,7 +1835,7 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     /* fool the macros */
     struct dummy { int tilesize; } dummy, *ds = &dummy;
@@ -2084,19 +2134,21 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
     /*
      * I'll use 6mm squares by default.
      */
-    game_compute_size(params, 600, &pw, &ph);
+    game_compute_size(params, 600, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int w = state->p.w, h = state->p.h, W = w+1;
     int ink = print_mono_colour(dr, 0);
@@ -2176,6 +2228,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     true, game_can_format_as_text_now, game_text_format,
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
     NULL, /* encode_ui */

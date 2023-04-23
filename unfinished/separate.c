@@ -731,7 +731,7 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     *x = *y = 10 * tilesize;	       /* FIXME */
 }
@@ -804,11 +804,13 @@ static bool game_timing_state(const game_state *state, game_ui *ui)
     return true;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
 }
 
@@ -833,6 +835,7 @@ const struct game thegame = {
     free_game,
     false, solve_game,
     false, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
     NULL, /* encode_ui */

@@ -1135,7 +1135,7 @@ static DSF *make_dsf(DSF *dsf, int *board, const int w, const int h) {
     int i;
 
     if (!dsf)
-        dsf = dsf_new(w * h);
+        dsf = dsf_new_min(w * h);
     else
         dsf_reinit(dsf);
 
@@ -1174,14 +1174,14 @@ static void minimize_clue_set(int *board, int w, int h, random_state *rs)
     dsf = make_dsf(NULL, board, w, h);
     next = snewn(sz, int);
     for (i = 0; i < sz; ++i) {
-	int j = dsf_canonify(dsf, i);
+	int j = dsf_minimal(dsf, i);
 	if (i == j) {
 	    /* First cell of a region; set next[i] = -1 to indicate
 	     * end-of-list. */
 	    next[i] = -1;
 	} else {
 	    /* Add this cell to a region which already has a
-	     * linked-list head, by pointing the canonical element j
+	     * linked-list head, by pointing the minimal element j
 	     * at this one, and pointing this one in turn at wherever
 	     * j previously pointed. (This should end up with the
 	     * elements linked in the order 1,n,n-1,n-2,...,2, which
@@ -1209,7 +1209,7 @@ static void minimize_clue_set(int *board, int w, int h, random_state *rs)
      * if we can.
      */
     for (i = 0; i < sz; ++i) {
-	int j = dsf_canonify(dsf, shuf[i]);
+	int j = dsf_minimal(dsf, shuf[i]);
 	if (next[j] != -2) {
 	    int tmp = board[j];
 	    int k;
@@ -1652,7 +1652,7 @@ enum {
 };
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     *x = (params->w + 1) * tilesize;
     *y = (params->h + 1) * tilesize;
@@ -2092,19 +2092,21 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+			    float *x, float *y)
 {
     int pw, ph;
 
     /*
      * I'll use 6mm squares by default.
      */
-    game_compute_size(params, 600, &pw, &ph);
+    game_compute_size(params, 600, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+		       int tilesize)
 {
     const int w = state->shared->params.w;
     const int h = state->shared->params.h;
@@ -2172,6 +2174,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
     NULL, /* encode_ui */

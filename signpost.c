@@ -1387,7 +1387,31 @@ struct game_ui {
     bool dragging, drag_is_from;
     int sx, sy;         /* grid coords of start cell */
     int dx, dy;         /* pixel coords of drag posn */
+
+    /*
+     * Trivial and foolish configurable option done on purest whim.
+     * With this option enabled, the victory flash is done by rotating
+     * each square in the opposite direction from its immediate
+     * neighbours, so that they behave like a field of interlocking
+     * gears. With it disabled, they all rotate in the same direction.
+     * Choose for yourself which is more brain-twisting :-)
+     */
+    bool gear_mode;
 };
+
+static void legacy_prefs_override(struct game_ui *ui_out)
+{
+    static bool initialised = false;
+    static int gear_mode = -1;
+
+    if (!initialised) {
+        initialised = true;
+        gear_mode = getenv_bool("SIGNPOST_GEARS", -1);
+    }
+
+    if (gear_mode != -1)
+        ui_out->gear_mode = gear_mode;
+}
 
 static game_ui *new_ui(const game_state *state)
 {
@@ -1402,12 +1426,39 @@ static game_ui *new_ui(const game_state *state)
     ui->dragging = false;
     ui->sx = ui->sy = ui->dx = ui->dy = 0;
 
+    ui->gear_mode = false;
+    legacy_prefs_override(ui);
+
     return ui;
 }
 
 static void free_ui(game_ui *ui)
 {
     sfree(ui);
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *ret;
+
+    ret = snewn(2, config_item);
+
+    ret[0].name = "Victory rotation effect";
+    ret[0].kw = "flash-type";
+    ret[0].type = C_CHOICES;
+    ret[0].u.choices.choicenames = ":Unidirectional:Meshing gears";
+    ret[0].u.choices.choicekws = ":unidirectional:gears";
+    ret[0].u.choices.selected = ui->gear_mode;
+
+    ret[1].name = NULL;
+    ret[1].type = C_END;
+
+    return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->gear_mode = cfg[0].u.choices.selected;
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -1659,7 +1710,7 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     /* Ick: fake up `ds->tilesize' for macro expansion purposes */
     struct { int tilesize, order; } ads, *ds = &ads;
@@ -2143,26 +2194,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
             if (state->nums[i] != ds->nums[i] ||
                 f != ds->f[i] || dirp != ds->dirp[i] ||
                 force || !ds->started) {
-                int sign;
-                {
-                    /*
-                     * Trivial and foolish configurable option done on
-                     * purest whim. With this option enabled, the
-                     * victory flash is done by rotating each square
-                     * in the opposite direction from its immediate
-                     * neighbours, so that they behave like a field of
-                     * interlocking gears. With it disabled, they all
-                     * rotate in the same direction. Choose for
-                     * yourself which is more brain-twisting :-)
-                     */
-                    static int gear_mode = -1;
-                    if (gear_mode < 0)
-                        gear_mode = getenv_bool("SIGNPOST_GEARS", false);
-                    if (gear_mode)
-                        sign = 1 - 2 * ((x ^ y) & 1);
-                    else
-                        sign = 1;
-                }
+                int sign = (ui->gear_mode ? 1 - 2 * ((x ^ y) & 1) : 1);
                 tile_redraw(dr, ds,
                             BORDER + x * TILE_SIZE,
                             BORDER + y * TILE_SIZE,
@@ -2220,16 +2252,18 @@ static int game_status(const game_state *state)
     return state->completed ? +1 : 0;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
-    game_compute_size(params, 1300, &pw, &ph);
+    game_compute_size(params, 1300, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int ink = print_mono_colour(dr, 0);
     int x, y;
@@ -2282,6 +2316,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     true, game_can_format_as_text_now, game_text_format,
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
     NULL, /* encode_ui */
