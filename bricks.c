@@ -1266,7 +1266,7 @@ static void game_get_cursor_location(const game_ui *ui,
 }
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
 	tilesize &= ~1;
 	*x = (params->w+1) * tilesize;
@@ -1290,7 +1290,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 	tilesize &= ~1;
 	ds->tilesize = tilesize;
 	ds->thickness = max(2.0L, tilesize / 7.0L);
-	game_compute_size(params, tilesize, &ds->w, &ds->h);
+	game_compute_size(params, tilesize, NULL, &ds->w, &ds->h);
 
 	game_set_offsets(params->h, tilesize, &ds->offsetx, &ds->offsety);
 }
@@ -1550,16 +1550,18 @@ static bool game_timing_state(const game_state *state, game_ui *ui)
 
 /* Using 9mm squares */
 #define PRINT_SQUARE_SIZE 900
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
 	int pw, ph;
 
-	game_compute_size(params, PRINT_SQUARE_SIZE, &pw, &ph);
+	game_compute_size(params, PRINT_SQUARE_SIZE, ui, &pw, &ph);
 	*x = pw / 100.0F;
 	*y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
 	int w = state->w;
 	int h = state->h;
@@ -1637,6 +1639,7 @@ const struct game thegame = {
 	free_game,
 	true, solve_game,
 	true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
 	new_ui,
 	free_ui,
 	encode_ui,

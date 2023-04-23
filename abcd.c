@@ -1515,7 +1515,7 @@ static void game_get_cursor_location(const game_ui *ui,
 }
 
 static void game_compute_size(const game_params *params, int tilesize,
-				  int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
 	int w = params->w;
 	int h = params->h;
@@ -2017,17 +2017,19 @@ static bool game_timing_state(const game_state *state, game_ui *ui)
 	return true;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
 	int pw, ph;
 
 	/* Using 9mm squares */
-	game_compute_size(params, 900, &pw, &ph);
+	game_compute_size(params, 900, ui, &pw, &ph);
 	*x = pw / 100.0F;
 	*y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
 	int ink = print_mono_colour(dr, 0);
 	int w = state->w;
@@ -2108,6 +2110,7 @@ const struct game thegame = {
 	free_game,
 	true, solve_game,
 	true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
 	new_ui,
 	free_ui,
 	encode_ui,
