@@ -921,7 +921,7 @@ static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->draw_faint_lines = true;
-    ui->autofollow = AF_OFF;
+    ui->autofollow = AF_ADAPTIVE;
     legacy_prefs_override(ui);
     return ui;
 }
