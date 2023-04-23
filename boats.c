@@ -3918,7 +3918,7 @@ static void game_set_size(drawing *dr, game_drawstate *ds,
 }
 
 static void game_compute_size(const game_params *params, int tilesize,
-				  int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
 	int fh;
 	*x = (params->w+2) * tilesize;
@@ -3954,17 +3954,19 @@ static bool game_timing_state(const game_state *state, game_ui *ui)
 	return true;
 }
 
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
     /* Using 7mm squares */
-    game_compute_size(params, 700, &pw, &ph);
+    game_compute_size(params, 700, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
 	int x, y;
 	int w = state->w;

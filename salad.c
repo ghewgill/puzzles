@@ -1795,7 +1795,7 @@ static void game_get_cursor_location(const game_ui *ui,
 }
 
 static void game_compute_size(const game_params *params, int tilesize,
-				  int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
 	*x = *y = (params->order+2) * tilesize;
 }
@@ -2339,18 +2339,20 @@ static bool game_timing_state(const game_state *state, game_ui *ui)
 
 /* Using 8mm squares */
 #define PRINT_SQUARE_SIZE 800
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
 	int pw, ph;
 
 	/* Add an extra line for the character range 
 	 (which would normally be in the statusbar) */
-	game_compute_size(params, PRINT_SQUARE_SIZE, &pw, &ph);
+	game_compute_size(params, PRINT_SQUARE_SIZE, ui, &pw, &ph);
 	*x = pw / 100.0F;
 	*y = (ph+PRINT_SQUARE_SIZE) / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
 	int o = state->params->order;
 	int mode = state->params->mode;
