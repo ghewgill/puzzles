@@ -351,7 +351,7 @@ static int sticks_validate(game_state *state, DSF *dsf, int *lengths)
 	bool hastemp = dsf != NULL;
 	if (!hastemp)
 	{
-		dsf = dsf_new(w*h);
+		dsf = dsf_new_min(w*h);
 		lengths = snewn(w*h, int);
 	}
 	bool error;
@@ -580,7 +580,7 @@ static int sticks_solve_game(game_state *state)
 	int i;
 	int ret = STATUS_UNFINISHED;
 
-	DSF *dsf = dsf_new(s);
+	DSF *dsf = dsf_new_min(s);
 	int *lengths = snewn(s, int);
 
 	for (i = 0; i < s; i++)
@@ -719,7 +719,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 			   char **aux, bool interactive)
 {
 	int w = params->w, h = params->h;
-	DSF *dsf = dsf_new(w*h);
+	DSF *dsf = dsf_new_min(w*h);
 	int *spaces = snewn(w*h, int);
 	int i, j;
 	game_state *state = new_game(NULL, params, NULL);
@@ -752,21 +752,16 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 				if (i / w < h - 1 && state->grid[i + w] & F_VER) n++;
 				state->numbers[i] = n;
 			}
-			else if (dsf_canonify(dsf, i) == i)
+			else if (dsf_minimal(dsf, i) == i)
 			{
-                state->numbers[i] = dsf_size(dsf, i);
-                // Alternatively:
-                //  - change all `dsf_new` into `dsf_new_min`
-                //  - call `dsf_minimal` just above instead of `dsf_canonify`
-                //  - restore logic below
-//				int n = dsf_size(dsf, i);
-//
-//				if (n == 1)
-//					state->numbers[i] = 1;
-//				else if (state->grid[i] & F_HOR)
-//					state->numbers[i + random_upto(rs, n)] = n;
-//				else if (state->grid[i] & F_VER)
-//					state->numbers[i + (w*random_upto(rs, n))] = n;
+				int n = dsf_size(dsf, i);
+
+				if (n == 1)
+					state->numbers[i] = 1;
+				else if (state->grid[i] & F_HOR)
+					state->numbers[i + random_upto(rs, n)] = n;
+				else if (state->grid[i] & F_VER)
+					state->numbers[i + (w*random_upto(rs, n))] = n;
 			}
 		}
 	} while (sticks_solve_game(state) != STATUS_COMPLETE);
