@@ -1027,6 +1027,16 @@ static game_state *new_game(midend *me, const game_params *params,
         for (j = 0; j < state->common->rowlen[i]; j++)
             if (state->common->rowdata[state->common->rowsize * i + j] >= 10)
                 state->common->fontsize = FS_SMALL;
+    /*
+     * We might also need to use the small font if there are lots of
+     * row clues.  We assume that all clues are one digit and that a
+     * single-digit clue takes up 1.5 tiles, of which the clue is 0.5
+     * tiles and the space is 1.0 tiles.
+     */
+    for (i = params->w; i < params->w + params->h; i++)
+        if ((state->common->rowlen[i] * 3 - 2) >
+            TLBORDER(state->common->w) * 2)
+            state->common->fontsize = FS_SMALL;
 
     if (desc[-1] == ',') {
         /*
@@ -1810,10 +1820,10 @@ static void draw_numbers(
      * and FS_SMALL in all other cases.
      *
      * If we assume that a digit is about 0.6em wide, and we want
-     * about that space between clues, then FS_SMALL should be
+     * about that space between clues, then FS_LARGE should be
      * TILESIZE/1.2.  If we also assume that clues are at most two
      * digits long then the case where adjacent clues are two digits
-     * long requries FS_LARGE to be TILESIZE/1.8.
+     * long requries FS_SMALL to be TILESIZE/1.8.
      */
     fontsize = (TILE_SIZE + 0.5F) /
         (state->common->fontsize == FS_LARGE ? 1.2F : 1.8F);
@@ -1845,11 +1855,15 @@ static void draw_numbers(
     } else {
         int x, y;
         size_t off = 0;
+        const char *spaces = "  ";
 
         assert(rowlen <= state->common->rowsize);
         *ds->strbuf = '\0';
+        /* Squish up a bit if there are lots of clues. */
+        if (rowlen > TLBORDER(state->common->w)) spaces++;
         for (j = 0; j < rowlen; j++)
-            off += sprintf(ds->strbuf + off, "%s%d", j ? "  " : "", rowdata[j]);
+            off += sprintf(ds->strbuf + off, "%s%d",
+                           j ? spaces : "", rowdata[j]);
         y = ry;
         x = BORDER + TILE_SIZE * (TLBORDER(state->common->w)-1);
         draw_text(dr, x+TILE_SIZE, y+TILE_SIZE/2, FONT_VARIABLE,
