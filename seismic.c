@@ -1388,7 +1388,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				ui->cshow = false;
 			
 			ui->ckey = false;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		/* Select square for marking */
 		else if (button == RIGHT_BUTTON)
@@ -1412,7 +1412,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				ui->cshow = false;
 			
 			ui->ckey = false;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 	}
 	
@@ -1421,7 +1421,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	{
 		move_cursor(button, &ui->hx, &ui->hy, w, h, 0);
 		ui->cshow = ui->ckey = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	/* Keyboard change pencil cursor */
@@ -1429,7 +1429,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	{
 		ui->cpencil = !ui->cpencil;
 		ui->ckey = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	/* Enter or remove numbers */

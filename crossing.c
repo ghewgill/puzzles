@@ -1324,7 +1324,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui->cshow = false;
 			
 			ui->ckey = false;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		/* Select square for marking */
 		else if (button == RIGHT_BUTTON)
@@ -1350,7 +1350,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				ui->cshow = false;
 			
 			ui->ckey = false;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 	}
 	
@@ -1358,14 +1358,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	{
 		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
 		ui->cshow = ui->ckey = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	/* Keyboard change pencil cursor */
 	if (ui->cshow && button == CURSOR_SELECT)
 	{
 		ui->cpencil = !ui->cpencil;
 		ui->ckey = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	/* Enter or remove numbers */

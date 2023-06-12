@@ -1541,7 +1541,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			{
 				ui->hshow = false;
 			}
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		
 		/* Quick add Circle or Hole */
@@ -1578,14 +1578,14 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		move_cursor(button, &gx, &gy, o, o, 0);
 		ui->hx = gx; ui->hy = gy;
 		ui->hshow = ui->hcursor = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	/* Keyboard change pencil cursor */
 	if (ui->hshow && button == CURSOR_SELECT)
 	{
 		ui->hpencil = !ui->hpencil;
 		ui->hcursor = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	if(ui->hshow && (state->gridclues[pos] == 0 || state->gridclues[pos] == LATINH_CIRCLE))
