@@ -12,6 +12,7 @@
 \cfg{html-contents-depth-0}{1}
 \cfg{html-contents-depth-1}{2}
 \cfg{html-leaf-contains-contents}{true}
+\cfg{html-head-end}{<meta name="viewport" content="width=device-width, initial-scale=1">}
 
 \cfg{chm-filename}{puzzles.chm}
 \cfg{chm-contents-filename}{index.html}
@@ -3575,6 +3576,552 @@ These parameters are available from the \q{Custom...} option on the
 \dd With this option set, the game generator will try harder to
 eliminate unnecessary clues on the board. This slows down generation,
 so it's not recommended for boards larger than, say, 30\times\.30.
+
+\C{abcd} \i{ABCD}
+
+\cfg{winhelp-topic}{games.abcd}
+
+You're given an empty grid, and several rows of numbers on the side.
+You have to write a letter in every empty cell, following these rules:
+
+\n The numbers on the edge indicate how many instances of a specific
+letter appear in that row or column.
+
+\n Identical letters can not be horizontally or vertically adjacent.
+
+The inventor of this type is unknown. This puzzle is also known under
+the names \e{ABCD Puzzle}, \e{ABC-Kombi} or \e{ABCD-R\u00e4{a}tsel}.
+
+More information: \W{https://www.janko.at/Raetsel/Abc-Kombi/index.htm}\cw{www.janko.at/Raetsel/Abc-Kombi/index.htm}
+
+\H{abcd-controls} \i{ABCD Controls}
+
+\IM{ABCD Controls} controls, for ABCD
+
+ABCD uses the same control scheme as Solo, but with letters instead of numbers.
+
+Left-click to select a cell, then type a letter on your keyboard to enter it.
+Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a letter to add a pencil mark. Pencil marks can
+be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter
+to toggle between entering letters and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{abcd-parameters} \I{parameters, for ABCD}ABCD parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares (excluding the size of the numbers on the
+edge).
+
+\dt \e{Letters}
+
+\dd The amount of different letters that can appear in the puzzle.
+
+\dt \e{Remove clues}
+
+\dd When enabled, the difficulty is increased by hiding certain number clues.
+
+\dt \e{Allow diagonal touching}
+
+\dd When disabled, letters cannot be diagonally adjacent (in addition to
+letters not being orthogonally adjacent).
+
+\C{ascent} \i{Ascent}
+
+\cfg{winhelp-topic}{games.ascent}
+
+You're given a grid, with several numbers inside. Your objective is to place each number exactly once, so a path is formed from the lowest number (i.e. 1) to the highest number. Two numbers that are in sequence must be horizontally, vertically or diagonally adjacent.
+
+The puzzle can be played on a rectangular or hexagonal grid. It's also possible to play on a rectangular grid while not allowing the path to move diagonally.
+
+In the alternate game mode 'Edges', the grid is surrounded by numbers placed inside arrows. An arrow points to the row, column or diagonal where this number appears in the path.
+
+This puzzle is invented by Gyora Benedek, and is known as \e{Hidato} (or the non-trademarked name \e{Hidoku}). Edges mode is an implementation of \e{1to25} invented by Jeff Widderich.
+
+More information: \W{http://www.janko.at/Raetsel/Hidoku/index.htm}\cw{http://www.janko.at/Raetsel/Hidoku/index.htm}
+
+\H{ascent-controls} \i{Ascent Controls}
+
+\IM{Ascent Controls} controls, for Ascent
+
+There are three ways to enter a number:
+
+\n Click a number to highlight it, then click (or drag to) an adjacent cell to place the next number in the sequence. The arrow keys and Enter can be used to emulate mouse clicks.
+
+\n Click an empty cell, then type a multi-digit number. To confirm a number, either press Enter, an arrow key, or click any cell.
+
+\n In Edges mode, click and drag from an edge number, then release in an empty grid cell in the same row, column or diagonal.
+
+To remove numbers, right-click or right-drag a number.
+
+It's also possible to draw a path while the numbers inside the path are still unknown. Left-click and drag across cells to draw a line. Right-click or right-drag to clear the line going through a cell.
+
+If a path has only a single number, the endpoints will display one or two smaller numbers, which represent the numbers which are valid for this cell.
+
+\H{ascent-parameters} \I{parameters, for Ascent}Ascent parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Always show start and end points}
+
+\dd When enabled, the first and last number are always given. Disable this option for an added challenge.
+
+\dt \e{Symmetrical clues}
+
+\dd When enabled, all given numbers form a symmetric pattern. This usually leads to easier puzzles.
+
+\dt \e{Grid type}
+
+\dd Choose between 'Rectangle', 'Rectangle (no diagonals)', 'Hexagon', 'Honeycomb' and 'Edges' mode.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{boats} \i{Boats}
+
+\cfg{winhelp-topic}{games.boats}
+
+You're given a grid, and a list of boats which must be located inside that grid. Boats can be rotated. Two boats cannot be horizontally, vertically or diagonally adjacent.
+
+The numbers on the side indicate the amount of cells inside that row or column which are occupied by a boat.
+
+Some boat segments are given (corner pieces, centers, or single-length boats), along with their orientation.
+
+At the bottom of the puzzle is a list of every boat that must be placed in the grid. When a boat is found, it is automatically crossed off of this list. Make sure a boat is surrounded by water on all sides, to indicate that it cannot possibly grow any further.
+
+This puzzle is best known as \e{Battleships}.
+
+More information: \W{https://www.janko.at/Raetsel/Battleships/index.htm}\cw{https://www.janko.at/Raetsel/Battleships/index.htm}
+
+\H{boats-controls} \i{Boats Controls}
+
+\IM{Boats Controls} controls, for Boats
+
+Left-click to place a boat segment in the grid. Unknown boat segments are represented by a small rectangle, and will automatically change into the correct shape when the surrounding cells are filled in.
+
+Right-click to place water, to indicate that a boat cannot be placed here.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to place a boat segment, and press Space to place water.
+
+\H{boats-parameters} \I{parameters, for Boats}Boats parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Fleet size}
+
+\dd The size of the largest possible boat.
+
+\dt \e{Fleet configuration}
+
+\dd Customize the fleet by entering a list of numbers. Each number indicates how many times a boat of a specific size appears. For example, the configuration \cw{3,2,1} represents 3 boats of size 1, 2 boats of size 2, and 1 boat of size 3.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\dt \e{Remove numbers}
+
+\dd When enabled, the difficulty is increased by hiding certain number clues.
+
+\C{bricks} \i{Bricks}
+
+\cfg{winhelp-topic}{games.bricks}
+
+Objective of the game: Shade several cells in the hexagonal grid 
+while following these rules:
+
+\n Each shaded cell must have at least one shaded cell below it
+   (unless it's on the bottom row).
+
+\n There can not be 3 or more shaded cells in a horizontal row.
+
+\n A number indicates the amount of shaded cells around it.
+
+\n Cells with numbers cannot be shaded.
+
+This genre was invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli} under the name \e{Tawamurenga}.
+
+\H{bricks-controls} \i{Bricks Controls}
+
+\IM{Bricks Controls} controls, for Bricks
+
+Left-click to shade a cell. Right-click to unshade a cell. You can also click and drag to place multiple squares.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to shade a square, and press Space to unshade a square.
+
+You can also use the numpad (keys 1, 3, 7, 9) to move the cursor diagonally.
+
+\H{bricks-parameters} \I{parameters, for Bricks}Bricks parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{clusters} \i{Clusters}
+
+\cfg{winhelp-topic}{games.clusters}
+
+You're given a grid, with several dots inside colored squares. Your objective is to fill every empty space with one of two colors while following these rules:
+
+\n Tiles which are adjacent to 1 other tile of the same color are denoted with a dot. All of these tiles are given.
+
+\n All other tiles must be adjacent to 2 or more tiles of the same color.
+
+This puzzle type was invented by Inaba Naoki under the name \e{\u30AF\u30E9\u30B9\u30BF\u30FC}, or literally \e{Kurasuta}, which Google Translate names 'Cluster'. The original puzzles are available here: \W{http://www.inabapuzzle.com/honkaku/kura.html}\cw{http://www.inabapuzzle.com/honkaku/kura.html}
+
+\H{clusters-controls} \i{Clusters Controls}
+
+\IM{Clusters Controls} controls, for Clusters
+
+Left-click to place blue squares. Right-click to place red squares. You can also click and drag to place multiple squares.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to place a blue square, and press Space to place a red square.
+
+\H{clusters-parameters} \I{parameters, for Clusters}Clusters parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\C{crossing} \i{Crossing}
+
+\cfg{winhelp-topic}{games.crossing}
+
+You're given a grid with several black squares, and a list of numbers. Your objective is to fill every empty square with a digit, so each number appears once in the grid when reading from left-to-right or from top-to-bottom.
+
+This is an implementation of \e{Nansuke}, which was invented by Nikoli. It's sometimes known as \e{Number Skeleton}.
+
+More information: \W{https://www.nikoli.co.jp/en/puzzles/nansuke/}\cw{https://www.nikoli.co.jp/en/puzzles/nansuke/}
+
+\H{crossing-controls} \i{Crossing Controls}
+
+\IM{Crossing Controls} controls, for Crossing
+
+Crossing uses the same control scheme as Solo.
+
+Left-click to select a cell, then type a number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a number to add a pencil mark. Pencil marks can be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering number and entering pencil marks.
+
+\H{crossing-parameters} \I{parameters, for Crossing}Crossing parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Symmetric walls}
+
+\dd When enabled, all walls form a rotationally symmetric pattern.
+
+\C{mathrax} \i{Mathrax}
+
+\cfg{winhelp-topic}{games.mathrax}
+
+You have a square grid; each square may contain a digit from 1 to the size of the grid, and some squares have clues overlapping them. Your objective is to fill the grid with numbers so that no number appears more than once in a row or column, and all clues are satisfied.
+
+The following clues can appear:
+
+\b An 'E' indicates that the four adjacent digits are even.
+
+\b An 'O' indicates that the four adjacent digits are odd.
+
+\b An '=' indicates that diagonally adjacent digits are equal.
+
+\b A number indicates the result of the given operation when applied to each pair of diagonally adjacent digits. (topleft * bottomright) = (topright * bottomleft)
+
+The inventor of Mathrax is unknown. 
+
+More information: \W{https://www.janko.at/Raetsel/Mathrax/index.htm}\cw{https://www.janko.at/Raetsel/Mathrax/index.htm}
+
+\H{mathrax-controls} \i{Mathrax Controls}
+
+\IM{Mathrax Controls} controls, for Mathrax
+
+Mathrax uses the same control scheme as Solo.
+
+Left-click to select a cell, then type a number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a number to add a pencil mark. Pencil marks can be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering number and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{mathrax-parameters} \I{parameters, for Mathrax}Mathrax parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Size (s*s)}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\dt \e{Addition clues}
+
+\dd Allows clues with the addition operation to appear.
+
+\dt \e{Subtraction clues}
+
+\dd Allows clues with the subtraction operation to appear. Note that clues with a difference of zero are covered by Equality clues instead.
+
+\dt \e{Multiplication clues}
+
+\dd Allows clues with the multiplication operation to appear.
+
+\dt \e{Division clues}
+
+\dd Allows clues with the division operation to appear. Note that clues with a ratio of one are covered by Equality clues instead.
+
+\dt \e{Equality clues}
+
+\dd Allows clues with equality signs to appear.
+
+\dt \e{Even/odd clues}
+
+\dd Allows Even clues and Odd clues to appear.
+
+\C{rome} \i{Rome}
+
+\cfg{winhelp-topic}{games.rome}
+
+You're given a grid that has been divided into areas, containing arrows and one or more goals (represented by circles). Your goal is to fill every empty space with an arrow pointing up, down, left or right while following these rules:
+
+\n Every outlined area contains different arrows.
+
+\n Following the arrows must lead to one of the circled goals.
+
+This type was invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli}, who name it \e{Roma}.
+
+More information: \W{http://www.janko.at/Raetsel/Nikoli/Roma.htm}\cw{http://www.janko.at/Raetsel/Nikoli/Roma.htm}
+
+\H{rome-controls} \i{Rome Controls}
+
+\IM{Rome Controls} controls, for Rome
+
+Click and hold a square, then drag in one of the four directions to place an arrow.
+
+Right-click and drag to place a pencil mark. Pencil marks can be used for any purpose.
+
+The keyboard can also be used. Move the cursor with the arrow keys, and press Enter followed with an arrow key to place an arrow. Use Space to add pencil marks. Alternatively, use the arrows on the numpad to enter arrows directly.
+
+\H{rome-parameters} \I{parameters, for Rome}Rome parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{salad} \i{Salad}
+
+\cfg{winhelp-topic}{games.salad}
+
+You have a square grid; each square may contain a character from A (or 1) to a given maximum. Your objective is to put characters in some of the squares, so each character appears exactly once in each row and column.
+
+The rules vary depending on the game mode:
+
+\b ABC End View mode: Letters on the edge show which letter appears first when 'looking' into the grid.
+
+\b Number Ball mode: Squares with a ball must contain a number. Squares with a cross must remain empty.
+
+Number Ball was invented by Inaba Naoki. The original puzzles are available here: \W{http://www.janko.at/Raetsel/Nanbaboru/index.htm}\cw{http://www.janko.at/Raetsel/Nanbaboru/index.htm}
+
+I don't know who first designed ABC End View.
+
+\H{salad-controls} \i{Salad Controls}
+
+\IM{Salad Controls} controls, for Salad
+
+Salad uses a control scheme similar to Solo, but with the ability to mark empty squares.
+
+Left-click to select a cell, then type a letter or number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Press 'X' to mark a cell as empty, or press 'O' to mark a cell as "definitely not empty".
+
+Right-click a cell, then type a letter or number to add a pencil mark. Pencil marks can be used for any purpose. The letter 'X' can also be used to indicate a cell that might be empty.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering letters/numbers and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{salad-parameters} \I{parameters, for Salad}Salad parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Game mode}
+
+\dd Switch between ABC End View and Number Ball mode.
+
+\dt \e{Size (s*s)}
+
+\dd Size of the grid in squares.
+
+\dt \e{Symbols}
+
+\dd The amount of different symbols that appear in each row.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle.
+
+\C{seismic} \i{Seismic}
+
+\cfg{winhelp-topic}{games.seismic}
+
+You're given a grid that has been divided into areas. Fill each empty cell with a number so each area of size N contains one instance of each number between 1 and N. Depending on the game mode, the following rule is added:
+
+\b Seismic: Two equal numbers N in the same row or column must have at least N spaces between them.
+
+\b Tectonic: Two equal numbers cannot be horizontally, vertically or diagonally adjacent.
+
+Seismic mode is an implementation of \e{Hakyuu}, a puzzle invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli}. It's also known as \e{Ripple Effect}. More information: \W{http://www.janko.at/Raetsel/Hakyuu/index.htm}\cw{http://www.janko.at/Raetsel/Hakyuu/index.htm}
+
+I don't know who first invented Tectonic.
+
+\H{seismic-controls} \i{Seismic Controls}
+
+\IM{Seismic Controls} controls, for Seismic
+
+Seismic uses the same control scheme as Solo, but the interface automatically enforces the maximum number on each area, so it's not possible to enter numbers that are out of range.
+
+Left-click to select a cell, then type a number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a number to add a pencil mark. Pencil marks can be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering number and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{seismic-parameters} \I{parameters, for Seismic}Seismic parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\dt \e{Game mode}
+
+\dd Switch between Seismic and Tectonic mode.
+
+\C{spokes} \i{Spokes}
+
+\cfg{winhelp-topic}{games.spokes}
+
+You are given a grid filled with hubs with numbers on them. Your objective is to draw lines between them while following these rules:
+
+\n You can only draw a line starting from a hub's point. If there is no point visible, you cannot draw a line.
+
+\n Only one line can be drawn between two hubs.
+
+\n The number indicates the amount of lines starting from a hub.
+
+\n Lines cannot cross each other.
+
+\n All hubs must form a single connected group.
+
+The inventor of this puzzle type is unknown.
+
+\H{spokes-controls} \i{Spokes Controls}
+
+\IM{Spokes Controls} controls, for Spokes
+
+To draw a line, left-click and drag from one hub to another. You can mark a dot as unused by dragging between hubs with the right mouse button.
+
+You can also use the keyboard. Use the arrow keys to move the cursor on top of a dot, then press Enter to draw a line or Space to mark it.
+
+\H{spokes-parameters} \I{parameters, for Spokes}Spokes parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{sticks} \i{Sticks}
+
+\cfg{winhelp-topic}{games.sticks}
+
+You are given a grid with several black cells. Fill every blank cell with a line, which connects two cell edges and goes horizontally or vertically through the center of the cell. The lines must follow these rules:
+
+\n A number overlapping a line indicates the length of that line.
+
+\n A line can't overlap more than one number.
+
+\n Numbers in black cells indicate the amount of lines connected to the cell.
+
+This puzzle type was invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli}, and is known as \e{Tatebo-Yokobo}.
+
+More information: \W{https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm}\cw{https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm}
+
+\H{sticks-controls} \i{Sticks Controls}
+
+\IM{Sticks Controls} controls, for Sticks
+
+To place a line, drag the mouse horizontally or vertically inside a cell.
+
+To place a line without dragging the mouse, left-click to place a vertical line and right-click to place a horizontal line.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to place a vertical line, and press Space to place a horizontal line.
+
+\H{sticks-parameters} \I{parameters, for Sticks}Sticks parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{%age of black squares}
+
+\dd Rough percentage of black squares in the grid.
+
+\dt \e{Symmetry}
+
+\dd Allows you to specify the required symmetry of the black squares in the grid.
 
 \A{licence} \I{MIT licence}\ii{Licence}
 

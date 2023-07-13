@@ -1892,7 +1892,7 @@ static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
 #endif
 
 const struct game thegame = {
-	"Crossing", NULL, NULL,
+	"Crossing", "games.crossing", "crossing",
 	default_params,
 	game_fetch_preset, NULL,
 	decode_params,

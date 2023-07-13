@@ -3949,7 +3949,7 @@ static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
 #endif
 
 const struct game thegame = {
-	"Ascent", NULL, NULL,
+	"Ascent", "games.ascent", "ascent",
 	default_params,
 	NULL, game_preset_menu,
 	decode_params,

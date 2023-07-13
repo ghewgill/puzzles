@@ -2094,7 +2094,7 @@ static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
 #endif
 
 const struct game thegame = {
-	"ABCD", NULL, NULL,
+	"ABCD", "games.abcd", "abcd",
 	default_params,
 	game_fetch_preset, NULL,
 	decode_params,
