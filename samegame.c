@@ -1389,7 +1389,7 @@ static float *game_colours(frontend *fe, int *ncolours)
 {
     float *ret = snewn(3 * NCOLOURS, float);
 
-    frontend_default_colour(fe, &ret[COL_BACKGROUND * 3]);
+    game_mkhighlight(fe, ret, COL_BACKGROUND, COL_HIGHLIGHT, COL_LOWLIGHT);
 
     ret[COL_1 * 3 + 0] = 0.0F;
     ret[COL_1 * 3 + 1] = 0.0F;
@@ -1403,8 +1403,8 @@ static float *game_colours(frontend *fe, int *ncolours)
     ret[COL_3 * 3 + 1] = 0.0F;
     ret[COL_3 * 3 + 2] = 0.0F;
 
-    ret[COL_4 * 3 + 0] = 1.0F;
-    ret[COL_4 * 3 + 1] = 1.0F;
+    ret[COL_4 * 3 + 0] = 0.7F;
+    ret[COL_4 * 3 + 1] = 0.7F;
     ret[COL_4 * 3 + 2] = 0.0F;
 
     ret[COL_5 * 3 + 0] = 1.0F;
@@ -1412,16 +1412,16 @@ static float *game_colours(frontend *fe, int *ncolours)
     ret[COL_5 * 3 + 2] = 1.0F;
 
     ret[COL_6 * 3 + 0] = 0.0F;
-    ret[COL_6 * 3 + 1] = 1.0F;
-    ret[COL_6 * 3 + 2] = 1.0F;
+    ret[COL_6 * 3 + 1] = 0.8F;
+    ret[COL_6 * 3 + 2] = 0.8F;
 
     ret[COL_7 * 3 + 0] = 0.5F;
     ret[COL_7 * 3 + 1] = 0.5F;
     ret[COL_7 * 3 + 2] = 1.0F;
 
-    ret[COL_8 * 3 + 0] = 0.5F;
-    ret[COL_8 * 3 + 1] = 1.0F;
-    ret[COL_8 * 3 + 2] = 0.5F;
+    ret[COL_8 * 3 + 0] = 0.2F;
+    ret[COL_8 * 3 + 1] = 0.8F;
+    ret[COL_8 * 3 + 2] = 0.2F;
 
     ret[COL_9 * 3 + 0] = 1.0F;
     ret[COL_9 * 3 + 1] = 0.5F;
@@ -1434,14 +1434,6 @@ static float *game_colours(frontend *fe, int *ncolours)
     ret[COL_SEL * 3 + 0] = 1.0F;
     ret[COL_SEL * 3 + 1] = 1.0F;
     ret[COL_SEL * 3 + 2] = 1.0F;
-
-    ret[COL_HIGHLIGHT * 3 + 0] = 1.0F;
-    ret[COL_HIGHLIGHT * 3 + 1] = 1.0F;
-    ret[COL_HIGHLIGHT * 3 + 2] = 1.0F;
-
-    ret[COL_LOWLIGHT * 3 + 0] = ret[COL_BACKGROUND * 3 + 0] * 2.0F / 3.0F;
-    ret[COL_LOWLIGHT * 3 + 1] = ret[COL_BACKGROUND * 3 + 1] * 2.0F / 3.0F;
-    ret[COL_LOWLIGHT * 3 + 2] = ret[COL_BACKGROUND * 3 + 2] * 2.0F / 3.0F;
 
     *ncolours = NCOLOURS;
     return ret;
