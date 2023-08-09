@@ -1093,14 +1093,6 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
     sel_clear(ui, newstate);
-
-    /*
-     * If the game state has just changed into an unplayable one
-     * (either completed or impossible), we vanish the keyboard-
-     * control cursor.
-     */
-    if (newstate->complete || newstate->impossible)
-	ui->displaysel = false;
 }
 
 static const char *current_key_label(const game_ui *ui,
@@ -1289,9 +1281,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     int tx, ty;
     char *ret = MOVE_UI_UPDATE;
 
-    ui->displaysel = false;
-
     if (button == RIGHT_BUTTON || button == LEFT_BUTTON) {
+        ui->displaysel = false;
 	tx = FROMCOORD(x); ty= FROMCOORD(y);
     } else if (IS_CURSOR_MOVE(button)) {
 	int dx = 0, dy = 0;
@@ -1306,11 +1297,11 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	tx = ui->xsel;
 	ty = ui->ysel;
     } else
-	return NULL;
+	return MOVE_UNUSED;
 
     if (tx < 0 || tx >= state->params.w || ty < 0 || ty >= state->params.h)
-	return NULL;
-    if (COL(state, tx, ty) == 0) return NULL;
+	return MOVE_UNUSED;
+    if (COL(state, tx, ty) == 0) return MOVE_NO_EFFECT;
 
     if (ISSEL(ui,tx,ty)) {
 	if (button == RIGHT_BUTTON || button == CURSOR_SELECT2)
@@ -1370,7 +1361,7 @@ static game_state *execute_move(const game_state *from, const char *move)
 static void game_set_size(drawing *dr, game_drawstate *ds,
                           const game_params *params, int tilesize)
 {
-    ds->tilegap = 2;
+    ds->tilegap = (tilesize + 8) / 16;
     ds->tileinner = tilesize - ds->tilegap;
 }
 
@@ -1471,6 +1462,7 @@ static void tile_redraw(drawing *dr, game_drawstate *ds,
                         int tile, int bgcolour)
 {
     int outer = bgcolour, inner = outer, col = tile & TILE_COLMASK;
+    int tile_w, tile_h, outer_w, outer_h;
 
     if (col) {
 	if (tile & TILE_IMPOSSIBLE) {
@@ -1483,19 +1475,25 @@ static void tile_redraw(drawing *dr, game_drawstate *ds,
 	    outer = inner = col;
 	}
     }
-    draw_rect(dr, COORD(x), COORD(y), TILE_INNER, TILE_INNER, outer);
-    draw_rect(dr, COORD(x)+TILE_INNER/4, COORD(y)+TILE_INNER/4,
-	      TILE_INNER/2, TILE_INNER/2, inner);
-
-    if (dright)
-	draw_rect(dr, COORD(x)+TILE_INNER, COORD(y), TILE_GAP, TILE_INNER,
-		  (tile & TILE_JOINRIGHT) ? outer : bgcolour);
-    if (dbelow)
-	draw_rect(dr, COORD(x), COORD(y)+TILE_INNER, TILE_INNER, TILE_GAP,
-		  (tile & TILE_JOINDOWN) ? outer : bgcolour);
-    if (dright && dbelow)
-	draw_rect(dr, COORD(x)+TILE_INNER, COORD(y)+TILE_INNER, TILE_GAP, TILE_GAP,
-		  (tile & TILE_JOINDIAG) ? outer : bgcolour);
+    tile_w = dright ? TILE_SIZE : TILE_INNER;
+    tile_h = dbelow ? TILE_SIZE : TILE_INNER;
+    outer_w = (tile & TILE_JOINRIGHT) ? tile_w : TILE_INNER;
+    outer_h = (tile & TILE_JOINDOWN)  ? tile_h : TILE_INNER;
+    /* Draw the background if any of it will be visible. */
+    if (outer_w != tile_w || outer_h != tile_h || outer == bgcolour)
+        draw_rect(dr, COORD(x), COORD(y), tile_w, tile_h, bgcolour);
+    /* Draw the piece. */
+    if (outer != bgcolour)
+        draw_rect(dr, COORD(x), COORD(y), outer_w, outer_h, outer);
+    if (inner != outer)
+        draw_rect(dr, COORD(x)+TILE_INNER/4, COORD(y)+TILE_INNER/4,
+                  TILE_INNER/2, TILE_INNER/2, inner);
+    /* Reset bottom-right corner if necessary. */
+    if ((tile & (TILE_JOINRIGHT | TILE_JOINDOWN | TILE_JOINDIAG)) ==
+        (TILE_JOINRIGHT | TILE_JOINDOWN) && outer != bgcolour &&
+        TILE_GAP != 0)
+	draw_rect(dr, COORD(x)+TILE_INNER, COORD(y)+TILE_INNER,
+                  TILE_GAP, TILE_GAP, bgcolour);
 
     if (tile & TILE_HASSEL) {
 	int sx = COORD(x)+2, sy = COORD(y)+2, ssz = TILE_INNER-5;
@@ -1566,8 +1564,13 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	    if ((tile & TILE_JOINRIGHT) && (tile & TILE_JOINDOWN) &&
 		COL(state,x+1,y+1) == col)
 		tile |= TILE_JOINDIAG;
-
-	    if (ui->displaysel && ui->xsel == x && ui->ysel == y)
+            /*
+             * If the game state is an unplayable one (either
+             * completed or impossible), we hide the keyboard-control
+             * cursor.
+             */
+	    if (ui->displaysel && ui->xsel == x && ui->ysel == y &&
+                !(state->complete || state->impossible))
 		tile |= TILE_HASSEL;
 
 	    /* For now we're never expecting oldstate at all (because we have
