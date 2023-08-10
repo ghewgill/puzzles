@@ -713,7 +713,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	/* Keyboard move */
 	if (IS_CURSOR_MOVE(button)) {
 		int ox = ui->cx, oy = ui->cy;
-		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
+		move_cursor(button, &ui->cx, &ui->cy, w, h, 0, NULL);
 		ui->cursor = true;
 
 		if (shift | control)

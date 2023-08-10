@@ -1356,7 +1356,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	
 	if (IS_CURSOR_MOVE(button))
 	{
-		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
+		move_cursor(button, &ui->cx, &ui->cy, w, h, 0, NULL);
 		ui->cshow = ui->ckey = true;
 		return MOVE_UI_UPDATE;
 	}

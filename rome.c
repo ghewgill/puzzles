@@ -1559,7 +1559,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		if (IS_CURSOR_MOVE(button) && 
 			(ui->kmode == KEYMODE_OFF || ui->kmode == KEYMODE_MOVE))
 		{
-			move_cursor(button, &ui->hx, &ui->hy, w, h, false);
+			move_cursor(button, &ui->hx, &ui->hy, w, h, false, NULL);
 			ui->kmode = KEYMODE_MOVE;
 			return MOVE_UI_UPDATE;
 		}

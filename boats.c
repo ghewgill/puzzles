@@ -3277,7 +3277,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	if (IS_CURSOR_MOVE(button & ~MOD_MASK))
 	{
 		int cx = ui->cx, cy = ui->cy;
-		move_cursor(button & ~MOD_MASK, &ui->cx, &ui->cy, w, h, 0);
+		move_cursor(button & ~MOD_MASK, &ui->cx, &ui->cy, w, h, 0, NULL);
 		ui->cursor = true;
 		
 		/* Place boats or water by holding Shift or Ctrl while moving */
