@@ -19,7 +19,7 @@
  *   3 . . . \ 2
  *     3 3 2 2
  *
- *  would be encoded into: 
+ *  would be encoded into:
  *     4x4:0,2,6,LLaRLaRaRaRdL,2,1,1,1,2,2,2,2,2,2,3,3,3,0,0,1
  *
  *  Additionally, the game description can contain monsters fixed at a
@@ -27,7 +27,7 @@
  *  this feature, but this is needed to enter puzzles like Janko No.
  *  14, which is encoded as:
  *  8x5:12,12,0,LaRbLaRaLaRLbRaVaVaGRaRaRaLbLaRbRLb,0,2,0,2,2,1,2,1,3,1,0,1,8,4,3,0,0,2,3,2,7,2,1,6,2,1
- * 
+ *
  */
 
 #include <stdio.h>
@@ -297,7 +297,7 @@ static game_state *new_state(const game_params *params) {
 
     state->solved = false;
     state->cheated = false;
-    
+
     return state;
 }
 
@@ -348,7 +348,7 @@ static game_state *dup_game(const game_state *state)
 
     ret->solved = state->solved;
     ret->cheated = state->cheated;
-    
+
     return ret;
 }
 
@@ -443,7 +443,7 @@ static void make_paths(game_state *state) {
         int x,y,dir;
         int j,k,num_monsters;
         bool found;
-        int c,p; 
+        int c,p;
         found = false;
         /* Check whether inverse path is already in list */
         for (j=0;j<count;j++) {
@@ -455,9 +455,9 @@ static void make_paths(game_state *state) {
         if (found) continue;
 
         /* We found a new path through the mirror maze */
-        state->common->paths[count].grid_start = i;     
+        state->common->paths[count].grid_start = i;
         dir = range2grid(i, state->common->params.w,
-                         state->common->params.h,&x,&y);     
+                         state->common->params.h,&x,&y);
         state->common->paths[count].sightings_start =
             state->common->grid[x+y*(state->common->params.w +2)];
         while (true) {
@@ -467,11 +467,11 @@ static void make_paths(game_state *state) {
             else if (dir == DIRECTION_LEFT)     x--;
             else if (dir == DIRECTION_UP)       y--;
             else if (dir == DIRECTION_RIGHT)    x++;
-            
+
             r = grid2range(x, y, state->common->params.w,
                            state->common->params.h);
             if (r != -1) {
-                state->common->paths[count].grid_end = r;               
+                state->common->paths[count].grid_end = r;
                 state->common->paths[count].sightings_end =
                     state->common->grid[x+y*(state->common->params.w +2)];
                 break;
@@ -536,7 +536,7 @@ struct guess {
 static bool next_list(struct guess *g, int pos) {
 
     if (pos == 0) {
-        if ((g->guess[pos] == 1 && g->possible[pos] == 1) || 
+        if ((g->guess[pos] == 1 && g->possible[pos] == 1) ||
             (g->guess[pos] == 2 && (g->possible[pos] == 3 ||
                                     g->possible[pos] == 2)) ||
             g->guess[pos] == 4)
@@ -596,7 +596,7 @@ static void get_unique(game_state *state, int counter, random_state *rs) {
     int p,i,c,pathlimit,count_uniques;
     struct guess path_guess;
     int *view_count;
-    
+
     struct entry {
         struct entry *link;
         int *guess;
@@ -614,7 +614,7 @@ static void get_unique(game_state *state, int counter, random_state *rs) {
     path_guess.length = state->common->paths[counter].num_monsters;
     path_guess.guess = snewn(path_guess.length,int);
     path_guess.possible = snewn(path_guess.length,int);
-    for (i=0;i<path_guess.length;i++) 
+    for (i=0;i<path_guess.length;i++)
         path_guess.guess[i] = path_guess.possible[i] = 0;
 
     for (p=0;p<path_guess.length;p++) {
@@ -638,11 +638,11 @@ static void get_unique(game_state *state, int counter, random_state *rs) {
     view_count = snewn(pathlimit*pathlimit, int);
     for (i = 0; i < pathlimit*pathlimit; i++)
         view_count[i] = 0;
-    
+
     do {
         bool mirror;
         int start_view, end_view;
-        
+
         mirror = false;
         start_view = 0;
         for (p=0;p<state->common->paths[counter].length;p++) {
@@ -702,7 +702,7 @@ static void get_unique(game_state *state, int counter, random_state *rs) {
 
     test_views.head = views.head;
     test_views.node = views.node;
-    
+
     test_entry.guess = snewn(path_guess.length,int);
 
     single_views.head = NULL;
@@ -747,7 +747,7 @@ static void get_unique(game_state *state, int counter, random_state *rs) {
             sfree(single_views.node->guess);
             sfree(single_views.node);
         }
-        
+
         /* Modify state_guess according to path_guess.mapping */
         for (i=0;i<path_guess.length;i++)
             state->guess[state->common->paths[counter].mapping[i]] =
@@ -791,7 +791,7 @@ static bool check_numbers(game_state *state, int *guess) {
     int i;
     int count_ghosts, count_vampires, count_zombies;
 
-    count_ghosts = count_vampires = count_zombies = 0;  
+    count_ghosts = count_vampires = count_zombies = 0;
     for (i=0;i<state->common->num_total;i++) {
         if (guess[i] == 1) count_ghosts++;
         if (guess[i] == 2) count_vampires++;
@@ -800,9 +800,9 @@ static bool check_numbers(game_state *state, int *guess) {
 
     valid = true;
 
-    if (count_ghosts   > state->common->num_ghosts)   valid = false; 
-    if (count_vampires > state->common->num_vampires) valid = false; 
-    if (count_zombies > state->common->num_zombies)   valid = false; 
+    if (count_ghosts   > state->common->num_ghosts)   valid = false;
+    if (count_vampires > state->common->num_vampires) valid = false;
+    if (count_zombies > state->common->num_zombies)   valid = false;
 
     return valid;
 }
@@ -822,7 +822,7 @@ static bool check_solution(int *g, struct path path) {
             else if (g[path.p[i]] == 4) count++;
         }
     }
-    if (count != path.sightings_start) return false;    
+    if (count != path.sightings_start) return false;
 
     count = 0;
     mirror = false;
@@ -834,7 +834,7 @@ static bool check_solution(int *g, struct path path) {
             else if (g[path.p[i]] == 4) count++;
         }
     }
-    if (count != path.sightings_end) return false;  
+    if (count != path.sightings_end) return false;
 
     return true;
 }
@@ -883,7 +883,7 @@ static bool solve_iterative(game_state *state, struct path *paths) {
                     guess[i] = state->guess[i];
                 }
                 count = 0;
-                for (i=0;i<paths[p].num_monsters;i++) 
+                for (i=0;i<paths[p].num_monsters;i++)
                     guess[paths[p].mapping[i]] = loop.guess[count++];
                 if (check_numbers(state,guess) &&
                     check_solution(guess,paths[p]))
@@ -891,7 +891,7 @@ static bool solve_iterative(game_state *state, struct path *paths) {
                         possible[paths[p].mapping[j]] |= loop.guess[j];
                 if (!next_list(&loop,loop.length-1)) break;
             }
-            for (i=0;i<paths[p].num_monsters;i++)       
+            for (i=0;i<paths[p].num_monsters;i++)
                 state->guess[paths[p].mapping[i]] &=
                     possible[paths[p].mapping[i]];
             sfree(loop.possible);
@@ -942,7 +942,7 @@ static bool solve_bruteforce(game_state *state, struct path *paths) {
 
         correct = true;
         if (!check_numbers(state,loop.guess)) correct = false;
-        else 
+        else
             for (p=0;p<state->common->num_paths;p++)
                 if (!check_solution(loop.guess,paths[p])) {
                     correct = false; break;
@@ -952,7 +952,7 @@ static bool solve_bruteforce(game_state *state, struct path *paths) {
             solved = true;
             if(number_solutions > 1) {
                 solved = false;
-                break; 
+                break;
             }
             for (i=0;i<state->common->num_total;i++)
                 state->guess[i] = loop.guess[i];
@@ -985,7 +985,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     int count_ghosts, count_vampires, count_zombies;
     bool abort;
     float ratio;
-    
+
     /* Variables for solver algorithm */
     bool solved_iterative, solved_bruteforce, contains_inconsistency;
     int count_ambiguous;
@@ -995,7 +995,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     /* Variables for game description generation */
     int x,y;
     char *e;
-    char *desc; 
+    char *desc;
 
     while (true) {
         new = new_state(params);
@@ -1012,14 +1012,14 @@ static char *new_game_desc(const game_params *params, random_state *rs,
                     new->common->xinfo[w+h*(new->common->params.w+2)] = count++;
                 }
                 else if (c == 0) {
-                    new->common->grid[w+h*(new->common->params.w+2)] = 
+                    new->common->grid[w+h*(new->common->params.w+2)] =
                         CELL_MIRROR_L;
                     new->common->xinfo[w+h*(new->common->params.w+2)] = -1;
                 }
                 else {
                     new->common->grid[w+h*(new->common->params.w+2)] =
                         CELL_MIRROR_R;
-                    new->common->xinfo[w+h*(new->common->params.w+2)] = -1;         
+                    new->common->xinfo[w+h*(new->common->params.w+2)] = -1;
                 }
             }
         new->common->num_total = count; /* Total number of monsters in maze */
@@ -1037,9 +1037,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         if (ratio < 0.48F || ratio > 0.78F) {
             free_game(new);
             continue;
-        }        
+        }
 
-        /* Assign clue identifiers */   
+        /* Assign clue identifiers */
         for (r=0;r<2*(new->common->params.w+new->common->params.h);r++) {
             int x,y,gridno;
             gridno = range2grid(r,new->common->params.w,new->common->params.h,
@@ -1049,13 +1049,13 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         }
         /* The four corners don't matter at all for the game. Set them
          * all to zero, just to have a nice data structure */
-        new->common->grid[0] = 0;        
-        new->common->xinfo[0] = 0;      
-        new->common->grid[new->common->params.w+1] = 0; 
+        new->common->grid[0] = 0;
+        new->common->xinfo[0] = 0;
+        new->common->grid[new->common->params.w+1] = 0;
         new->common->xinfo[new->common->params.w+1] = 0;
-        new->common->grid[new->common->params.w+1 + (new->common->params.h+1)*(new->common->params.w+2)] = 0; 
+        new->common->grid[new->common->params.w+1 + (new->common->params.h+1)*(new->common->params.w+2)] = 0;
         new->common->xinfo[new->common->params.w+1 + (new->common->params.h+1)*(new->common->params.w+2)] = 0;
-        new->common->grid[(new->common->params.h+1)*(new->common->params.w+2)] = 0; 
+        new->common->grid[(new->common->params.h+1)*(new->common->params.w+2)] = 0;
         new->common->xinfo[(new->common->params.h+1)*(new->common->params.w+2)] = 0;
 
         /* Initialize solution vector */
@@ -1119,11 +1119,11 @@ static char *new_game_desc(const game_params *params, random_state *rs,
             count++;
         }
 
-        /* Fill any remaining ambiguous entries with random monsters */ 
+        /* Fill any remaining ambiguous entries with random monsters */
         for(g=0;g<new->common->num_total;g++) {
             if (new->guess[g] == 7) {
                 r = random_upto(rs,3);
-                new->guess[g] = (r == 0) ? 1 : ( (r == 1) ? 2 : 4 );        
+                new->guess[g] = (r == 0) ? 1 : ( (r == 1) ? 2 : 4 );
             }
         }
 
@@ -1141,7 +1141,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
         /* Discard puzzle if difficulty Tricky, and it has only 1
          * member of any monster type */
-        if (new->common->params.diff == DIFF_TRICKY && 
+        if (new->common->params.diff == DIFF_TRICKY &&
             (new->common->num_ghosts <= 1 ||
              new->common->num_vampires <= 1 || new->common->num_zombies <= 1)) {
             free_game(new);
@@ -1154,18 +1154,18 @@ static char *new_game_desc(const game_params *params, random_state *rs,
                 if (c >= 0) {
                     if (new->guess[c] == 1) new->common->grid[w+h*(new->common->params.w+2)] = CELL_GHOST;
                     if (new->guess[c] == 2) new->common->grid[w+h*(new->common->params.w+2)] = CELL_VAMPIRE;
-                    if (new->guess[c] == 4) new->common->grid[w+h*(new->common->params.w+2)] = CELL_ZOMBIE;                 
+                    if (new->guess[c] == 4) new->common->grid[w+h*(new->common->params.w+2)] = CELL_ZOMBIE;
                 }
             }
 
-        /* Prepare path information needed by the solver (containing all hints) */  
+        /* Prepare path information needed by the solver (containing all hints) */
         for (p=0;p<new->common->num_paths;p++) {
             bool mirror;
             int x,y;
 
             new->common->paths[p].sightings_start = 0;
             new->common->paths[p].sightings_end = 0;
-            
+
             mirror = false;
             for (g=0;g<new->common->paths[p].length;g++) {
 
@@ -1211,17 +1211,17 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         while (true) {
             bool no_change = true;
             solved_iterative = solve_iterative(new,new->common->paths);
-            iterative_depth++;      
+            iterative_depth++;
             for (p=0;p<new->common->num_total;p++) {
                 if (new->guess[p] != old_guess[p]) no_change = false;
                 old_guess[p] = new->guess[p];
                 if (new->guess[p] == 0) contains_inconsistency = true;
             }
             if (solved_iterative || no_change) break;
-        } 
+        }
 
         /* If necessary, try to solve the puzzle with the brute-force solver */
-        solved_bruteforce = false;  
+        solved_bruteforce = false;
         if (new->common->params.diff != DIFF_EASY &&
             !solved_iterative && !contains_inconsistency) {
             for (p=0;p<new->common->num_total;p++)
@@ -1229,11 +1229,11 @@ static char *new_game_desc(const game_params *params, random_state *rs,
                     new->guess[p] != 4) count_ambiguous++;
 
             solved_bruteforce = solve_bruteforce(new, new->common->paths);
-        }   
+        }
 
-        /*  Determine puzzle difficulty level */    
+        /*  Determine puzzle difficulty level */
         if (new->common->params.diff == DIFF_EASY && solved_iterative &&
-            iterative_depth <= 3 && !contains_inconsistency) { 
+            iterative_depth <= 3 && !contains_inconsistency) {
 /*          printf("Puzzle level: EASY Level %d Ratio %f Ambiguous %d (Found after %i tries)\n",iterative_depth, ratio, count_ambiguous, i); */
             break;
         }
@@ -1241,7 +1241,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         if (new->common->params.diff == DIFF_NORMAL &&
             ((solved_iterative && iterative_depth > 3) ||
              (solved_bruteforce && count_ambiguous < 4)) &&
-            !contains_inconsistency) {  
+            !contains_inconsistency) {
 /*          printf("Puzzle level: NORMAL Level %d Ratio %f Ambiguous %d (Found after %d tries)\n", iterative_depth, ratio, count_ambiguous, i); */
             break;
         }
@@ -1253,13 +1253,13 @@ static char *new_game_desc(const game_params *params, random_state *rs,
         }
 
         /* If puzzle is not solvable or does not satisfy the desired
-         * difficulty level, free memory and start from scratch */    
+         * difficulty level, free memory and start from scratch */
         sfree(old_guess);
         free_game(new);
     }
-    
+
     /* We have a valid puzzle! */
-    
+
     desc = snewn(10 + new->common->wh +
                  6*(new->common->params.w + new->common->params.h), char);
     e = desc;
@@ -1289,7 +1289,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
             else {
                 if (count > 0) *e++ = (count-1 + 'a');
                 *e++ = 'R';
-                count = 0;          
+                count = 0;
             }
         }
     if (count > 0) *e++ = (count-1 + 'a');
@@ -1466,7 +1466,7 @@ static const char *validate_desc(const game_params *params, const char *desc)
     int monsters;
     int monster_count;
     const char *desc_s = desc;
-        
+
     for (i=0;i<3;i++) {
         if (!*desc) return "Faulty game description";
         while (*desc && isdigit((unsigned char)*desc)) { desc++; }
@@ -1474,7 +1474,7 @@ static const char *validate_desc(const game_params *params, const char *desc)
         desc++;
     }
     desc = desc_s;
-    
+
     area = monsters = monster_count = 0;
     for (i=0;i<3;i++) {
         monster_count += atoi(desc);
@@ -1536,7 +1536,7 @@ static char *solve_game(const game_state *state_start, const game_state *currsta
     solved_iterative = false;
     contains_inconsistency = false;
     count_ambiguous = 0;
-    
+
     /* Try to solve the puzzle with the iterative solver */
     while (true) {
         bool no_change = true;
@@ -1559,7 +1559,7 @@ static char *solve_game(const game_state *state_start, const game_state *currsta
     }
 
     /* If necessary, try to solve the puzzle with the brute-force solver */
-    solved_bruteforce = false;  
+    solved_bruteforce = false;
     if (!solved_iterative) {
         for (p=0;p<solve_state->common->num_total;p++)
             if (solve_state->guess[p] != 1 && solve_state->guess[p] != 2 &&
@@ -1590,7 +1590,7 @@ static char *solve_game(const game_state *state_start, const game_state *currsta
     *c++ = '\0';
     move = sresize(move, c - move, char);
 
-    sfree(old_guess);   
+    sfree(old_guess);
     free_game(solve_state);
     return move;
 }
@@ -1644,6 +1644,17 @@ struct game_ui {
     int hx, hy;                         /* as for solo.c, highlight pos */
     bool hshow, hpencil, hcursor;       /* show state, type, and ?cursor. */
     bool ascii;
+
+    /*
+     * User preference option: if the user right-clicks in a square
+     * and presses a monster key to add/remove a pencil mark, do we
+     * hide the mouse highlight again afterwards?
+     *
+     * Historically our answer was yes. The Android port prefers no.
+     * There are advantages both ways, depending how much you dislike
+     * the highlight cluttering your view. So it's a preference.
+     */
+    bool pencil_keep_highlight;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1653,6 +1664,9 @@ static game_ui *new_ui(const game_state *state)
     ui->hx = ui->hy = ui->hshow = ui->hcursor =
         getenv_bool("PUZZLES_SHOW_CURSOR", false);
     ui->ascii = false;
+
+    ui->pencil_keep_highlight = false;
+
     return ui;
 }
 
@@ -1660,24 +1674,30 @@ static config_item *get_prefs(game_ui *ui)
 {
     config_item *ret;
 
-    ret = snewn(2, config_item);
+    ret = snewn(3, config_item);
 
-    ret[0].name = "Monster representation";
-    ret[0].kw = "monsters";
-    ret[0].type = C_CHOICES;
-    ret[0].u.choices.choicenames = ":Pictures:Letters";
-    ret[0].u.choices.choicekws = ":pictures:letters";
-    ret[0].u.choices.selected = ui->ascii;
+    ret[0].name = "Keep mouse highlight after changing a pencil mark";
+    ret[0].kw = "pencil-keep-highlight";
+    ret[0].type = C_BOOLEAN;
+    ret[0].u.boolean.bval = ui->pencil_keep_highlight;
 
-    ret[1].name = NULL;
-    ret[1].type = C_END;
+    ret[1].name = "Monster representation";
+    ret[1].kw = "monsters";
+    ret[1].type = C_CHOICES;
+    ret[1].u.choices.choicenames = ":Pictures:Letters";
+    ret[1].u.choices.choicekws = ":pictures:letters";
+    ret[1].u.choices.selected = ui->ascii;
+
+    ret[2].name = NULL;
+    ret[2].type = C_END;
 
     return ret;
 }
 
 static void set_prefs(game_ui *ui, const config_item *cfg)
 {
-    ui->ascii = cfg[0].u.choices.selected;
+    ui->pencil_keep_highlight = cfg[0].u.boolean.bval;
+    ui->ascii = cfg[1].u.choices.selected;
 }
 
 static void free_ui(game_ui *ui) {
@@ -1716,7 +1736,7 @@ struct game_drawstate {
     int tilesize;
     bool started, solved;
     int w, h;
-        
+
     int *monsters;
     unsigned char *pencils;
 
@@ -1767,7 +1787,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 {
     int gx,gy;
     int g,xi;
-    char buf[80]; 
+    char buf[80];
 
     gx = ((x-BORDER-1) / TILESIZE );
     gy = ((y-BORDER-2) / TILESIZE ) - 1;
@@ -1780,7 +1800,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     if (button == 'm' || button == 'M') {
         return dupstr("M");
     }
-    
+
     if (ui->hshow && !ui->hpencil) {
         xi = state->common->xinfo[ui->hx + ui->hy*(state->common->params.w+2)];
         if (xi >= 0 && !state->common->fixed[xi]) {
@@ -1813,7 +1833,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 sprintf(buf,"E%d",xi);
                 return dupstr(buf);
             }
-        }       
+        }
     }
 
     if (IS_CURSOR_MOVE(button)) {
@@ -1840,42 +1860,37 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     if (ui->hshow && ui->hpencil) {
         xi = state->common->xinfo[ui->hx + ui->hy*(state->common->params.w+2)];
         if (xi >= 0 && !state->common->fixed[xi]) {
+            buf[0] = '\0';
+
             if (button == 'g' || button == 'G' || button == '1') {
                 sprintf(buf,"g%d",xi);
-                if (!ui->hcursor && !ui->hpencil) {
-                    ui->hpencil = false;
-                    ui->hshow = false;
-                }
-                return dupstr(buf);
-            }
-            if (button == 'v' || button == 'V' || button == '2') {
+            } else if (button == 'v' || button == 'V' || button == '2') {
                 sprintf(buf,"v%d",xi);
-                if (!ui->hcursor && !ui->hpencil) {
-                    ui->hpencil = false;
-                    ui->hshow = false;
-                }
-                return dupstr(buf);
-            }
-            if (button == 'z' || button == 'Z' || button == '3') {
+            } else if (button == 'z' || button == 'Z' || button == '3') {
                 sprintf(buf,"z%d",xi);
-                if (!ui->hcursor && !ui->hpencil) {
-                    ui->hpencil = false;
-                    ui->hshow = false;
-                }
-                return dupstr(buf);
-            }
-            if (button == 'e' || button == 'E' || button == CURSOR_SELECT2 ||
-                button == '0' || button == '\b') {
-                if (!ui->hcursor && !ui->hpencil) {
-                    ui->hpencil = false;
-                    ui->hshow = false;
-                }
+            } else if (button == 'e' || button == 'E' ||
+                       button == CURSOR_SELECT2 || button == '0' ||
+                       button == '\b') {
                 if (state->pencils[xi] == 0)
                     return ui->hcursor ? NULL : MOVE_UI_UPDATE;
                 sprintf(buf,"E%d",xi);
+            }
+
+            if (buf[0]) {
+                /*
+                 * Hide the highlight after a keypress, if it was mouse-
+                 * generated. Also, don't hide it if this move has changed
+                 * pencil marks and the user preference says not to hide the
+                 * highlight in that situation.
+                 */
+                if (!ui->hcursor &&
+                    !(ui->hpencil && ui->pencil_keep_highlight)) {
+                    ui->hpencil = false;
+                    ui->hshow = false;
+                }
                 return dupstr(buf);
             }
-        }       
+        }
     }
 
     if (gx > 0 && gx < ds->w+1 && gy > 0 && gy < ds->h+1) {
@@ -1966,7 +1981,7 @@ static bool check_numbers_draw(game_state *state, int *guess) {
     int i,x,y,xy;
     int count_ghosts, count_vampires, count_zombies;
 
-    count_ghosts = count_vampires = count_zombies = 0;  
+    count_ghosts = count_vampires = count_zombies = 0;
     for (i=0;i<state->common->num_total;i++) {
         if (guess[i] == 1) count_ghosts++;
         if (guess[i] == 2) count_vampires++;
@@ -1979,8 +1994,8 @@ static bool check_numbers_draw(game_state *state, int *guess) {
 
     if (count_ghosts > state->common->num_ghosts ||
         (filled && count_ghosts != state->common->num_ghosts) ) {
-        valid = false; 
-        state->count_errors[0] = true; 
+        valid = false;
+        state->count_errors[0] = true;
         for (x=1;x<state->common->params.w+1;x++)
             for (y=1;y<state->common->params.h+1;y++) {
                 xy = x+y*(state->common->params.w+2);
@@ -1991,8 +2006,8 @@ static bool check_numbers_draw(game_state *state, int *guess) {
     }
     if (count_vampires > state->common->num_vampires ||
         (filled && count_vampires != state->common->num_vampires) ) {
-        valid = false; 
-        state->count_errors[1] = true; 
+        valid = false;
+        state->count_errors[1] = true;
         for (x=1;x<state->common->params.w+1;x++)
             for (y=1;y<state->common->params.h+1;y++) {
                 xy = x+y*(state->common->params.w+2);
@@ -2003,8 +2018,8 @@ static bool check_numbers_draw(game_state *state, int *guess) {
     }
     if (count_zombies > state->common->num_zombies ||
         (filled && count_zombies != state->common->num_zombies) )  {
-        valid = false; 
-        state->count_errors[2] = true; 
+        valid = false;
+        state->count_errors[2] = true;
         for (x=1;x<state->common->params.w+1;x++)
             for (y=1;y<state->common->params.h+1;y++) {
                 xy = x+y*(state->common->params.w+2);
@@ -2075,7 +2090,7 @@ static bool check_path_solution(game_state *state, int p) {
     }
 
     if (!correct) {
-        for (i=0;i<state->common->paths[p].length;i++) 
+        for (i=0;i<state->common->paths[p].length;i++)
             state->cell_errors[state->common->paths[p].xy[i]] = true;
     }
 
@@ -2086,8 +2101,8 @@ static game_state *execute_move(const game_state *state, const char *move)
 {
     int x,y,n,p,i;
     char c;
-    bool correct; 
-    bool solver; 
+    bool correct;
+    bool solver;
 
     game_state *ret = dup_game(state);
     solver = false;
@@ -2238,7 +2253,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     ds->w = state->common->params.w;
     ds->h = state->common->params.h;
     ds->ascii = false;
-    
+
     ds->count_errors[0] = false;
     ds->count_errors[1] = false;
     ds->count_errors[2] = false;
@@ -2318,7 +2333,7 @@ static void draw_monster(drawing *dr, game_drawstate *ds, int x, int y,
                          int tilesize, bool hflash, int monster)
 {
     int black = (hflash ? COL_FLASH : COL_TEXT);
-    
+
     if (monster == 1) {                /* ghost */
         int poly[80], i, j;
 
@@ -2354,12 +2369,12 @@ static void draw_monster(drawing *dr, game_drawstate *ds, int x, int y,
                     COL_BACKGROUND,black);
         draw_circle(dr,x+tilesize/6,y-tilesize/12,tilesize/10,
                     COL_BACKGROUND,black);
-        
+
         draw_circle_or_point(dr,x-tilesize/6+1+tilesize/48,y-tilesize/12,
                              tilesize/48,black);
         draw_circle_or_point(dr,x+tilesize/6+1+tilesize/48,y-tilesize/12,
                              tilesize/48,black);
-        
+
     } else if (monster == 2) {         /* vampire */
         int poly[80], i;
 
@@ -2448,21 +2463,21 @@ static void draw_monster_count(drawing *dr, game_drawstate *ds,
     int dx,dy;
     char buf[MAX_DIGITS(int) + 1];
     char bufm[8];
-    
+
     dy = TILESIZE/4;
     dx = BORDER+(ds->w+2)*TILESIZE/2+TILESIZE/4;
     switch (c) {
-      case 0: 
+      case 0:
         sprintf(buf,"%d",state->common->num_ghosts);
         sprintf(bufm,"G");
         dx -= 3*TILESIZE/2;
         break;
-      case 1: 
-        sprintf(buf,"%d",state->common->num_vampires); 
+      case 1:
+        sprintf(buf,"%d",state->common->num_vampires);
         sprintf(bufm,"V");
         break;
-      case 2: 
-        sprintf(buf,"%d",state->common->num_zombies); 
+      case 2:
+        sprintf(buf,"%d",state->common->num_zombies);
         sprintf(bufm,"Z");
         dx += 3*TILESIZE/2;
         break;
@@ -2470,7 +2485,7 @@ static void draw_monster_count(drawing *dr, game_drawstate *ds,
 
     draw_rect(dr, dx-2*TILESIZE/3, dy, 3*TILESIZE/2, TILESIZE,
               COL_BACKGROUND);
-    if (!ds->ascii) { 
+    if (!ds->ascii) {
         draw_monster(dr, ds, dx-TILESIZE/3, dy+TILESIZE/2,
                      2*TILESIZE/3, hflash, 1<<c);
     } else {
@@ -2647,8 +2662,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
     hflash = (int)(flashtime * 5 / FLASH_TIME) % 2;
 
-    /* Draw static grid components at startup */    
-    if (!ds->started) { 
+    /* Draw static grid components at startup */
+    if (!ds->started) {
         draw_rect(dr, BORDER+TILESIZE-1, BORDER+2*TILESIZE-1,
                   (ds->w)*TILESIZE +3, (ds->h)*TILESIZE +3, COL_GRID);
         for (i=0;i<ds->w;i++)
@@ -2682,7 +2697,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
             stale = true;
             ds->count_errors[i] = state->count_errors[i];
         }
-        
+
         if (stale) {
             draw_monster_count(dr, ds, state, i, hflash);
         }
@@ -2691,7 +2706,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     /* Draw path count hints */
     for (i=0;i<state->common->num_paths;i++) {
         struct path *path = &state->common->paths[i];
-        
+
         if (is_hint_stale(ds, hflash, state, path->grid_start)) {
             draw_path_hint(dr, ds, &state->common->params, path->grid_start,
                            hflash, path->sightings_start);
@@ -2710,11 +2725,11 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
             xy = x+y*(state->common->params.w+2);
             xi = state->common->xinfo[xy];
             c = state->common->grid[xy];
-    
+
             if (!ds->started) stale = true;
             if (ds->hflash != hflash) stale = true;
             if (changed_ascii) stale = true;
-        
+
             if (hchanged) {
                 if ((x == ui->hx && y == ui->hy) ||
                     (x == ds->hx && y == ds->hy))
@@ -2725,7 +2740,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                 stale = true;
                 ds->monsters[xi] = state->guess[xi];
             }
-        
+
             if (xi >= 0 && (state->pencils[xi] != ds->pencils[xi]) ) {
                 stale = true;
                 ds->pencils[xi] = state->pencils[xi];
@@ -2735,15 +2750,15 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                 stale = true;
                 ds->cell_errors[xy] = state->cell_errors[xy];
             }
-                
+
             if (stale) {
                 draw_cell_background(dr, ds, state, ui, x, y);
-                if (xi < 0) 
+                if (xi < 0)
                     draw_mirror(dr, ds, state, x, y, hflash, c);
                 else if (state->guess[xi] == 1 || state->guess[xi] == 2 ||
                          state->guess[xi] == 4)
                     draw_big_monster(dr, ds, state, x, y, hflash, state->guess[xi]);
-                else 
+                else
                     draw_pencils(dr, ds, state, x, y, state->pencils[xi]);
             }
         }

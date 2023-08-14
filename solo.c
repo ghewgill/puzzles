@@ -26,7 +26,7 @@
  *       elimination-only might be in order
  *     + but it's not good to have _too_ many difficulty levels, or
  *       it'll take too long to randomly generate a given level.
- * 
+ *
  *  - it might still be nice to do some prioritisation on the
  *    removal of numbers from the grid
  *     + one possibility is to try to minimise the maximum number
@@ -208,7 +208,7 @@ struct game_params {
     /*
      * For a square puzzle, `c' and `r' indicate the puzzle
      * parameters as described above.
-     * 
+     *
      * A jigsaw-style puzzle is indicated by r==1, in which case c
      * can be whatever it likes (there is no constraint on
      * compositeness - a 7x7 jigsaw sudoku makes perfect sense).
@@ -247,7 +247,7 @@ struct block_structure {
      * are of the form "(1,3)"; for jigsaw they are "starting at
      * (5,7)". So the sensible usage in both cases is to say
      * "elimination within block %s" with one of these strings.
-     * 
+     *
      * Only blocknames itself needs individually freeing; it's all
      * one block.
      */
@@ -643,13 +643,13 @@ static void remove_from_block(struct block_structure *blocks, int b, int n)
 
 /* ----------------------------------------------------------------------
  * Solver.
- * 
+ *
  * This solver is used for two purposes:
  *  + to check solubility of a grid as we gradually remove numbers
  *    from it
  *  + to solve an externally generated puzzle when the user selects
  *    `Solve'.
- * 
+ *
  * It supports a variety of specific modes of reasoning. By
  * enabling or disabling subsets of these modes we can arrange a
  * range of difficulty levels.
@@ -699,9 +699,9 @@ static void remove_from_block(struct block_structure *blocks, int b, int n)
  *       places, found by taking the _complement_ of the union of
  *       the numbers' possible positions (or the spaces' possible
  *       contents).
- * 
+ *
  *  - Forcing chains (see comment for solver_forcing().)
- * 
+ *
  *  - Recursion. If all else fails, we pick one of the currently
  *    most constrained empty squares and take a random guess at its
  *    contents, then continue solving on that basis and see if we
@@ -1127,7 +1127,7 @@ static int solver_set(struct solver_usage *usage,
                  * bits in the positions _not_ listed in `set'.
                  * Return +1 (meaning progress has been made) if we
                  * successfully eliminated anything at all.
-                 * 
+                 *
                  * This involves referring back through
                  * rowidx/colidx in order to work out which actual
                  * positions in the cube to meddle with.
@@ -1250,7 +1250,7 @@ static int solver_forcing(struct solver_usage *usage,
             /*
              * If this square doesn't have exactly two candidate
              * numbers, don't try it.
-             * 
+             *
              * In this loop we also sum the candidate numbers,
              * which is a nasty hack to allow us to quickly find
              * `the other one' (since we will shortly know there
@@ -1767,7 +1767,7 @@ static void solver(int cr, struct block_structure *blocks,
 	usage->diag = snewn(cr * 2, bool);
 	memset(usage->diag, 0, cr * 2 * sizeof(bool));
     } else
-	usage->diag = NULL; 
+	usage->diag = NULL;
 
     usage->nr_regions = cr * 3 + (xtype ? 2 : 0);
     usage->regions = snewn(cr * usage->nr_regions, int);
@@ -3194,7 +3194,7 @@ static char *encode_solve_move(int cr, digit *grid)
      * It's surprisingly easy to work out _exactly_ how long this
      * string needs to be. To decimal-encode all the numbers from 1
      * to n:
-     * 
+     *
      *  - every number has a units digit; total is n.
      *  - all numbers above 9 have a tens digit; total is max(n-9,0).
      *  - all numbers above 99 have a hundreds digit; total is max(n-99,0).
@@ -3275,7 +3275,7 @@ static char *encode_block_structure_desc(char *p, struct block_structure *blocks
      * ordinary reading order, then over the cr*(cr-1)
      * internal horizontal ones in transposed reading
      * order.
-     * 
+     *
      * We encode the number of non-lines between the
      * lines; _ means zero (two adjacent divisions), a
      * means 1, ..., y means 25, and z means 25 non-lines
@@ -4347,15 +4347,15 @@ static char *grid_text_format(int cr, struct block_structure *blocks,
      * For jigsaw puzzles, however, we must leave space between
      * _all_ pairs of digits for an optional dividing line, so we
      * have to move to the rather ugly
-     * 
+     *
      * .   .   .   .
      * ------+------
      * .   . | .   .
-     *       +---+  
+     *       +---+
      * .   . | . | .
-     * ------+   |  
+     * ------+   |
      * .   .   . | .
-     * 
+     *
      * We deal with both cases using the same formatting code; we
      * simply invent a vmod value such that there's a vertical
      * dividing line before column i iff i is divisible by vmod
@@ -4557,6 +4557,17 @@ struct game_ui {
      * allowed on immutable squares.
      */
     bool hcursor;
+
+    /*
+     * User preference option: if the user right-clicks in a square
+     * and presses a number or letter key to add/remove a pencil mark,
+     * do we hide the mouse highlight again afterwards?
+     *
+     * Historically our answer was yes. The Android port prefers no.
+     * There are advantages both ways, depending how much you dislike
+     * the highlight cluttering your view. So it's a preference.
+     */
+    bool pencil_keep_highlight;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -4567,12 +4578,36 @@ static game_ui *new_ui(const game_state *state)
     ui->hpencil = false;
     ui->hshow = ui->hcursor = getenv_bool("PUZZLES_SHOW_CURSOR", false);
 
+    ui->pencil_keep_highlight = false;
+
     return ui;
 }
 
 static void free_ui(game_ui *ui)
 {
     sfree(ui);
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *ret;
+
+    ret = snewn(2, config_item);
+
+    ret[0].name = "Keep mouse highlight after changing a pencil mark";
+    ret[0].kw = "pencil-keep-highlight";
+    ret[0].type = C_BOOLEAN;
+    ret[0].u.boolean.bval = ui->pencil_keep_highlight;
+
+    ret[1].name = NULL;
+    ret[1].type = C_END;
+
+    return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->pencil_keep_highlight = cfg[0].u.boolean.bval;
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -4667,10 +4702,9 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         }
     }
     if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->hx, &ui->hy, cr, cr, false, NULL);
-        ui->hshow = true;
         ui->hcursor = true;
-        return MOVE_UI_UPDATE;
+        return move_cursor(button, &ui->hx, &ui->hy, cr, cr, false,
+                           &ui->hshow);
     }
     if (ui->hshow &&
         (button == CURSOR_SELECT)) {
@@ -4729,7 +4763,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	sprintf(buf, "%c%d,%d,%d",
 		(char)(ui->hpencil && n > 0 ? 'P' : 'R'), ui->hx, ui->hy, n);
 
-        if (!ui->hcursor && !ui->hpencil) ui->hshow = false;
+        /*
+         * Hide the highlight after a keypress, if it was mouse-
+         * generated. Also, don't hide it if this move has changed
+         * pencil marks and the user preference says not to hide the
+         * highlight in that situation.
+         */
+        if (!ui->hcursor && !(ui->hpencil && ui->pencil_keep_highlight))
+            ui->hshow = false;
 
 	return dupstr(buf);
     }
@@ -5638,7 +5679,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     true, game_can_format_as_text_now, game_text_format,
-    NULL, NULL, /* get_prefs, set_prefs */
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
     NULL, /* encode_ui */

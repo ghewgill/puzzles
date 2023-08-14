@@ -11,7 +11,7 @@
    * #1: 5:0,0L,0L,0,0,0R,0,0L,0D,0L,0R,0,2,0D,0,0,0,0,0,0,0U,0,0,0,0U,
    * #2: 5:0,0,0,4L,0L,0,2LU,0L,0U,0,0,0U,0,0,0,0,0D,0,3LRUD,0,0R,3,0L,0,0,
    * #3: (reprint of #2)
-   * #4: 
+   * #4:
    * #5: 5:0,0,0,0,0,0,2,0U,3U,0U,0,0,3,0,0,0,3,0D,4,0,0,0L,0R,0,0,
    * #6: 5:0D,0L,0,0R,0,0,0D,0,3,0D,0,0R,0,0R,0D,0U,0L,0,1,2,0,0,0U,0,0L,
  */
@@ -1436,6 +1436,17 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 struct game_ui {
     int hx, hy;                         /* as for solo.c, highlight pos */
     bool hshow, hpencil, hcursor;       /* show state, type, and ?cursor. */
+
+    /*
+     * User preference option: if the user right-clicks in a square
+     * and presses a number key to add/remove a pencil mark, do we
+     * hide the mouse highlight again afterwards?
+     *
+     * Historically our answer was yes. The Android port prefers no.
+     * There are advantages both ways, depending how much you dislike
+     * the highlight cluttering your view. So it's a preference.
+     */
+    bool pencil_keep_highlight;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1446,12 +1457,36 @@ static game_ui *new_ui(const game_state *state)
     ui->hpencil = false;
     ui->hshow = ui->hcursor = getenv_bool("PUZZLES_SHOW_CURSOR", false);
 
+    ui->pencil_keep_highlight = false;
+
     return ui;
 }
 
 static void free_ui(game_ui *ui)
 {
     sfree(ui);
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *ret;
+
+    ret = snewn(2, config_item);
+
+    ret[0].name = "Keep mouse highlight after changing a pencil mark";
+    ret[0].kw = "pencil-keep-highlight";
+    ret[0].type = C_BOOLEAN;
+    ret[0].u.boolean.bval = ui->pencil_keep_highlight;
+
+    ret[1].name = NULL;
+    ret[1].type = C_END;
+
+    return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->pencil_keep_highlight = cfg[0].u.boolean.bval;
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -1591,11 +1626,9 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 	    return dupstr(buf);
 	} else {
-            move_cursor(button, &ui->hx, &ui->hy, ds->order, ds->order, false,
-                        NULL);
-	    ui->hshow = true;
             ui->hcursor = true;
-	    return MOVE_UI_UPDATE;
+            return move_cursor(button, &ui->hx, &ui->hy, ds->order, ds->order,
+                               false, &ui->hshow);
 	}
     }
     if (ui->hshow && IS_CURSOR_SELECT(button)) {
@@ -1641,7 +1674,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         sprintf(buf, "%c%d,%d,%d",
                 (char)(ui->hpencil && n > 0 ? 'P' : 'R'), ui->hx, ui->hy, n);
 
-        if (!ui->hcursor && !ui->hpencil) ui->hshow = false;
+        /*
+         * Hide the highlight after a keypress, if it was mouse-
+         * generated. Also, don't hide it if this move has changed
+         * pencil marks and the user preference says not to hide the
+         * highlight in that situation.
+         */
+        if (!ui->hcursor && !(ui->hpencil && ui->pencil_keep_highlight))
+            ui->hshow = false;
 
         return dupstr(buf);
     }
@@ -2164,7 +2204,7 @@ const struct game thegame = {
     free_game,
     true, solve_game,
     true, game_can_format_as_text_now, game_text_format,
-    NULL, NULL, /* get_prefs, set_prefs */
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
     NULL, /* encode_ui */
