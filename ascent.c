@@ -1743,7 +1743,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	enum { RUN_NONE, RUN_BLANK, RUN_WALL, RUN_NUMBER } runtype = RUN_NONE;
 	for(i = 0; i <= w*h; i++)
 	{
-		n = grid[i];
+		n = (i == w*h) ? NUMBER_EMPTY : grid[i];
 		if(IS_NUMBER_EDGE(n)) n = NUMBER_EDGE(n);
 
 		if(runtype == RUN_BLANK && (i == w*h || n != NUMBER_EMPTY))
