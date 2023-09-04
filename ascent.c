@@ -1743,7 +1743,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	enum { RUN_NONE, RUN_BLANK, RUN_WALL, RUN_NUMBER } runtype = RUN_NONE;
 	for(i = 0; i <= w*h; i++)
 	{
-		n = grid[i];
+		n = (i == w*h) ? NUMBER_EMPTY : grid[i];
 		if(IS_NUMBER_EDGE(n)) n = NUMBER_EDGE(n);
 
 		if(runtype == RUN_BLANK && (i == w*h || n != NUMBER_EMPTY))
@@ -2079,13 +2079,13 @@ struct game_ui
 	cell doubleclick_cell;
 	int dragx, dragy;
 
-	/* User interface tweaks. Can be enabled from code. */
+	/* User interface tweaks */
 	bool move_with_numpad;
 };
 
 static game_ui *new_ui(const game_state *state)
 {
-	int i, w = state->w, s = w*state->h;
+	int i, w = state ? state->w : 1, s = state ? w*state->h : 1;
 	game_ui *ret = snew(game_ui);
 	
 	ret->held = CELL_NONE;
@@ -2100,6 +2100,9 @@ static game_ui *new_ui(const game_state *state)
 
 	ret->move_with_numpad = false;
 
+	if (!state) return ret;
+
+	/* Initialize UI from existing grid */
 	for (i = 0; i < s; i++)
 	{
 		if (state->grid[i] != NUMBER_BOUND) break;
@@ -2122,6 +2125,30 @@ static void free_ui(game_ui *ui)
 	sfree(ui->nexthints);
 	sfree(ui->prevhints);
 	sfree(ui);
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+	config_item *ret;
+
+	ret = snewn(2, config_item);
+
+	ret[0].name = "Numpad inputs";
+	ret[0].kw = "numpad";
+	ret[0].type = C_CHOICES;
+	ret[0].u.choices.choicenames = ":Enter numbers:Move cursor";
+	ret[0].u.choices.choicekws = ":number:cursor";
+	ret[0].u.choices.selected = ui->move_with_numpad;
+
+	ret[1].name = NULL;
+	ret[1].type = C_END;
+
+	return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+	ui->move_with_numpad = cfg[0].u.choices.selected;
 }
 
 static char *encode_ui_item(const int *arr, int s, char *p)
@@ -3965,7 +3992,7 @@ const struct game thegame = {
 	free_game,
 	true, solve_game,
 	true, game_can_format_as_text_now, game_text_format,
-    NULL, NULL, /* get_prefs, set_prefs */
+    get_prefs, set_prefs,
 	new_ui,
 	free_ui,
 	encode_ui,

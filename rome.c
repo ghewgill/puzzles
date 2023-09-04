@@ -1495,16 +1495,6 @@ static game_ui *new_ui(const game_state *state)
 	/* 
 	 * Enable or disable the coloring of squares which point in a loop (red),
 	 * and squares that point towards a goal (blue).
-	 *
-	 * TODO: I cannot decide which of these to enable. In my opinion, the red
-	 * highlighting for loops is 'overpowered'. A player can just check which
-	 * arrows cause something to light up, and easily brute force their way to
-	 * a solution.
-	 * 
-	 * It seems like a better idea to just use the positive feedback
-	 * of the blue highlighting to show the player they're making progress.
-	 *
-	 * I'm disabling the loop highlighting for the time being.
 	 */
 	ret->sloops = false;
 	ret->sgoals = true;
@@ -1515,6 +1505,34 @@ static game_ui *new_ui(const game_state *state)
 static void free_ui(game_ui *ui)
 {
 	sfree(ui);
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+	config_item *ret;
+
+	ret = snewn(3, config_item);
+
+	ret[0].name = "Highlight arrows pointing towards goal";
+	ret[0].kw = "goal";
+	ret[0].type = C_BOOLEAN;
+	ret[0].u.boolean.bval = ui->sgoals;
+
+	ret[1].name = "Highlight loops";
+	ret[1].kw = "loop";
+	ret[1].type = C_BOOLEAN;
+	ret[1].u.boolean.bval = ui->sloops;
+
+	ret[2].name = NULL;
+	ret[2].type = C_END;
+
+	return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+	ui->sgoals = cfg[0].u.boolean.bval;
+	ui->sloops = cfg[1].u.boolean.bval;
 }
 
 static char *encode_ui(const game_ui *ui)
@@ -2254,7 +2272,7 @@ const struct game thegame = {
 	free_game,
 	true, solve_game,
 	false, game_can_format_as_text_now, game_text_format,
-    NULL, NULL, /* get_prefs, set_prefs */
+    get_prefs, set_prefs,
 	new_ui,
 	free_ui,
 	encode_ui,

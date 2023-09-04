@@ -1376,7 +1376,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		
 		/* When in pencil mode, filled in squares cannot be changed */
 		if (ui->hpencil && state->grid[hy*w+hx] != EMPTY)
-			return NULL;
+			return MOVE_NO_EFFECT;
 		
 		/* TODO Prevent operations which do nothing */
 		

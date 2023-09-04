@@ -247,7 +247,7 @@ static char bricks_validate_threes(int w, int h, cell *grid)
 
 	/* Check for any three in a row, and mark errors accordingly */
 	for (y = 0; y < h; y++) {
-		for (x = 0; x < w; x++) {
+		for (x = 1; x < w-1; x++) {
 			int i1 = y * w + x-1;
 			int i2 = y * w + x;
 			int i3 = y * w + x+1;
@@ -641,7 +641,7 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	cell n;
 	int result;
 
-	bricks_solve_game(solved, DIFF_TRICKY, NULL, true, false);
+	bricks_solve_game(solved, DIFF_TRICKY, NULL, true, true);
 
 	result = bricks_validate(w, h, solved->grid, false);
 
@@ -734,10 +734,10 @@ static void bricks_fill_grid(game_state *state, random_state *rs)
 			int i2 = (y+1) * w + x-1;
 			int i3 = (y+1) * w + x;
 
-			cell n2 = x == 0 ? F_BOUND : state->grid[i2];
+			cell n2 = (x == 0 || y == h-1) ? F_BOUND : state->grid[i2];
 			if(!(n2 & F_BOUND))
 				n2 &= COL_MASK;
-			cell n3 = state->grid[i3];
+			cell n3 = (y == h-1) ? F_BOUND : state->grid[i3];
 			if(!(n3 & F_BOUND))
 				n3 &= COL_MASK;
 
@@ -865,7 +865,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	enum { RUN_NONE, RUN_BLANK, RUN_NUMBER } runtype = RUN_NONE;
 	for(i = 0; i <= w*h; i++)
 	{
-		n = state->grid[i];
+		n = (i == w*h) ? 0 : state->grid[i];
 
 		if(runtype == RUN_BLANK && (i == w*h || !(n & COL_MASK)))
 		{
@@ -1081,7 +1081,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			ui->cshow = false;
 		}
 		else
-			return NULL;
+			return MOVE_NO_EFFECT;
 	}
 
 	if (IS_MOUSE_DOWN(button))
@@ -1110,12 +1110,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		int d;
 
 		if (state->grid[i] == ui->dragtype)
-			return NULL;
+			return MOVE_NO_EFFECT;
 
 		for (d = 0; d < ui->ndrags; d++)
 		{
 			if (i == ui->drag[d])
-				return NULL;
+				return MOVE_NO_EFFECT;
 		}
 
 		ui->drag[ui->ndrags++] = i;
@@ -1158,7 +1158,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		cell old = state->grid[i] & COL_MASK;
 
 		if (!old)
-			return NULL;
+			return MOVE_NO_EFFECT;
 
 		c = 'C';
 
@@ -1176,14 +1176,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		if ((old == F_SHADE && c == 'A') ||
 			(old == F_UNSHADE && c == 'B') ||
 			(old == F_EMPTY && c == 'C'))
-			return NULL;               /* don't put no-ops on the undo chain */
+			return MOVE_NO_EFFECT;               /* don't put no-ops on the undo chain */
 
 		sprintf(buf, "%c%d;", c, i);
 
 		return dupstr(buf);
 	}
 
-	return NULL;
+	return MOVE_UNUSED;
 }
 
 static game_state *execute_move(const game_state *state, const char *move)
