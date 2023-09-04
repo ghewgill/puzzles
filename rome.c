@@ -1577,29 +1577,29 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		if (IS_CURSOR_MOVE(button) && 
 			(ui->kmode == KEYMODE_OFF || ui->kmode == KEYMODE_MOVE))
 		{
-			move_cursor(button, &ui->hx, &ui->hy, w, h, false);
+			move_cursor(button, &ui->hx, &ui->hy, w, h, false, NULL);
 			ui->kmode = KEYMODE_MOVE;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		
 		if(button == CURSOR_SELECT && !(state->grid[y*w+x] & FM_FIXED))
 		{
 			ui->kmode = ui->kmode != KEYMODE_PLACE ? KEYMODE_PLACE : KEYMODE_MOVE;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		
 		if(button == CURSOR_SELECT2 && state->grid[y*w+x] == EMPTY
 			&& ui->kmode != KEYMODE_PLACE)
 		{
 			ui->kmode = ui->kmode != KEYMODE_PENCIL ? KEYMODE_PENCIL : KEYMODE_MOVE;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		
 		if(button == CURSOR_SELECT2 && ui->kmode == KEYMODE_PLACE)
 		{
 			ui->kmode = KEYMODE_MOVE;
 			if(state->grid[y*w+x] & FM_FIXED)
-				return UI_UPDATE;
+				return MOVE_UI_UPDATE;
 			
 			sprintf(buf, "R%d,%d,-", x, y);
 			return dupstr(buf);
@@ -1612,9 +1612,9 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			
 			ui->kmode = KEYMODE_MOVE;
 			if(state->grid[y*w+x] & FM_FIXED)
-				return UI_UPDATE;
+				return MOVE_UI_UPDATE;
 			if(state->grid[y*w+x] != EMPTY && m == 'P')
-				return UI_UPDATE;
+				return MOVE_UI_UPDATE;
 			
 			if(button == CURSOR_UP && !(state->grid[y*w+x] & FM_UP))
 				sprintf(buf, "%c%d,%d,U", m, x, y);
@@ -1625,7 +1625,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			else if(button == CURSOR_RIGHT && !(state->grid[y*w+x] & FM_RIGHT))
 				sprintf(buf, "%c%d,%d,R", m, x, y);
 			else
-				return UI_UPDATE;
+				return MOVE_UI_UPDATE;
 			
 			return dupstr(buf);
 		}
@@ -1685,7 +1685,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			
 			ui->mmode = button == LEFT_BUTTON ? MOUSEMODE_PLACE : MOUSEMODE_PENCIL;
 			ui->mdir = EMPTY;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 	}
 	else if (IS_MOUSE_DRAG(button) || IS_MOUSE_RELEASE(button))
@@ -1704,7 +1704,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		if(c != ui->mdir && IS_MOUSE_DRAG(button))
 		{
 			ui->mdir = c;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		
 		if(IS_MOUSE_RELEASE(button))
@@ -1712,9 +1712,9 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			char m = ui->mmode == MOUSEMODE_PLACE ? 'R' : 'P';
 			ui->mmode = MOUSEMODE_OFF;
 			if(c == EMPTY && m == 'P')
-				return UI_UPDATE;
+				return MOVE_UI_UPDATE;
 			if(m == 'R' && c == state->grid[y*w+x])
-				return UI_UPDATE;
+				return MOVE_UI_UPDATE;
 			
 			sprintf(buf, "%c%d,%d,%c", m,
 				x, y, c == FM_UP ? 'U' : c == FM_DOWN ? 'D' :

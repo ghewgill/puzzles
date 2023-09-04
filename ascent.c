@@ -2889,7 +2889,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ui->typing_cell = i;
 		if (n < 1000)
 			ui->typing_number = n;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Remove the last digit when typing */
@@ -2898,7 +2898,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ui->typing_number /= 10;
 		if (ui->typing_number == 0)
 			ui->typing_cell = CELL_NONE;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	if (gx >= 0 && gx < w && gy >= 0 && gy < h)
@@ -2940,14 +2940,14 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		}
 
 		if (state->grid[i] == n || n > state->last)
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 
 		sprintf(buf, "P%d,%d", i, n);
 		ret = dupstr(buf);
 	}
 
 	if(finish_typing && !ret)
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	return ret;
 }
 

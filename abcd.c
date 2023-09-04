@@ -1308,7 +1308,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			}
 			
 			ui->hcursor = false;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 		/* Select square for marking */
 		else if (button == RIGHT_BUTTON)
@@ -1332,16 +1332,16 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				ui->hshow = false;
 			
 			ui->hcursor = false;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 	}
 	
 	/* Keyboard move */
 	if (IS_CURSOR_MOVE(button))
 	{
-		move_cursor(button, &ui->hx, &ui->hy, w, h, 0);
+		move_cursor(button, &ui->hx, &ui->hy, w, h, 0, NULL);
 		ui->hshow = ui->hcursor = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	/* Keyboard change pencil cursor */
@@ -1349,7 +1349,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 	{
 		ui->hpencil = !ui->hpencil;
 		ui->hcursor = true;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	/* Enter or remove letter */
@@ -1371,7 +1371,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 		
 		/* When in pencil mode, filled in squares cannot be changed */
 		if (ui->hpencil && state->grid[hy*w+hx] != EMPTY)
-			return NULL;
+			return MOVE_NO_EFFECT;
 		
 		/* TODO Prevent operations which do nothing */
 		

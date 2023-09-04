@@ -3223,7 +3223,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			ui->dsy = ui->dey = gy;
 			ui->cursor = false;
 			
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 	}
 	
@@ -3271,14 +3271,13 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 				return dupstr(buf);
 			}
 		}
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	if (IS_CURSOR_MOVE(button & ~MOD_MASK))
 	{
 		int cx = ui->cx, cy = ui->cy;
-		move_cursor(button & ~MOD_MASK, &ui->cx, &ui->cy, w, h, 0);
-		ui->cursor = true;
+		move_cursor(button & ~MOD_MASK, &ui->cx, &ui->cy, w, h, 0, &ui->cursor);
 		
 		/* Place boats or water by holding Shift or Ctrl while moving */
 		if(button & (MOD_CTRL|MOD_SHFT))
@@ -3297,7 +3296,7 @@ static char *interpret_move(const game_state *state, game_ui *ui, const game_dra
 			}
 		}
 		
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 	
 	if(ui->cursor && (button == CURSOR_SELECT ||

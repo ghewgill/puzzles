@@ -713,8 +713,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	/* Keyboard move */
 	if (IS_CURSOR_MOVE(button)) {
 		int ox = ui->cx, oy = ui->cy;
-		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
-		ui->cursor = true;
+		move_cursor(button, &ui->cx, &ui->cy, w, h, 0, &ui->cursor);
 
 		if (shift | control)
 		{
@@ -744,7 +743,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(buf[0])
 				return dupstr(buf);
 		}
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	if (IS_MOUSE_DOWN(button))
@@ -763,7 +762,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		if (ui->dragtype || old)
 			ui->drag[ui->ndrags++] = i;
 
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	if (IS_MOUSE_DRAG(button) && ui->dragtype != -1)
@@ -784,7 +783,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 		ui->drag[ui->ndrags++] = i;
 
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	if (IS_MOUSE_RELEASE(button) && ui->ndrags)
@@ -809,7 +808,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			return buf;
 		
 		sfree(buf);
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Place one */

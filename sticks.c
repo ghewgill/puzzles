@@ -929,8 +929,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	/* Keyboard move */
 	if (IS_CURSOR_MOVE(button)) {
 		int ox = ui->cx, oy = ui->cy;
-		move_cursor(button, &ui->cx, &ui->cy, w, h, 0);
-		ui->cursor = true;
+		move_cursor(button, &ui->cx, &ui->cy, w, h, 0, &ui->cursor);
 
 		if (shift | control)
 		{
@@ -962,7 +961,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			if(buf[0])
 				return dupstr(buf);
 		}
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Begin normal drag */
@@ -973,7 +972,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 		ui->ndrags = 0;
 		ui->dragtype = DRAG_START;
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Perform drag */
@@ -1025,7 +1024,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 				if (i == ui->drag[d])
 				{
 					ui->dragmove[d] = dragmove;
-					return UI_UPDATE;
+					return MOVE_UI_UPDATE;
 				}
 			}
 		}
@@ -1033,7 +1032,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ui->dragmove[ui->ndrags] = dragmove;
 		ui->drag[ui->ndrags++] = i;
 
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Begin clearing drag */
@@ -1049,7 +1048,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			ui->drag[ui->ndrags++] = i;
 		}
 
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Clearing drag */
@@ -1070,7 +1069,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		ui->dragmove[ui->ndrags] = 0;
 		ui->drag[ui->ndrags++] = i;
 
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Mouse click */
@@ -1082,7 +1081,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 		if (hx < 0 || hx >= w || hy < 0 || hy >= h)
 		{
 			ui->dragtype = DRAG_NONE;
-			return UI_UPDATE;
+			return MOVE_UI_UPDATE;
 		}
 
 		int i = hy*w + hx;
@@ -1123,7 +1122,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 			return buf;
 		
 		sfree(buf);
-		return UI_UPDATE;
+		return MOVE_UI_UPDATE;
 	}
 
 	/* Place one */
