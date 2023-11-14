@@ -1940,10 +1940,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                     }
                     else {
 #ifdef STYLUS_BASED
-                        ui->hshow = false;
-                        ui->hpencil = false;
-                        ui->hcursor = false;
-                        ui->hx = 0; ui->hy = 0;
+                        if (gx == ui->hx && gy == ui->hy) {
+                            ui->hshow = false;
+                            ui->hpencil = false;
+                            ui->hcursor = false;
+                            ui->hx = 0; ui->hy = 0;
+                        } else {
+                            ui->hshow = true;
+                            ui->hpencil = false;
+                            ui->hcursor = false;
+                            ui->hx = gx; ui->hy = gy;
+                        }
 #else
                         ui->hshow = true;
                         ui->hpencil = false;
