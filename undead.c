@@ -1917,10 +1917,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 if (button == LEFT_BUTTON) {
                     if (!ui->hpencil) {
                         if (gx == ui->hx && gy == ui->hy) {
+#ifdef STYLUS_BASED
+                            ui->hshow = true;
+                            ui->hpencil = true;
+                            ui->hcursor = false;
+                            ui->hx = gx; ui->hy = gy;
+#else
                             ui->hshow = false;
                             ui->hpencil = false;
                             ui->hcursor = false;
                             ui->hx = 0; ui->hy = 0;
+#endif
                             return MOVE_UI_UPDATE;
                         }
                         else {
@@ -1932,10 +1939,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                         }
                     }
                     else {
+#ifdef STYLUS_BASED
+                        ui->hshow = false;
+                        ui->hpencil = false;
+                        ui->hcursor = false;
+                        ui->hx = 0; ui->hy = 0;
+#else
                         ui->hshow = true;
                         ui->hpencil = false;
                         ui->hcursor = false;
                         ui->hx = gx; ui->hy = gy;
+#endif
                         return MOVE_UI_UPDATE;
                     }
                 }
