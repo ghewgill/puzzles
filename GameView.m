@@ -468,6 +468,24 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     }
 }
 
+- (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event
+{
+	UIPress *press;
+	for (press in presses) {
+		if (press.key != nil && [press.key.charactersIgnoringModifiers length] > 0) {
+			if (
+				ourgame->can_solve
+				&& press.key.modifierFlags & UIKeyModifierControl
+				&& [press.key.charactersIgnoringModifiers isEqual: @"s"]
+			) {
+				[self doSolve];
+			} else {
+				midend_process_key(me, -1, -1, [press.key.charactersIgnoringModifiers characterAtIndex:0]);
+			}
+		}
+	}
+}
+
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
 {
     UITouch *touch = [touches anyObject];
