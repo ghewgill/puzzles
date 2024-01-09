@@ -47,12 +47,16 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 
 #ifdef STANDALONE_SOLVER
-int solver_verbose = FALSE;
+static bool solver_verbose = false;
 #endif
 
 enum {
@@ -77,10 +81,11 @@ enum {
 
 struct game_params {
     int w2, h2;        /* full grid width and height respectively */
-    int unique;        /* should row and column patterns be unique? */
+    bool unique;       /* should row and column patterns be unique? */
     int diff;
 };
 #define DIFFLIST(A)                             \
+    A(TRIVIAL,Trivial, t)                       \
     A(EASY,Easy, e)                             \
     A(NORMAL,Normal, n)                         \
 
@@ -94,13 +99,14 @@ static char const *const unruly_diffnames[] = { DIFFLIST(TITLE) };
 static char const unruly_diffchars[] = DIFFLIST(ENCODE);
 #define DIFFCONFIG DIFFLIST(CONFIG)
 
-const static struct game_params unruly_presets[] = {
-    { 8,  8, FALSE, DIFF_EASY},
-    { 8,  8, FALSE, DIFF_NORMAL},
-    {10, 10, FALSE, DIFF_EASY},
-    {10, 10, FALSE, DIFF_NORMAL},
-    {14, 14, FALSE, DIFF_EASY},
-    {14, 14, FALSE, DIFF_NORMAL}
+static const struct game_params unruly_presets[] = {
+    { 8,  8, false, DIFF_TRIVIAL},
+    { 8,  8, false, DIFF_EASY},
+    { 8,  8, false, DIFF_NORMAL},
+    {10, 10, false, DIFF_EASY},
+    {10, 10, false, DIFF_NORMAL},
+    {14, 14, false, DIFF_EASY},
+    {14, 14, false, DIFF_NORMAL}
 };
 
 #define DEFAULT_PRESET 0
@@ -133,13 +139,18 @@ enum {
 #define FF_FLASH2         0x0800
 #define FF_IMMUTABLE      0x1000
 
+typedef struct unruly_common {
+    int refcount;
+    bool *immutable;
+} unruly_common;
+
 struct game_state {
     int w2, h2;
-    int unique;
+    bool unique;
     char *grid;
-    unsigned char *immutable;
+    unruly_common *common;
 
-    int completed, cheated;
+    bool completed, cheated;
 };
 
 static game_params *default_params(void)
@@ -151,13 +162,13 @@ static game_params *default_params(void)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char buf[80];
 
     if (i < 0 || i >= lenof(unruly_presets))
-        return FALSE;
+        return false;
 
     ret = snew(game_params);
     *ret = unruly_presets[i];     /* structure copy */
@@ -166,7 +177,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 
     *name = dupstr(buf);
     *params = ret;
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -185,7 +196,7 @@ static void decode_params(game_params *params, char const *string)
 {
     char const *p = string;
 
-    params->unique = FALSE;
+    params->unique = false;
 
     params->w2 = atoi(p);
     while (*p && isdigit((unsigned char)*p)) p++;
@@ -199,7 +210,7 @@ static void decode_params(game_params *params, char const *string)
 
     if (*p == 'u') {
         p++;
-        params->unique = TRUE;
+        params->unique = true;
     }
 
     if (*p == 'd') {
@@ -216,7 +227,7 @@ static void decode_params(game_params *params, char const *string)
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[80];
 
@@ -239,28 +250,24 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w2);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h2);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Unique rows and columns";
     ret[2].type = C_BOOLEAN;
-    ret[2].ival = params->unique;
+    ret[2].u.boolean.bval = params->unique;
 
     ret[3].name = "Difficulty";
     ret[3].type = C_CHOICES;
-    ret[3].sval = DIFFCONFIG;
-    ret[3].ival = params->diff;
+    ret[3].u.choices.choicenames = DIFFCONFIG;
+    ret[3].u.choices.selected = params->diff;
 
     ret[4].name = NULL;
     ret[4].type = C_END;
-    ret[4].sval = NULL;
-    ret[4].ival = 0;
 
     return ret;
 }
@@ -269,20 +276,22 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w2 = atoi(cfg[0].sval);
-    ret->h2 = atoi(cfg[1].sval);
-    ret->unique = cfg[2].ival;
-    ret->diff = cfg[3].ival;
+    ret->w2 = atoi(cfg[0].u.string.sval);
+    ret->h2 = atoi(cfg[1].u.string.sval);
+    ret->unique = cfg[2].u.boolean.bval;
+    ret->diff = cfg[3].u.choices.selected;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if ((params->w2 & 1) || (params->h2 & 1))
         return "Width and height must both be even";
     if (params->w2 < 6 || params->h2 < 6)
         return "Width and height must be at least 6";
+    if (params->w2 > INT_MAX / params->h2)
+        return "Width times height must not be unreasonably large";
     if (params->unique) {
         static const long A177790[] = {
             /*
@@ -319,7 +328,7 @@ static char *validate_params(const game_params *params, int full)
     return NULL;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int w2 = params->w2, h2 = params->h2;
     int s = w2 * h2;
@@ -348,7 +357,7 @@ static char *validate_desc(const game_params *params, const char *desc)
     return NULL;
 }
 
-static game_state *blank_state(int w2, int h2, int unique)
+static game_state *blank_state(int w2, int h2, bool unique, bool new_common)
 {
     game_state *state = snew(game_state);
     int s = w2 * h2;
@@ -357,12 +366,16 @@ static game_state *blank_state(int w2, int h2, int unique)
     state->h2 = h2;
     state->unique = unique;
     state->grid = snewn(s, char);
-    state->immutable = snewn(s, unsigned char);
-
     memset(state->grid, EMPTY, s);
-    memset(state->immutable, FALSE, s);
 
-    state->completed = state->cheated = FALSE;
+    if (new_common) {
+	state->common = snew(unruly_common);
+	state->common->refcount = 1;
+	state->common->immutable = snewn(s, bool);
+	memset(state->common->immutable, 0, s*sizeof(bool));
+    }
+
+    state->completed = state->cheated = false;
 
     return state;
 }
@@ -373,7 +386,7 @@ static game_state *new_game(midend *me, const game_params *params,
     int w2 = params->w2, h2 = params->h2;
     int s = w2 * h2;
 
-    game_state *state = blank_state(w2, h2, params->unique);
+    game_state *state = blank_state(w2, h2, params->unique, true);
 
     const char *p = desc;
     int pos = 0;
@@ -383,14 +396,14 @@ static game_state *new_game(midend *me, const game_params *params,
             pos += (*p - 'a');
             if (pos < s) {
                 state->grid[pos] = N_ZERO;
-                state->immutable[pos] = TRUE;
+                state->common->immutable[pos] = true;
             }
             pos++;
         } else if (*p >= 'A' && *p < 'Z') {
             pos += (*p - 'A');
             if (pos < s) {
                 state->grid[pos] = N_ONE;
-                state->immutable[pos] = TRUE;
+                state->common->immutable[pos] = true;
             }
             pos++;
         } else if (*p == 'Z' || *p == 'z') {
@@ -410,10 +423,11 @@ static game_state *dup_game(const game_state *state)
     int w2 = state->w2, h2 = state->h2;
     int s = w2 * h2;
 
-    game_state *ret = blank_state(w2, h2, state->unique);
+    game_state *ret = blank_state(w2, h2, state->unique, false);
 
     memcpy(ret->grid, state->grid, s);
-    memcpy(ret->immutable, state->immutable, s);
+    ret->common = state->common;
+    ret->common->refcount++;
 
     ret->completed = state->completed;
     ret->cheated = state->cheated;
@@ -424,14 +438,17 @@ static game_state *dup_game(const game_state *state)
 static void free_game(game_state *state)
 {
     sfree(state->grid);
-    sfree(state->immutable);
+    if (--state->common->refcount == 0) {
+        sfree(state->common->immutable);
+        sfree(state->common);
+    }
 
     sfree(state);
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -521,7 +538,7 @@ static void unruly_free_scratch(struct unruly_scratch *scratch)
 }
 
 static int unruly_solver_check_threes(game_state *state, int *rowcount,
-                                      int *colcount, int horizontal,
+                                      int *colcount, bool horizontal,
                                       char check, char block)
 {
     int w2 = state->w2, h2 = state->h2;
@@ -598,23 +615,23 @@ static int unruly_solver_check_all_threes(game_state *state,
 
     ret +=
         unruly_solver_check_threes(state, scratch->zeros_rows,
-                                   scratch->zeros_cols, TRUE, N_ONE, N_ZERO);
+                                   scratch->zeros_cols, true, N_ONE, N_ZERO);
     ret +=
         unruly_solver_check_threes(state, scratch->ones_rows,
-                                   scratch->ones_cols, TRUE, N_ZERO, N_ONE);
+                                   scratch->ones_cols, true, N_ZERO, N_ONE);
     ret +=
         unruly_solver_check_threes(state, scratch->zeros_rows,
-                                   scratch->zeros_cols, FALSE, N_ONE,
+                                   scratch->zeros_cols, false, N_ONE,
                                    N_ZERO);
     ret +=
         unruly_solver_check_threes(state, scratch->ones_rows,
-                                   scratch->ones_cols, FALSE, N_ZERO, N_ONE);
+                                   scratch->ones_cols, false, N_ZERO, N_ONE);
 
     return ret;
 }
 
 static int unruly_solver_check_uniques(game_state *state, int *rowcount,
-                                       int horizontal, char check, char block,
+                                       bool horizontal, char check, char block,
                                        struct unruly_scratch *scratch)
 {
     int w2 = state->w2, h2 = state->h2;
@@ -684,18 +701,18 @@ static int unruly_solver_check_all_uniques(game_state *state,
     int ret = 0;
 
     ret += unruly_solver_check_uniques(state, scratch->ones_rows,
-                                       TRUE, N_ONE, N_ZERO, scratch);
+                                       true, N_ONE, N_ZERO, scratch);
     ret += unruly_solver_check_uniques(state, scratch->zeros_rows,
-                                       TRUE, N_ZERO, N_ONE, scratch);
+                                       true, N_ZERO, N_ONE, scratch);
     ret += unruly_solver_check_uniques(state, scratch->ones_cols,
-                                       FALSE, N_ONE, N_ZERO, scratch);
+                                       false, N_ONE, N_ZERO, scratch);
     ret += unruly_solver_check_uniques(state, scratch->zeros_cols,
-                                       FALSE, N_ZERO, N_ONE, scratch);
+                                       false, N_ZERO, N_ONE, scratch);
 
     return ret;
 }
 
-static int unruly_solver_fill_row(game_state *state, int i, int horizontal,
+static int unruly_solver_fill_row(game_state *state, int i, bool horizontal,
                                   int *rowcount, int *colcount, char fill)
 {
     int ret = 0;
@@ -736,8 +753,63 @@ static int unruly_solver_fill_row(game_state *state, int i, int horizontal,
     return ret;
 }
 
+static int unruly_solver_check_single_gap(game_state *state,
+                                          int *complete, bool horizontal,
+                                          int *rowcount, int *colcount,
+                                          char fill)
+{
+    int w2 = state->w2, h2 = state->h2;
+    int count = (horizontal ? h2 : w2); /* number of rows to check */
+    int target = (horizontal ? w2 : h2) / 2; /* target number of 0s/1s */
+    int *other = (horizontal ? rowcount : colcount);
+
+    int ret = 0;
+
+    int i;
+    /* Check for completed rows/cols for one number, then fill in the rest */
+    for (i = 0; i < count; i++) {
+        if (complete[i] == target && other[i] == target - 1) {
+#ifdef STANDALONE_SOLVER
+            if (solver_verbose) {
+                printf("Solver: Row %i has only one square left which must be "
+                       "%c\n", i, (fill == N_ZERO ? '0' : '1'));
+            }
+#endif
+            ret += unruly_solver_fill_row(state, i, horizontal, rowcount,
+                                          colcount, fill);
+        }
+    }
+
+    return ret;
+}
+
+static int unruly_solver_check_all_single_gap(game_state *state,
+                                              struct unruly_scratch *scratch)
+{
+    int ret = 0;
+
+    ret +=
+        unruly_solver_check_single_gap(state, scratch->ones_rows, true,
+                                       scratch->zeros_rows,
+                                       scratch->zeros_cols, N_ZERO);
+    ret +=
+        unruly_solver_check_single_gap(state, scratch->ones_cols, false,
+                                       scratch->zeros_rows,
+                                       scratch->zeros_cols, N_ZERO);
+    ret +=
+        unruly_solver_check_single_gap(state, scratch->zeros_rows, true,
+                                       scratch->ones_rows,
+                                       scratch->ones_cols, N_ONE);
+    ret +=
+        unruly_solver_check_single_gap(state, scratch->zeros_cols, false,
+                                       scratch->ones_rows,
+                                       scratch->ones_cols, N_ONE);
+
+    return ret;
+}
+
 static int unruly_solver_check_complete_nums(game_state *state,
-                                             int *complete, int horizontal,
+                                             int *complete, bool horizontal,
                                              int *rowcount, int *colcount,
                                              char fill)
 {
@@ -772,19 +844,19 @@ static int unruly_solver_check_all_complete_nums(game_state *state,
     int ret = 0;
 
     ret +=
-        unruly_solver_check_complete_nums(state, scratch->ones_rows, TRUE,
+        unruly_solver_check_complete_nums(state, scratch->ones_rows, true,
                                           scratch->zeros_rows,
                                           scratch->zeros_cols, N_ZERO);
     ret +=
-        unruly_solver_check_complete_nums(state, scratch->ones_cols, FALSE,
+        unruly_solver_check_complete_nums(state, scratch->ones_cols, false,
                                           scratch->zeros_rows,
                                           scratch->zeros_cols, N_ZERO);
     ret +=
-        unruly_solver_check_complete_nums(state, scratch->zeros_rows, TRUE,
+        unruly_solver_check_complete_nums(state, scratch->zeros_rows, true,
                                           scratch->ones_rows,
                                           scratch->ones_cols, N_ONE);
     ret +=
-        unruly_solver_check_complete_nums(state, scratch->zeros_cols, FALSE,
+        unruly_solver_check_complete_nums(state, scratch->zeros_cols, false,
                                           scratch->ones_rows,
                                           scratch->ones_cols, N_ONE);
 
@@ -792,7 +864,7 @@ static int unruly_solver_check_all_complete_nums(game_state *state,
 }
 
 static int unruly_solver_check_near_complete(game_state *state,
-                                             int *complete, int horizontal,
+                                             int *complete, bool horizontal,
                                              int *rowcount, int *colcount,
                                              char fill)
 {
@@ -932,26 +1004,26 @@ static int unruly_solver_check_all_near_complete(game_state *state,
     int ret = 0;
 
     ret +=
-        unruly_solver_check_near_complete(state, scratch->ones_rows, TRUE,
+        unruly_solver_check_near_complete(state, scratch->ones_rows, true,
                                         scratch->zeros_rows,
                                         scratch->zeros_cols, N_ZERO);
     ret +=
-        unruly_solver_check_near_complete(state, scratch->ones_cols, FALSE,
+        unruly_solver_check_near_complete(state, scratch->ones_cols, false,
                                         scratch->zeros_rows,
                                         scratch->zeros_cols, N_ZERO);
     ret +=
-        unruly_solver_check_near_complete(state, scratch->zeros_rows, TRUE,
+        unruly_solver_check_near_complete(state, scratch->zeros_rows, true,
                                         scratch->ones_rows,
                                         scratch->ones_cols, N_ONE);
     ret +=
-        unruly_solver_check_near_complete(state, scratch->zeros_cols, FALSE,
+        unruly_solver_check_near_complete(state, scratch->zeros_cols, false,
                                         scratch->ones_rows,
                                         scratch->ones_cols, N_ONE);
 
     return ret;
 }
 
-static int unruly_validate_rows(const game_state *state, int horizontal,
+static int unruly_validate_rows(const game_state *state, bool horizontal,
                                 char check, int *errors)
 {
     int w2 = state->w2, h2 = state->h2;
@@ -991,7 +1063,7 @@ static int unruly_validate_rows(const game_state *state, int horizontal,
     return ret;
 }
 
-static int unruly_validate_unique(const game_state *state, int horizontal,
+static int unruly_validate_unique(const game_state *state, bool horizontal,
                                   int *errors)
 {
     int w2 = state->w2, h2 = state->h2;
@@ -1015,11 +1087,11 @@ static int unruly_validate_unique(const game_state *state, int horizontal,
         if (nfull != nc)
             continue;
         for (r2 = r+1; r2 < nr; r2++) {
-            int match = TRUE;
+            bool match = true;
             for (c = 0; c < nc; c++)
                 if (state->grid[r*rmult + c*cmult] !=
                     state->grid[r2*rmult + c*cmult])
-                    match = FALSE;
+                    match = false;
             if (match) {
                 if (errors) {
                     for (c = 0; c < nc; c++) {
@@ -1039,14 +1111,14 @@ static int unruly_validate_all_rows(const game_state *state, int *errors)
 {
     int errcount = 0;
 
-    errcount += unruly_validate_rows(state, TRUE, N_ONE, errors);
-    errcount += unruly_validate_rows(state, FALSE, N_ONE, errors);
-    errcount += unruly_validate_rows(state, TRUE, N_ZERO, errors);
-    errcount += unruly_validate_rows(state, FALSE, N_ZERO, errors);
+    errcount += unruly_validate_rows(state, true, N_ONE, errors);
+    errcount += unruly_validate_rows(state, false, N_ONE, errors);
+    errcount += unruly_validate_rows(state, true, N_ZERO, errors);
+    errcount += unruly_validate_rows(state, false, N_ZERO, errors);
 
     if (state->unique) {
-        errcount += unruly_validate_unique(state, TRUE, errors);
-        errcount += unruly_validate_unique(state, FALSE, errors);
+        errcount += unruly_validate_unique(state, true, errors);
+        errcount += unruly_validate_unique(state, false, errors);
     }
 
     if (errcount)
@@ -1055,63 +1127,63 @@ static int unruly_validate_all_rows(const game_state *state, int *errors)
 }
 
 static int unruly_validate_counts(const game_state *state,
-                                  struct unruly_scratch *scratch, int *errors)
+                                  struct unruly_scratch *scratch, bool *errors)
 {
     int w2 = state->w2, h2 = state->h2;
     int w = w2/2, h = h2/2;
-    char below = FALSE;
-    char above = FALSE;
+    bool below = false;
+    bool above = false;
     int i;
 
     /* See if all rows/columns are satisfied. If one is exceeded,
      * mark it as an error (if required)
      */
 
-    char hasscratch = TRUE;
+    bool hasscratch = true;
     if (!scratch) {
         scratch = unruly_new_scratch(state);
-        hasscratch = FALSE;
+        hasscratch = false;
     }
 
     for (i = 0; i < w2; i++) {
         if (scratch->ones_cols[i] < h)
-            below = TRUE;
+            below = true;
         if (scratch->zeros_cols[i] < h)
-            below = TRUE;
+            below = true;
 
         if (scratch->ones_cols[i] > h) {
-            above = TRUE;
+            above = true;
             if (errors)
-                errors[2*h2 + i] = TRUE;
+                errors[2*h2 + i] = true;
         } else if (errors)
-            errors[2*h2 + i] = FALSE;
+            errors[2*h2 + i] = false;
 
         if (scratch->zeros_cols[i] > h) {
-            above = TRUE;
+            above = true;
             if (errors)
-                errors[2*h2 + w2 + i] = TRUE;
+                errors[2*h2 + w2 + i] = true;
         } else if (errors)
-            errors[2*h2 + w2 + i] = FALSE;
+            errors[2*h2 + w2 + i] = false;
     }
     for (i = 0; i < h2; i++) {
         if (scratch->ones_rows[i] < w)
-            below = TRUE;
+            below = true;
         if (scratch->zeros_rows[i] < w)
-            below = TRUE;
+            below = true;
 
         if (scratch->ones_rows[i] > w) {
-            above = TRUE;
+            above = true;
             if (errors)
-                errors[i] = TRUE;
+                errors[i] = true;
         } else if (errors)
-            errors[i] = FALSE;
+            errors[i] = false;
 
         if (scratch->zeros_rows[i] > w) {
-            above = TRUE;
+            above = true;
             if (errors)
-                errors[h2 + i] = TRUE;
+                errors[h2 + i] = true;
         } else if (errors)
-            errors[h2 + i] = FALSE;
+            errors[h2 + i] = false;
     }
 
     if (!hasscratch)
@@ -1125,7 +1197,7 @@ static int unruly_solve_game(game_state *state,
 {
     int done, maxdiff = -1;
 
-    while (TRUE) {
+    while (true) {
         done = 0;
 
         /* Check for impending 3's */
@@ -1133,10 +1205,23 @@ static int unruly_solve_game(game_state *state,
 
         /* Keep using the simpler techniques while they produce results */
         if (done) {
-            if (maxdiff < DIFF_EASY)
-                maxdiff = DIFF_EASY;
+            if (maxdiff < DIFF_TRIVIAL)
+                maxdiff = DIFF_TRIVIAL;
             continue;
         }
+
+        /* Check for rows with only one unfilled square */
+        done += unruly_solver_check_all_single_gap(state, scratch);
+
+        if (done) {
+            if (maxdiff < DIFF_TRIVIAL)
+                maxdiff = DIFF_TRIVIAL;
+            continue;
+        }
+
+        /* Easy techniques */
+        if (diff < DIFF_EASY)
+            break;
 
         /* Check for completed rows */
         done += unruly_solver_check_all_complete_nums(state, scratch);
@@ -1178,7 +1263,7 @@ static int unruly_solve_game(game_state *state,
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     game_state *solved = dup_game(state);
     struct unruly_scratch *scratch = unruly_new_scratch(solved);
@@ -1219,8 +1304,8 @@ static char *solve_game(const game_state *state, const game_state *currstate,
  * Generator *
  * ********* */
 
-static int unruly_fill_game(game_state *state, struct unruly_scratch *scratch,
-                            random_state *rs)
+static bool unruly_fill_game(game_state *state, struct unruly_scratch *scratch,
+                             random_state *rs)
 {
 
     int w2 = state->w2, h2 = state->h2;
@@ -1267,17 +1352,17 @@ static int unruly_fill_game(game_state *state, struct unruly_scratch *scratch,
 
     if (unruly_validate_all_rows(state, NULL) != 0
         || unruly_validate_counts(state, scratch, NULL) != 0)
-        return FALSE;
+        return false;
 
-    return TRUE;
+    return true;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-                           char **aux, int interactive)
+                           char **aux, bool interactive)
 {
 #ifdef STANDALONE_SOLVER
     char *debug;
-    int temp_verbose = FALSE;
+    bool temp_verbose = false;
 #endif
 
     int w2 = params->w2, h2 = params->h2;
@@ -1293,9 +1378,9 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
     while (1) {
 
-        while (TRUE) {
+        while (true) {
             attempts++;
-            state = blank_state(w2, h2, params->unique);
+            state = blank_state(w2, h2, params->unique, true);
             scratch = unruly_new_scratch(state);
             if (unruly_fill_game(state, scratch, rs))
                 break;
@@ -1311,8 +1396,10 @@ static char *new_game_desc(const game_params *params, random_state *rs,
             sfree(debug);
 
             temp_verbose = solver_verbose;
-            solver_verbose = FALSE;
+            solver_verbose = false;
         }
+#else
+        (void)attempts;
 #endif
 
         unruly_free_scratch(scratch);
@@ -1352,7 +1439,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 #ifdef STANDALONE_SOLVER
         if (temp_verbose) {
-            solver_verbose = TRUE;
+            solver_verbose = true;
 
             printf("Final puzzle:\n");
             debug = game_text_format(state);
@@ -1365,7 +1452,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
          * See if the game has accidentally come out too easy.
          */
         if (params->diff > 0) {
-            int ok;
+            bool ok;
             game_state *solver;
 
             solver = dup_game(state);
@@ -1373,7 +1460,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
             unruly_solve_game(solver, scratch, params->diff - 1);
 
-            ok = unruly_validate_counts(solver, scratch, NULL);
+            ok = unruly_validate_counts(solver, scratch, NULL) > 0;
 
             free_game(solver);
             unruly_free_scratch(scratch);
@@ -1424,7 +1511,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 struct game_ui {
     int cx, cy;
-    char cursor;
+    bool cursor;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -1432,7 +1519,7 @@ static game_ui *new_ui(const game_state *state)
     game_ui *ret = snew(game_ui);
 
     ret->cx = ret->cy = 0;
-    ret->cursor = FALSE;
+    ret->cursor = getenv_bool("PUZZLES_SHOW_CURSOR", false);
 
     return ret;
 }
@@ -1442,27 +1529,39 @@ static void free_ui(game_ui *ui)
     sfree(ui);
 }
 
-static char *encode_ui(const game_ui *ui)
-{
-    return NULL;
-}
-
-static void decode_ui(game_ui *ui, const char *encoding)
-{
-}
-
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
 }
 
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    int hx = ui->cx, hy = ui->cy;
+    int w2 = state->w2;
+    char i = state->grid[hy * w2 + hx];
+
+    if (ui->cursor && IS_CURSOR_SELECT(button)) {
+        if (state->common->immutable[hy * w2 + hx]) return "";
+        switch (i) {
+          case EMPTY:
+            return button == CURSOR_SELECT ? "Black" : "White";
+          case N_ONE:
+            return button == CURSOR_SELECT ? "White" : "Empty";
+          case N_ZERO:
+            return button == CURSOR_SELECT ? "Empty" : "Black";
+        }
+    }
+    return "";
+}
+
 struct game_drawstate {
     int tilesize;
     int w2, h2;
-    int started;
+    bool started;
 
     int *gridfs;
-    int *rowfs;
+    bool *rowfs;
 
     int *grid;
 };
@@ -1478,10 +1577,10 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     ds->tilesize = 0;
     ds->w2 = w2;
     ds->h2 = h2;
-    ds->started = FALSE;
+    ds->started = false;
 
     ds->gridfs = snewn(s, int);
-    ds->rowfs = snewn(2 * (w2 + h2), int);
+    ds->rowfs = snewn(2 * (w2 + h2), bool);
 
     ds->grid = snewn(s, int);
     for (i = 0; i < s; i++)
@@ -1513,6 +1612,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
     int w2 = state->w2, h2 = state->h2;
 
+    char *nullret = MOVE_NO_EFFECT;
+
     button &= ~MOD_MASK;
 
     /* Mouse click */
@@ -1522,17 +1623,18 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             && oy >= (ds->tilesize / 2) && gy < h2) {
             hx = gx;
             hy = gy;
-            ui->cursor = FALSE;
+            if (ui->cursor) {
+                ui->cursor = false;
+                nullret = MOVE_UI_UPDATE;
+            }
         } else
-            return NULL;
+            return MOVE_UNUSED;
     }
 
     /* Keyboard move */
-    if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cx, &ui->cy, w2, h2, 0);
-        ui->cursor = TRUE;
-        return "";
-    }
+    if (IS_CURSOR_MOVE(button))
+        return move_cursor(button, &ui->cx, &ui->cy, w2, h2, false,
+                           &ui->cursor);
 
     /* Place one */
     if ((ui->cursor && (button == CURSOR_SELECT || button == CURSOR_SELECT2
@@ -1543,8 +1645,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         char buf[80];
         char c, i;
 
-        if (state->immutable[hy * w2 + hx])
-            return NULL;
+        if (state->common->immutable[hy * w2 + hx])
+            return nullret;
 
         c = '-';
         i = state->grid[hy * w2 + hx];
@@ -1564,13 +1666,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
         if (state->grid[hy * w2 + hx] ==
             (c == '0' ? N_ZERO : c == '1' ? N_ONE : EMPTY))
-            return NULL;               /* don't put no-ops on the undo chain */
+            return nullret; /* don't put no-ops on the undo chain */
 
         sprintf(buf, "P%c,%d,%d", c, hx, hy);
 
         return dupstr(buf);
     }
-    return NULL;
+    return MOVE_UNUSED;
 }
 
 static game_state *execute_move(const game_state *state, const char *move)
@@ -1599,7 +1701,7 @@ static game_state *execute_move(const game_state *state, const char *move)
             p++;
         }
 
-        ret->completed = ret->cheated = TRUE;
+        ret->completed = ret->cheated = true;
         return ret;
     } else if (move[0] == 'P'
                && sscanf(move + 1, "%c,%d,%d", &c, &x, &y) == 3 && x >= 0
@@ -1608,7 +1710,7 @@ static game_state *execute_move(const game_state *state, const char *move)
         ret = dup_game(state);
         i = y * w2 + x;
 
-        if (state->immutable[i]) {
+        if (state->common->immutable[i]) {
             free_game(ret);
             return NULL;
         }
@@ -1617,7 +1719,7 @@ static game_state *execute_move(const game_state *state, const char *move)
 
         if (!ret->completed && unruly_validate_counts(ret, NULL, NULL) == 0
             && (unruly_validate_all_rows(ret, NULL) == 0))
-            ret->completed = TRUE;
+            ret->completed = true;
 
         return ret;
     }
@@ -1630,7 +1732,7 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     *x = tilesize * (params->w2 + 1);
     *y = tilesize * (params->h2 + 1);
@@ -1781,16 +1883,13 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     int x, y, i;
 
     if (!ds->started) {
-        /* Main window background */
-        draw_rect(dr, 0, 0, TILE_SIZE * (w2+1), TILE_SIZE * (h2+1),
-                  COL_BACKGROUND);
         /* Outer edge of grid */
         draw_rect(dr, COORD(0)-TILE_SIZE/10, COORD(0)-TILE_SIZE/10,
                   TILE_SIZE*w2 + 2*(TILE_SIZE/10) - 1,
                   TILE_SIZE*h2 + 2*(TILE_SIZE/10) - 1, COL_GRID);
 
         draw_update(dr, 0, 0, TILE_SIZE * (w2+1), TILE_SIZE * (h2+1));
-        ds->started = TRUE;
+        ds->started = true;
     }
 
     flash = 0;
@@ -1801,7 +1900,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         ds->gridfs[i] = 0;
     unruly_validate_all_rows(state, ds->gridfs);
     for (i = 0; i < 2 * (h2 + w2); i++)
-        ds->rowfs[i] = 0;
+        ds->rowfs[i] = false;
     unruly_validate_counts(state, NULL, ds->rowfs);
 
     for (y = 0; y < h2; y++) {
@@ -1824,7 +1923,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
             tile |= flash;
 
-            if (state->immutable[i])
+            if (state->common->immutable[i])
                 tile |= FF_IMMUTABLE;
 
             if (ui->cursor && ui->cx == x && ui->cy == y)
@@ -1853,27 +1952,37 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cursor) {
+        *x = COORD(ui->cx);
+        *y = COORD(ui->cy);
+        *w = *h = TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
-{
-    return TRUE;
-}
-
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
     /* Using 7mm squares */
-    game_compute_size(params, 700, &pw, &ph);
+    game_compute_size(params, 700, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int w2 = state->w2, h2 = state->h2;
     int x, y;
@@ -1912,25 +2021,28 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Unruly", "games.unruly", "unruly",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
-    encode_ui,
-    decode_ui,
+    NULL, /* encode_ui */
+    NULL, /* decode_ui */
+    NULL, /* game_request_keys */
     game_changed_state,
+    current_key_label,
     interpret_move,
     execute_move,
     DEFAULT_TILE_SIZE, game_compute_size, game_set_size,
@@ -1940,10 +2052,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    FALSE,                      /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    false,                      /* wants_statusbar */
+    false, NULL,                       /* timing_state */
     0,                          /* flags */
 };
 
@@ -1957,7 +2070,7 @@ const struct game thegame = {
 
 /* Most of the standalone solver code was copied from unequal.c and singles.c */
 
-const char *quis;
+static const char *quis;
 
 static void usage_exit(const char *msg)
 {
@@ -1976,7 +2089,8 @@ int main(int argc, char *argv[])
 
     game_params *params = NULL;
 
-    char *id = NULL, *desc = NULL, *err;
+    char *id = NULL, *desc = NULL;
+    const char *err;
 
     quis = argv[0];
 
@@ -1988,7 +2102,7 @@ int main(int argc, char *argv[])
             seed = (time_t) atoi(*++argv);
             argc--;
         } else if (!strcmp(p, "-v"))
-            solver_verbose = TRUE;
+            solver_verbose = true;
         else if (*p == '-')
             usage_exit("unrecognised option");
         else
@@ -2002,7 +2116,7 @@ int main(int argc, char *argv[])
 
         params = default_params();
         decode_params(params, id);
-        err = validate_params(params, TRUE);
+        err = validate_params(params, true);
         if (err) {
             fprintf(stderr, "Parameters are invalid\n");
             fprintf(stderr, "%s: %s", argv[0], err);
@@ -2016,8 +2130,8 @@ int main(int argc, char *argv[])
         if (!params)
             params = default_params();
         printf("Generating puzzle with parameters %s\n",
-               encode_params(params, TRUE));
-        desc_gen = new_game_desc(params, rs, &aux, FALSE);
+               encode_params(params, true));
+        desc_gen = new_game_desc(params, rs, &aux, false);
 
         if (!solver_verbose) {
             char *fmt = game_text_format(new_game(NULL, params, desc_gen));

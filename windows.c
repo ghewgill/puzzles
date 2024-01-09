@@ -7,11 +7,7 @@
 #ifndef NO_HTMLHELP
 #include <htmlhelp.h>
 #endif /* NO_HTMLHELP */
-
-#ifdef _WIN32_WCE
-#include <commdlg.h>
-#include <aygshell.h>
-#endif
+#include <io.h>
 
 #include <stdio.h>
 #include <assert.h>
@@ -22,10 +18,6 @@
 #include <time.h>
 
 #include "puzzles.h"
-
-#ifdef _WIN32_WCE
-#include "resource.h"
-#endif
 
 #define IDM_NEW       0x0010
 #define IDM_RESTART   0x0020
@@ -43,10 +35,14 @@
 #define IDM_SAVE      0x00E0
 #define IDM_LOAD      0x00F0
 #define IDM_PRINT     0x0100
-#define IDM_PRESETS   0x0110
-#define IDM_GAMES     0x0300
+#define IDM_PREFS     0x0110
 
-#define IDM_KEYEMUL   0x0400
+/* Menu items for preset game_params go up from IDM_PRESET_BASE in
+ * steps of MENUITEM_STEP = 0x20. Menu items for selecting different
+ * games (in -DCOMBINED mode) go up from IDM_GAME_BASE similarly. */
+#define IDM_PRESET_BASE   0x0120
+#define IDM_GAME_BASE     0x0130
+#define MENUITEM_STEP     0x0020
 
 #define HELP_FILE_NAME  "puzzles.hlp"
 #define HELP_CNT_NAME   "puzzles.cnt"
@@ -61,7 +57,7 @@ static HINSTANCE hh_dll;
 #endif /* NO_HTMLHELP */
 enum { NONE, HLP, CHM } help_type;
 char *help_path;
-int help_has_contents;
+bool help_has_contents;
 
 #ifndef FILENAME_MAX
 #define	FILENAME_MAX	(260)
@@ -77,56 +73,12 @@ int help_has_contents;
 #define CLASSNAME thegame.name
 #endif
 
-#ifdef _WIN32_WCE
-
-/*
- * Wrapper implementations of functions not supplied by the
- * PocketPC API.
- */
-
-#define SHGetSubMenu(hWndMB,ID_MENU) (HMENU)SendMessage((hWndMB), SHCMBM_GETSUBMENU, (WPARAM)0, (LPARAM)ID_MENU)
-
-#undef MessageBox
-
-int MessageBox(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
-{
-    TCHAR wText[2048];
-    TCHAR wCaption[2048];
-
-    MultiByteToWideChar (CP_ACP, 0, lpText,    -1, wText,    2048);
-    MultiByteToWideChar (CP_ACP, 0, lpCaption, -1, wCaption, 2048);
-
-    return MessageBoxW (hWnd, wText, wCaption, uType);
-}
-
-BOOL SetDlgItemTextA(HWND hDlg, int nIDDlgItem, LPCSTR lpString)
-{
-    TCHAR wText[256];
-
-    MultiByteToWideChar (CP_ACP, 0, lpString, -1, wText, 256);
-    return SetDlgItemTextW(hDlg, nIDDlgItem, wText);
-}
-
-LPCSTR getenv(LPCSTR buf)
-{
-    return NULL;
-}
-
-BOOL GetKeyboardState(PBYTE pb)
-{
-  return FALSE;
-}
-
-static TCHAR wClassName[256], wGameName[256];
-
-#endif
-
 #ifdef DEBUGGING
 static FILE *debug_fp = NULL;
 static HANDLE debug_hdl = INVALID_HANDLE_VALUE;
 static int debug_got_console = 0;
 
-void dputs(char *buf)
+static void dputs(char *buf)
 {
     /*DWORD dw;
 
@@ -144,20 +96,20 @@ void dputs(char *buf)
 	WriteFile(debug_hdl, buf, strlen(buf), &dw, NULL);
     }
     if (debug_fp) {
-      fputs(buf, debug_fp);
-      fflush(debug_fp);
+        fputs(buf, debug_fp);
+        fflush(debug_fp);
     }*/
     OutputDebugString(buf);
 }
 
-void debug_printf(char *fmt, ...)
+void debug_printf(const char *fmt, ...)
 {
     char buf[4096];
     va_list ap;
     static int debugging = -1;
 
     if (debugging == -1)
-        debugging = getenv("DEBUG_PUZZLES") ? 1 : 0;
+        debugging = getenv_bool("DEBUG_PUZZLES", false);
 
     if (debugging) {
         va_start(ap, fmt);
@@ -168,14 +120,12 @@ void debug_printf(char *fmt, ...)
 }
 #endif
 
-#ifndef _WIN32_WCE
 #define WINFLAGS (WS_OVERLAPPEDWINDOW &~ \
 		      (WS_MAXIMIZEBOX | WS_OVERLAPPED))
-#else
-#define WINFLAGS (WS_CAPTION | WS_SYSMENU)
-#endif
 
 static void new_game_size(frontend *fe, float scale);
+static void load_prefs(midend *me);
+static char *save_prefs(midend *me);
 
 struct font {
     HFONT font;
@@ -195,13 +145,15 @@ struct blitter {
 
 enum { CFG_PRINT = CFG_FRONTEND_SPECIFIC };
 
+struct preset_menuitemref {
+    HMENU which_menu;
+    int item_index;
+};
+
 struct frontend {
     const game *game;
     midend *me;
     HWND hwnd, statusbar, cfgbox;
-#ifdef _WIN32_WCE
-    HWND numpad;  /* window handle for the numeric pad */
-#endif
     HINSTANCE inst;
     HBITMAP bitmap, prevbm;
     RECT bitmapPosition;  /* game bitmap position within game window */
@@ -213,8 +165,9 @@ struct frontend {
     HMENU gamemenu, typemenu;
     UINT timer;
     DWORD timer_last_tickcount;
-    int npresets;
-    game_params **presets;
+    struct preset_menu *preset_menu;
+    struct preset_menuitemref *preset_menuitems;
+    int n_preset_menuitems;
     struct font *fonts;
     int nfonts, fontsize;
     config_item *cfg;
@@ -223,15 +176,17 @@ struct frontend {
     HFONT cfgfont;
     HBRUSH oldbr;
     HPEN oldpen;
-    int help_running;
+    bool help_running;
     enum { DRAWING, PRINTING, NOTHING } drawstatus;
     DOCINFO di;
-    int printcount, printw, printh, printsolns, printcurr, printcolour;
+    int printcount, printw, printh;
+    bool printsolns, printcurr, printcolour;
     float printscale;
     int printoffsetx, printoffsety;
     float printpixelscale;
     int fontstart;
-    int linewidth, linedotted;
+    int linewidth;
+    bool linedotted;
     drawing *dr;
     int xmin, ymin;
     float puzz_scale;
@@ -244,7 +199,6 @@ void frontend_free(frontend *fe)
     sfree(fe->colours);
     sfree(fe->brushes);
     sfree(fe->pens);
-    sfree(fe->presets);
     sfree(fe->fonts);
 
     sfree(fe);
@@ -253,7 +207,7 @@ void frontend_free(frontend *fe)
 static void update_type_menu_tick(frontend *fe);
 static void update_copy_menu_greying(frontend *fe);
 
-void fatal(char *fmt, ...)
+void fatal(const char *fmt, ...)
 {
     char buf[2048];
     va_list ap;
@@ -299,21 +253,11 @@ void get_random_seed(void **randseed, int *randseedsize)
     *randseedsize = sizeof(SYSTEMTIME);
 }
 
-static void win_status_bar(void *handle, char *text)
+static void win_status_bar(void *handle, const char *text)
 {
-#ifdef _WIN32_WCE
-    TCHAR wText[255];
-#endif
     frontend *fe = (frontend *)handle;
 
-#ifdef _WIN32_WCE
-    MultiByteToWideChar (CP_ACP, 0, text, -1, wText, 255);
-    SendMessage(fe->statusbar, SB_SETTEXT,
-                (WPARAM) 255 | SBT_NOBORDERS,
-                (LPARAM) wText);
-#else
     SetWindowText(fe->statusbar, text);
-#endif
 }
 
 static blitter *win_blitter_new(void *handle, int w, int h)
@@ -457,13 +401,6 @@ static void win_set_brush(frontend *fe, int colour)
 	if (hatch < 0) {
 	    br = CreateSolidBrush(RGB(r * 255, g * 255, b * 255));
 	} else {
-#ifdef _WIN32_WCE
-	    /*
-	     * This is only ever required during printing, and the
-	     * PocketPC port doesn't support printing.
-	     */
-	    fatal("CreateHatchBrush not supported");
-#else
 	    br = CreateHatchBrush(hatch == HATCH_BACKSLASH ? HS_FDIAGONAL :
 				  hatch == HATCH_SLASH ? HS_BDIAGONAL :
 				  hatch == HATCH_HORIZ ? HS_HORIZONTAL :
@@ -471,7 +408,6 @@ static void win_set_brush(frontend *fe, int colour)
 				  hatch == HATCH_PLUS ? HS_CROSS :
 				  /* hatch == HATCH_X ? */ HS_DIAGCROSS,
 				  RGB(0,0,0));
-#endif
 	}
     } else {
 	br = fe->brushes[colour];
@@ -490,7 +426,7 @@ static void win_reset_brush(frontend *fe)
 	DeleteObject(br);
 }
 
-static void win_set_pen(frontend *fe, int colour, int thin)
+static void win_set_pen(frontend *fe, int colour, bool thin)
 {
     HPEN pen;
     assert(fe->drawstatus != NOTHING);
@@ -551,7 +487,8 @@ static void win_unclip(void *handle)
 }
 
 static void win_draw_text(void *handle, int x, int y, int fonttype,
-			  int fontsize, int align, int colour, char *text)
+			  int fontsize, int align, int colour,
+                          const char *text)
 {
     frontend *fe = (frontend *)handle;
     POINT xy;
@@ -594,9 +531,6 @@ static void win_draw_text(void *handle, int x, int y, int fonttype,
         lf.lfPitchAndFamily = (fonttype == FONT_FIXED ?
                                FIXED_PITCH | FF_DONTCARE :
                                VARIABLE_PITCH | FF_SWISS);
-#ifdef _WIN32_WCE
-        wcscpy(lf.lfFaceName, TEXT("Tahoma"));
-#endif
 
         fe->fonts[i].font = CreateFontIndirect(&lf);
     }
@@ -608,7 +542,7 @@ static void win_draw_text(void *handle, int x, int y, int fonttype,
 	HFONT oldfont;
 	TEXTMETRIC tm;
 	SIZE size;
-	TCHAR wText[256];
+	WCHAR wText[256];
 	MultiByteToWideChar (CP_UTF8, 0, text, -1, wText, 256);
 
 	oldfont = SelectObject(fe->hdc, fe->fonts[i].font);
@@ -650,7 +584,7 @@ static void win_draw_rect(void *handle, int x, int y, int w, int h, int colour)
 	SetPixel(fe->hdc, x, y, fe->colours[colour]);
     } else {
 	win_set_brush(fe, colour);
-	win_set_pen(fe, colour, TRUE);
+	win_set_pen(fe, colour, true);
 	p = win_transform_point(fe, x, y);
 	q = win_transform_point(fe, x+w, y+h);
 	Rectangle(fe->hdc, p.x, p.y, q.x, q.y);
@@ -667,7 +601,7 @@ static void win_draw_line(void *handle, int x1, int y1, int x2, int y2, int colo
     if (fe->drawstatus == NOTHING)
 	return;
 
-    win_set_pen(fe, colour, FALSE);
+    win_set_pen(fe, colour, false);
     pp[0] = win_transform_point(fe, x1, y1);
     pp[1] = win_transform_point(fe, x2, y2);
     Polyline(fe->hdc, pp, 2);
@@ -692,7 +626,7 @@ static void win_draw_circle(void *handle, int cx, int cy, int radius,
     else
 	fe->oldbr = SelectObject(fe->hdc, GetStockObject(NULL_BRUSH));
 
-    win_set_pen(fe, outlinecolour, FALSE);
+    win_set_pen(fe, outlinecolour, false);
     p = win_transform_point(fe, cx - radius, cy - radius);
     q = win_transform_point(fe, cx + radius, cy + radius);
     Ellipse(fe->hdc, p.x, p.y, q.x+1, q.y+1);
@@ -700,7 +634,7 @@ static void win_draw_circle(void *handle, int cx, int cy, int radius,
     win_reset_pen(fe);
 }
 
-static void win_draw_polygon(void *handle, int *coords, int npoints,
+static void win_draw_polygon(void *handle, const int *coords, int npoints,
 			     int fillcolour, int outlinecolour)
 {
     frontend *fe = (frontend *)handle;
@@ -721,12 +655,12 @@ static void win_draw_polygon(void *handle, int *coords, int npoints,
 
     if (fillcolour >= 0) {
 	win_set_brush(fe, fillcolour);
-	win_set_pen(fe, outlinecolour, FALSE);
+	win_set_pen(fe, outlinecolour, false);
 	Polygon(fe->hdc, pts, npoints);
 	win_reset_brush(fe);
 	win_reset_pen(fe);
     } else {
-	win_set_pen(fe, outlinecolour, FALSE);
+	win_set_pen(fe, outlinecolour, false);
 	Polyline(fe->hdc, pts, npoints+1);
 	win_reset_pen(fe);
     }
@@ -746,9 +680,7 @@ static void win_start_draw(void *handle)
     fe->prevbm = SelectObject(fe->hdc, fe->bitmap);
     ReleaseDC(fe->hwnd, hdc_win);
     fe->clip = NULL;
-#ifndef _WIN32_WCE
     SetMapMode(fe->hdc, MM_TEXT);
-#endif
     fe->drawstatus = DRAWING;
 }
 
@@ -766,7 +698,7 @@ static void win_draw_update(void *handle, int x, int y, int w, int h)
     r.bottom = y + h;
 
     OffsetRect(&r, fe->bitmapPosition.left, fe->bitmapPosition.top);
-    InvalidateRect(fe->hwnd, &r, FALSE);
+    InvalidateRect(fe->hwnd, &r, false);
 }
 
 static void win_end_draw(void *handle)
@@ -793,7 +725,7 @@ static void win_line_width(void *handle, float width)
     fe->linewidth = (int)(width * fe->printpixelscale);
 }
 
-static void win_line_dotted(void *handle, int dotted)
+static void win_line_dotted(void *handle, bool dotted)
 {
     frontend *fe = (frontend *)handle;
 
@@ -894,7 +826,7 @@ static void win_begin_puzzle(void *handle, float xm, float xc,
     fe->printpixelscale = scale;
 
     fe->linewidth = 1;
-    fe->linedotted = FALSE;
+    fe->linedotted = false;
 }
 
 static void win_end_puzzle(void *handle)
@@ -991,13 +923,12 @@ const struct drawing_api win_drawing = {
 
 void print(frontend *fe)
 {
-#ifndef _WIN32_WCE
     PRINTDLG pd;
     char doctitle[256];
     document *doc;
     midend *nme = NULL;  /* non-interactive midend for bulk puzzle generation */
     int i;
-    char *err = NULL;
+    const char *err = NULL;
 
     /*
      * Create our document structure and fill it up with puzzles.
@@ -1011,6 +942,7 @@ void print(frontend *fe)
 		game_params *params;
 
 		nme = midend_new(NULL, fe->game, NULL, NULL);
+                load_prefs(nme);
 
 		/*
 		 * Set the non-interactive mid-end to have the same
@@ -1082,7 +1014,6 @@ void print(frontend *fe)
 
     DeleteDC(pd.hDC);
     document_free(doc);
-#endif
 }
 
 void deactivate_timer(frontend *fe)
@@ -1160,7 +1091,6 @@ void write_clip(HWND hwnd, char *data)
  */
 static void init_help(void)
 {
-#ifndef _WIN32_WCE
     char b[2048], *p, *q, *r;
     FILE *fp;
 
@@ -1216,18 +1146,15 @@ static void init_help(void)
 	strcpy(r, HELP_CNT_NAME);
 	if ( (fp = fopen(b, "r")) != NULL) {
 	    fclose(fp);
-	    help_has_contents = TRUE;
+	    help_has_contents = true;
 	} else
-	    help_has_contents = FALSE;
+	    help_has_contents = false;
 
 	return;
     }
 
     help_type = NONE;	       /* didn't find any */
-#endif
 }
-
-#ifndef _WIN32_WCE
 
 /*
  * Start Help.
@@ -1249,8 +1176,8 @@ static void start_help(frontend *fe, const char *topic)
 	} else {
 	    cmd = HELP_CONTENTS;
 	}
-	WinHelp(fe->hwnd, help_path, cmd, (DWORD)str);
-	fe->help_running = TRUE;
+	WinHelp(fe->hwnd, help_path, cmd, (ULONG_PTR)str);
+	fe->help_running = true;
 	break;
       case CHM:
 #ifndef NO_HTMLHELP
@@ -1263,7 +1190,7 @@ static void start_help(frontend *fe, const char *topic)
 	    str = dupstr(help_path);
 	}
 	htmlhelp(fe->hwnd, str, HH_DISPLAY_TOPIC, 0);
-	fe->help_running = TRUE;
+	fe->help_running = true;
 	break;
 #endif /* NO_HTMLHELP */
       case NONE:
@@ -1294,11 +1221,9 @@ static void stop_help(frontend *fe)
 	    assert(!"This shouldn't happen");
 	    break;
 	}
-	fe->help_running = FALSE;
+	fe->help_running = false;
     }
 }
-
-#endif
 
 /*
  * Terminate Help on process exit.
@@ -1330,10 +1255,8 @@ static void adjust_statusbar(frontend *fe, RECT *r)
     if (!fe->statusbar) return;
 
     sy = get_statusbar_height(fe);
-#ifndef _WIN32_WCE
     SetWindowPos(fe->statusbar, NULL, 0, r->bottom-r->top-sy, r->right-r->left,
                  sy, SWP_NOZORDER);
-#endif
 }
 
 static void get_menu_size(HWND wh, RECT *r)
@@ -1355,12 +1278,12 @@ static void get_menu_size(HWND wh, RECT *r)
  * furniture (wx,wy).
  */
 
-static int check_window_resize(frontend *fe, int cx, int cy,
-                               int *px, int *py,
-                               int *wx, int *wy)
+static bool check_window_resize(frontend *fe, int cx, int cy,
+                                int *px, int *py, int *wx, int *wy)
 {
     RECT r;
-    int x, y, sy = get_statusbar_height(fe), changed = 0;
+    int x, y, sy = get_statusbar_height(fe);
+    bool changed = false;
 
     /* disallow making window thinner than menu bar */
     x = max(cx, fe->xmin);
@@ -1370,7 +1293,7 @@ static int check_window_resize(frontend *fe, int cx, int cy,
      * See if we actually got the window size we wanted, and adjust
      * the puzzle size if not.
      */
-    midend_size(fe->me, &x, &y, TRUE);
+    midend_size(fe->me, &x, &y, true, 1.0);
     if (x != cx || y != cy) {
         /*
          * Resize the window, now we know what size we _really_
@@ -1379,10 +1302,10 @@ static int check_window_resize(frontend *fe, int cx, int cy,
         r.left = r.top = 0;
         r.right = x;
         r.bottom = y + sy;
-        AdjustWindowRectEx(&r, WINFLAGS, TRUE, 0);
+        AdjustWindowRectEx(&r, WINFLAGS, true, 0);
         *wx = r.right - r.left;
         *wy = r.bottom - r.top;
-        changed = 1;
+        changed = true;
     }
 
     *px = x;
@@ -1408,13 +1331,8 @@ static void check_window_size(frontend *fe, int *px, int *py)
     cx = r.right - r.left;
     cy = r.bottom - r.top;
 
-    if (check_window_resize(fe, cx, cy, px, py, &wx, &wy)) {
-#ifdef _WIN32_WCE
-        SetWindowPos(fe->hwnd, NULL, 0, 0, wx, wy,
-		     SWP_NOMOVE | SWP_NOZORDER);
-#endif
-        ;
-    }
+    if (check_window_resize(fe, cx, cy, px, py, &wx, &wy))
+        SetWindowPos(fe->hwnd, NULL, 0, 0, wx, wy, SWP_NOMOVE | SWP_NOZORDER);
 
     GetClientRect(fe->hwnd, &r);
     adjust_statusbar(fe, &r);
@@ -1424,14 +1342,14 @@ static void get_max_puzzle_size(frontend *fe, int *x, int *y)
 {
     RECT r, sr;
 
-    if (SystemParametersInfo(SPI_GETWORKAREA, 0, &sr, FALSE)) {
+    if (SystemParametersInfo(SPI_GETWORKAREA, 0, &sr, false)) {
 	*x = sr.right - sr.left;
 	*y = sr.bottom - sr.top;
 	r.left = 100;
 	r.right = 200;
 	r.top = 100;
 	r.bottom = 200;
-	AdjustWindowRectEx(&r, WINFLAGS, TRUE, 0);
+	AdjustWindowRectEx(&r, WINFLAGS, true, 0);
 	*x -= r.right - r.left - 100;
 	*y -= r.bottom - r.top - 100;
     } else {
@@ -1443,23 +1361,6 @@ static void get_max_puzzle_size(frontend *fe, int *x, int *y)
 	*y -= sr.bottom - sr.top;
     }
 }
-
-#ifdef _WIN32_WCE
-/* Toolbar buttons on the numeric pad */
-static TBBUTTON tbNumpadButtons[] =
-{
-    {0, IDM_KEYEMUL + '1', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {1, IDM_KEYEMUL + '2', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {2, IDM_KEYEMUL + '3', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {3, IDM_KEYEMUL + '4', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {4, IDM_KEYEMUL + '5', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {5, IDM_KEYEMUL + '6', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {6, IDM_KEYEMUL + '7', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {7, IDM_KEYEMUL + '8', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {8, IDM_KEYEMUL + '9', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1},
-    {9, IDM_KEYEMUL + ' ', TBSTATE_ENABLED, TBSTYLE_BUTTON,  0, -1}
-};
-#endif
 
 /*
  * Allocate a new frontend structure and create its main window.
@@ -1479,7 +1380,7 @@ static frontend *frontend_new(HINSTANCE inst)
     fe->timer = 0;
     fe->hwnd = NULL;
 
-    fe->help_running = FALSE;
+    fe->help_running = false;
 
     fe->drawstatus = NOTHING;
     fe->dr = NULL;
@@ -1494,34 +1395,6 @@ static frontend *frontend_new(HINSTANCE inst)
 
     fe->puzz_scale = 1.0;
 
-    #ifdef _WIN32_WCE
-    MultiByteToWideChar (CP_ACP, 0, nogame, -1, wGameName, 256);
-    fe->hwnd = CreateWindowEx(0, wClassName, wGameName,
-			      WS_VISIBLE,
-			      CW_USEDEFAULT, CW_USEDEFAULT,
-			      CW_USEDEFAULT, CW_USEDEFAULT,
-			      NULL, NULL, inst, NULL);
-
-    {
-	SHMENUBARINFO mbi;
-	RECT rc, rcBar, rcTB, rcClient;
-
-	memset (&mbi, 0, sizeof(SHMENUBARINFO));
-	mbi.cbSize     = sizeof(SHMENUBARINFO);
-	mbi.hwndParent = fe->hwnd;
-	mbi.nToolBarId = IDR_MENUBAR1;
-	mbi.hInstRes   = inst;
-
-	SHCreateMenuBar(&mbi);
-
-	GetWindowRect(fe->hwnd, &rc);
-	GetWindowRect(mbi.hwndMB, &rcBar);
-	rc.bottom -= rcBar.bottom - rcBar.top;
-	MoveWindow(fe->hwnd, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, FALSE);
-
-        fe->numpad = NULL;
-    }
-#else
     fe->hwnd = CreateWindowEx(0, CLASSNAME, nogame,
 			      WS_OVERLAPPEDWINDOW &~
 			      (WS_MAXIMIZEBOX),
@@ -1530,28 +1403,27 @@ static frontend *frontend_new(HINSTANCE inst)
 			      NULL, NULL, inst, NULL);
     if (!fe->hwnd) {
         DWORD lerr = GetLastError();
-        printf("no window: 0x%x\n", lerr);
+        printf("no window: 0x%x\n", (unsigned)lerr);
     }
-#endif
 
     fe->gamemenu = NULL;
-    fe->presets = NULL;
+    fe->preset_menu = NULL;
 
     fe->statusbar = NULL;
     fe->bitmap = NULL;
 
-    SetWindowLong(fe->hwnd, GWL_USERDATA, (LONG)fe);
+    SetWindowLongPtr(fe->hwnd, GWLP_USERDATA, (LONG_PTR)fe);
 
     return fe;
 }
 
-static void savefile_write(void *wctx, void *buf, int len)
+static void savefile_write(void *wctx, const void *buf, int len)
 {
     FILE *fp = (FILE *)wctx;
     fwrite(buf, 1, len, fp);
 }
 
-static int savefile_read(void *wctx, void *buf, int len)
+static bool savefile_read(void *wctx, void *buf, int len)
 {
     FILE *fp = (FILE *)wctx;
     int ret;
@@ -1570,18 +1442,19 @@ static int savefile_read(void *wctx, void *buf, int len)
  * permissible.
  */
 static midend *midend_for_new_game(frontend *fe, const game *cgame,
-                                   char *arg, int maybe_game_id,
-                                   int maybe_save_file, char **error)
+                                   char *arg, bool maybe_game_id,
+                                   bool maybe_save_file, char **error)
 {
     midend *me = NULL;
 
     if (!arg) {
         if (me) midend_free(me);
         me = midend_new(fe, cgame, &win_drawing, fe);
+        load_prefs(me);
         midend_new_game(me);
     } else {
         FILE *fp;
-        char *err_param, *err_load;
+        const char *err_param, *err_load;
 
         /*
          * See if arg is a valid filename of a save game file.
@@ -1618,6 +1491,7 @@ static midend *midend_for_new_game(frontend *fe, const game *cgame,
             if (!err_load) {
                 if (me) midend_free(me);
                 me = midend_new(fe, loadgame, &win_drawing, fe);
+                load_prefs(me);
                 err_load = midend_deserialise(me, savefile_read, fp);
             }
         } else {
@@ -1630,6 +1504,7 @@ static midend *midend_for_new_game(frontend *fe, const game *cgame,
              */
             if (me) midend_free(me);
             me = midend_new(fe, cgame, &win_drawing, fe);
+            load_prefs(me);
             err_param = midend_game_id(me, arg);
             if (!err_param) {
                 midend_new_game(me);
@@ -1658,6 +1533,39 @@ static midend *midend_for_new_game(frontend *fe, const game *cgame,
     return me;
 }
 
+static void populate_preset_menu(frontend *fe,
+                                 struct preset_menu *menu, HMENU winmenu)
+{
+    int i;
+    for (i = 0; i < menu->n_entries; i++) {
+        struct preset_menu_entry *entry = &menu->entries[i];
+        UINT_PTR id_or_sub;
+        UINT flags = MF_ENABLED;
+
+        if (entry->params) {
+            id_or_sub = (UINT_PTR)(
+                IDM_PRESET_BASE + MENUITEM_STEP * entry->id);
+
+            fe->preset_menuitems[entry->id].which_menu = winmenu;
+            fe->preset_menuitems[entry->id].item_index =
+                GetMenuItemCount(winmenu);
+        } else {
+            HMENU winsubmenu = CreateMenu();
+            id_or_sub = (UINT_PTR)winsubmenu;
+            flags |= MF_POPUP;
+
+            populate_preset_menu(fe, entry->submenu, winsubmenu);
+        }
+
+        /*
+         * FIXME: we ought to go through and do something with ampersands
+         * here.
+         */
+
+        AppendMenu(winmenu, flags, id_or_sub, entry->title);
+    }
+}
+
 /*
  * Populate a frontend structure with a new midend structure, and
  * create any window furniture that it needs.
@@ -1671,7 +1579,11 @@ static int fe_set_midend(frontend *fe, midend *me)
     int x, y;
     RECT r;
 
-    if (fe->me) midend_free(fe->me);
+    if (fe->me) {
+        midend_free(fe->me);
+        fe->preset_menu = NULL;
+        sfree(fe->preset_menuitems);
+    }
     fe->me = me;
     fe->game = midend_which_game(fe->me);
 
@@ -1702,7 +1614,8 @@ static int fe_set_midend(frontend *fe, midend *me)
     if (fe->statusbar)
         DestroyWindow(fe->statusbar);
     if (midend_wants_statusbar(fe->me)) {
-	fe->statusbar = CreateWindowEx(0, STATUSCLASSNAME, TEXT("ooh"),
+	fe->statusbar = CreateWindowEx(0, STATUSCLASSNAME,
+				       TEXT(DEFAULT_STATUSBAR_TEXT),
 				       WS_CHILD | WS_VISIBLE,
 				       0, 0, 0, 0, /* status bar does these */
 				       NULL, NULL, fe->inst, NULL);
@@ -1710,41 +1623,14 @@ static int fe_set_midend(frontend *fe, midend *me)
         fe->statusbar = NULL;
 
     get_max_puzzle_size(fe, &x, &y);
-    midend_size(fe->me, &x, &y, FALSE);
+    midend_size(fe->me, &x, &y, false, 1.0);
 
     r.left = r.top = 0;
     r.right = x;
     r.bottom = y;
-    AdjustWindowRectEx(&r, WINFLAGS, TRUE, 0);
+    AdjustWindowRectEx(&r, WINFLAGS, true, 0);
 
-#ifdef _WIN32_WCE
-    if (fe->numpad)
-        DestroyWindow(fe->numpad);
-    if (fe->game->flags & REQUIRE_NUMPAD)
-    {
-        fe->numpad = CreateToolbarEx (fe->hwnd,
-                                      WS_VISIBLE | WS_CHILD | CCS_NOPARENTALIGN | TBSTYLE_FLAT,
-                                      0, 10, fe->inst, IDR_PADTOOLBAR,
-                                      tbNumpadButtons, sizeof (tbNumpadButtons) / sizeof (TBBUTTON),
-                                      0, 0, 14, 15, sizeof (TBBUTTON));
-        GetWindowRect(fe->numpad, &rcTB);
-        GetClientRect(fe->hwnd, &rcClient);
-        MoveWindow(fe->numpad, 
-                   0, 
-                   rcClient.bottom - (rcTB.bottom - rcTB.top) - 1,
-                   rcClient.right,
-                   rcTB.bottom - rcTB.top,
-                   FALSE);
-        SendMessage(fe->numpad, TB_SETINDENT, (rcClient.right - (10 * 21)) / 2, 0);
-    }
-    else {
-	fe->numpad = NULL;
-    }
-    MultiByteToWideChar (CP_ACP, 0, fe->game->name, -1, wGameName, 256);
-    SetWindowText(fe->hwnd, wGameName);
-#else
     SetWindowText(fe->hwnd, fe->game->name);
-#endif
 
     if (fe->statusbar)
         DestroyWindow(fe->statusbar);
@@ -1754,24 +1640,15 @@ static int fe_set_midend(frontend *fe, midend *me)
 				       WS_CHILD | WS_VISIBLE,
 				       0, 0, 0, 0, /* status bar does these */
 				       fe->hwnd, NULL, fe->inst, NULL);
-#ifdef _WIN32_WCE
-	/* Flat status bar looks better on the Pocket PC */
-	SendMessage(fe->statusbar, SB_SIMPLE, (WPARAM) TRUE, 0);
-	SendMessage(fe->statusbar, SB_SETTEXT,
-				(WPARAM) 255 | SBT_NOBORDERS,
-				(LPARAM) L"");
-#endif
 
 	/*
 	 * Now resize the window to take account of the status bar.
 	 */
 	GetWindowRect(fe->statusbar, &sr);
 	GetWindowRect(fe->hwnd, &r);
-#ifndef _WIN32_WCE
 	SetWindowPos(fe->hwnd, NULL, 0, 0, r.right - r.left,
 		     r.bottom - r.top + sr.bottom - sr.top,
 		     SWP_NOMOVE | SWP_NOZORDER);
-#endif
     } else {
 	fe->statusbar = NULL;
     }
@@ -1779,60 +1656,36 @@ static int fe_set_midend(frontend *fe, midend *me)
     {
         HMENU oldmenu = GetMenu(fe->hwnd);
 
-#ifndef _WIN32_WCE
 	HMENU bar = CreateMenu();
 	HMENU menu = CreateMenu();
         RECT menusize;
 
-	AppendMenu(bar, MF_ENABLED|MF_POPUP, (UINT)menu, "&Game");
-#else
-	HMENU menu = SHGetSubMenu(SHFindMenuBar(fe->hwnd), ID_GAME);
-	DeleteMenu(menu, 0, MF_BYPOSITION);
-#endif
+	AppendMenu(bar, MF_ENABLED|MF_POPUP, (UINT_PTR)menu, "&Game");
 	fe->gamemenu = menu;
 	AppendMenu(menu, MF_ENABLED, IDM_NEW, TEXT("&New"));
 	AppendMenu(menu, MF_ENABLED, IDM_RESTART, TEXT("&Restart"));
-#ifndef _WIN32_WCE
         /* ...here I run out of sensible accelerator characters. */
 	AppendMenu(menu, MF_ENABLED, IDM_DESC, TEXT("Speci&fic..."));
 	AppendMenu(menu, MF_ENABLED, IDM_SEED, TEXT("Rando&m Seed..."));
-#endif
 
-        if (fe->presets)
-            sfree(fe->presets);
-	if ((fe->npresets = midend_num_presets(fe->me)) > 0 ||
-	    fe->game->can_configure) {
-	    int i;
-#ifndef _WIN32_WCE
+        assert(!fe->preset_menu);
+
+        fe->preset_menu = midend_get_presets(
+            fe->me, &fe->n_preset_menuitems);
+        fe->preset_menuitems = snewn(fe->n_preset_menuitems,
+                                     struct preset_menuitemref);
+        {
+            int i;
+            for (i = 0; i < fe->n_preset_menuitems; i++)
+                fe->preset_menuitems[i].which_menu = NULL;
+        }
+	if (fe->preset_menu->n_entries > 0 || fe->game->can_configure) {
 	    HMENU sub = CreateMenu();
 
-	    AppendMenu(bar, MF_ENABLED|MF_POPUP, (UINT)sub, "&Type");
-#else
-	    HMENU sub = SHGetSubMenu(SHFindMenuBar(fe->hwnd), ID_TYPE);
-	    DeleteMenu(sub, 0, MF_BYPOSITION);
-#endif
-	    fe->presets = snewn(fe->npresets, game_params *);
+	    AppendMenu(bar, MF_ENABLED|MF_POPUP, (UINT_PTR)sub, "&Type");
 
-	    for (i = 0; i < fe->npresets; i++) {
-		char *name;
-#ifdef _WIN32_WCE
-		TCHAR wName[255];
-#endif
+            populate_preset_menu(fe, fe->preset_menu, sub);
 
-		midend_fetch_preset(fe->me, i, &name, &fe->presets[i]);
-
-		/*
-		 * FIXME: we ought to go through and do something
-		 * with ampersands here.
-		 */
-
-#ifndef _WIN32_WCE
-		AppendMenu(sub, MF_ENABLED, IDM_PRESETS + 0x10 * i, name);
-#else
-		MultiByteToWideChar (CP_ACP, 0, name, -1, wName, 255);
-		AppendMenu(sub, MF_ENABLED, IDM_PRESETS + 0x10 * i, wName);
-#endif
-	    }
 	    if (fe->game->can_configure) {
 		AppendMenu(sub, MF_ENABLED, IDM_CONFIG, TEXT("&Custom..."));
 	    }
@@ -1840,31 +1693,28 @@ static int fe_set_midend(frontend *fe, midend *me)
 	    fe->typemenu = sub;
 	} else {
 	    fe->typemenu = INVALID_HANDLE_VALUE;
-            fe->presets = NULL;
         }
 
 #ifdef COMBINED
-#ifdef _WIN32_WCE
-#error Windows CE does not support COMBINED build.
-#endif
         {
             HMENU games = CreateMenu();
             int i;
 
             AppendMenu(menu, MF_SEPARATOR, 0, 0);
-            AppendMenu(menu, MF_ENABLED|MF_POPUP, (UINT)games, "&Other");
+            AppendMenu(menu, MF_ENABLED|MF_POPUP, (UINT_PTR)games, "&Other");
             for (i = 0; i < gamecount; i++) {
                 if (strcmp(gamelist[i]->name, fe->game->name) != 0) {
                     /* only include those games that aren't the same as the
                      * game we're currently playing. */
-                    AppendMenu(games, MF_ENABLED, IDM_GAMES + i, gamelist[i]->name);
+                    AppendMenu(games, MF_ENABLED,
+                               IDM_GAME_BASE + MENUITEM_STEP * i,
+                               gamelist[i]->name);
                 }
             }
         }
 #endif
 
 	AppendMenu(menu, MF_SEPARATOR, 0, 0);
-#ifndef _WIN32_WCE
 	AppendMenu(menu, MF_ENABLED, IDM_LOAD, TEXT("&Load..."));
 	AppendMenu(menu, MF_ENABLED, IDM_SAVE, TEXT("&Save..."));
 	AppendMenu(menu, MF_SEPARATOR, 0, 0);
@@ -1872,27 +1722,23 @@ static int fe_set_midend(frontend *fe, midend *me)
 	    AppendMenu(menu, MF_ENABLED, IDM_PRINT, TEXT("&Print..."));
 	    AppendMenu(menu, MF_SEPARATOR, 0, 0);
 	}
-#endif
 	AppendMenu(menu, MF_ENABLED, IDM_UNDO, TEXT("Undo"));
 	AppendMenu(menu, MF_ENABLED, IDM_REDO, TEXT("Redo"));
-#ifndef _WIN32_WCE
 	if (fe->game->can_format_as_text_ever) {
 	    AppendMenu(menu, MF_SEPARATOR, 0, 0);
 	    AppendMenu(menu, MF_ENABLED, IDM_COPY, TEXT("&Copy"));
 	}
-#endif
 	if (fe->game->can_solve) {
 	    AppendMenu(menu, MF_SEPARATOR, 0, 0);
 	    AppendMenu(menu, MF_ENABLED, IDM_SOLVE, TEXT("Sol&ve"));
 	}
 	AppendMenu(menu, MF_SEPARATOR, 0, 0);
-#ifndef _WIN32_WCE
+	AppendMenu(menu, MF_ENABLED, IDM_PREFS, TEXT("Pre&ferences"));
+	AppendMenu(menu, MF_SEPARATOR, 0, 0);
 	AppendMenu(menu, MF_ENABLED, IDM_QUIT, TEXT("E&xit"));
 	menu = CreateMenu();
-	AppendMenu(bar, MF_ENABLED|MF_POPUP, (UINT)menu, TEXT("&Help"));
-#endif
+	AppendMenu(bar, MF_ENABLED|MF_POPUP, (UINT_PTR)menu, TEXT("&Help"));
 	AppendMenu(menu, MF_ENABLED, IDM_ABOUT, TEXT("&About"));
-#ifndef _WIN32_WCE
         if (help_type != NONE) {
             char *item;
             AppendMenu(menu, MF_SEPARATOR, 0, 0);
@@ -1907,7 +1753,6 @@ static int fe_set_midend(frontend *fe, midend *me)
 	SetMenu(fe->hwnd, bar);
         get_menu_size(fe->hwnd, &menusize);
         fe->xmin = (menusize.right - menusize.left) + 25;
-#endif
     }
 
     if (fe->bitmap) DeleteObject(fe->bitmap);
@@ -1928,76 +1773,22 @@ static void show_window(frontend *fe)
     midend_redraw(fe->me);
 }
 
-#ifdef _WIN32_WCE
-static HFONT dialog_title_font()
-{
-    static HFONT hf = NULL;
-    LOGFONT lf;
-
-    if (hf)
-	return hf;
-
-    memset (&lf, 0, sizeof(LOGFONT));
-    lf.lfHeight = -11; /* - ((8 * GetDeviceCaps(hdc, LOGPIXELSY)) / 72) */
-    lf.lfWeight = FW_BOLD;
-    wcscpy(lf.lfFaceName, TEXT("Tahoma"));
-
-    return hf = CreateFontIndirect(&lf);
-}
-
-static void make_dialog_full_screen(HWND hwnd)
-{
-    SHINITDLGINFO shidi;
-
-    /* Make dialog full screen */
-    shidi.dwMask = SHIDIM_FLAGS;
-    shidi.dwFlags = SHIDIF_DONEBUTTON | SHIDIF_SIZEDLGFULLSCREEN |
-                    SHIDIF_EMPTYMENU;
-    shidi.hDlg = hwnd;
-    SHInitDialog(&shidi);
-}
-#endif
-
 static int CALLBACK AboutDlgProc(HWND hwnd, UINT msg,
 				 WPARAM wParam, LPARAM lParam)
 {
-    frontend *fe = (frontend *)GetWindowLong(hwnd, GWL_USERDATA);
+    frontend *fe = (frontend *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
     switch (msg) {
       case WM_INITDIALOG:
-#ifdef _WIN32_WCE
-	{
-	    char title[256];
-
-	    make_dialog_full_screen(hwnd);
-
-	    sprintf(title, "About %.250s", fe->game->name);
-	    SetDlgItemTextA(hwnd, IDC_ABOUT_CAPTION, title);
-
-	    SendDlgItemMessage(hwnd, IDC_ABOUT_CAPTION, WM_SETFONT,
-			       (WPARAM) dialog_title_font(), 0);
-
-	    SetDlgItemTextA(hwnd, IDC_ABOUT_GAME, fe->game->name);
-	    SetDlgItemTextA(hwnd, IDC_ABOUT_VERSION, ver);
-	}
-#endif
-	return TRUE;
+	return 1;
 
       case WM_COMMAND:
 	if (LOWORD(wParam) == IDOK)
-#ifdef _WIN32_WCE
-	    EndDialog(hwnd, 1);
-#else
 	    fe->dlg_done = 1;
-#endif
 	return 0;
 
       case WM_CLOSE:
-#ifdef _WIN32_WCE
-	EndDialog(hwnd, 1);
-#else
 	fe->dlg_done = 1;
-#endif
 	return 0;
     }
 
@@ -2026,52 +1817,43 @@ static config_item *frontend_get_config(frontend *fe, int which,
 
 	ret[i].name = "Number of puzzles to print";
 	ret[i].type = C_STRING;
-	ret[i].sval = dupstr("1");
-	ret[i].ival = 0;
+	ret[i].u.string.sval = dupstr("1");
 	i++;
 
 	ret[i].name = "Number of puzzles across the page";
 	ret[i].type = C_STRING;
-	ret[i].sval = dupstr("1");
-	ret[i].ival = 0;
+	ret[i].u.string.sval = dupstr("1");
 	i++;
 
 	ret[i].name = "Number of puzzles down the page";
 	ret[i].type = C_STRING;
-	ret[i].sval = dupstr("1");
-	ret[i].ival = 0;
+	ret[i].u.string.sval = dupstr("1");
 	i++;
 
 	ret[i].name = "Percentage of standard size";
 	ret[i].type = C_STRING;
-	ret[i].sval = dupstr("100.0");
-	ret[i].ival = 0;
+	ret[i].u.string.sval = dupstr("100.0");
 	i++;
 
 	ret[i].name = "Include currently shown puzzle";
 	ret[i].type = C_BOOLEAN;
-	ret[i].sval = NULL;
-	ret[i].ival = TRUE;
+	ret[i].u.boolean.bval = true;
 	i++;
 
 	ret[i].name = "Print solutions";
 	ret[i].type = C_BOOLEAN;
-	ret[i].sval = NULL;
-	ret[i].ival = FALSE;
+	ret[i].u.boolean.bval = false;
 	i++;
 
 	if (fe->game->can_print_in_colour) {
 	    ret[i].name = "Print in colour";
 	    ret[i].type = C_BOOLEAN;
-	    ret[i].sval = NULL;
-	    ret[i].ival = FALSE;
+	    ret[i].u.boolean.bval = false;
 	    i++;
 	}
 
 	ret[i].name = NULL;
 	ret[i].type = C_END;
-	ret[i].sval = NULL;
-	ret[i].ival = 0;
 	i++;
 
 	return ret;
@@ -2081,22 +1863,24 @@ static config_item *frontend_get_config(frontend *fe, int which,
     }
 }
 
-static char *frontend_set_config(frontend *fe, int which, config_item *cfg)
+static const char *frontend_set_config(
+    frontend *fe, int which, config_item *cfg)
 {
     if (which < CFG_FRONTEND_SPECIFIC) {
 	return midend_set_config(fe->me, which, cfg);
     } else if (which == CFG_PRINT) {
-	if ((fe->printcount = atoi(cfg[0].sval)) <= 0)
+	if ((fe->printcount = atoi(cfg[0].u.string.sval)) <= 0)
 	    return "Number of puzzles to print should be at least one";
-	if ((fe->printw = atoi(cfg[1].sval)) <= 0)
+	if ((fe->printw = atoi(cfg[1].u.string.sval)) <= 0)
 	    return "Number of puzzles across the page should be at least one";
-	if ((fe->printh = atoi(cfg[2].sval)) <= 0)
+	if ((fe->printh = atoi(cfg[2].u.string.sval)) <= 0)
 	    return "Number of puzzles down the page should be at least one";
-	if ((fe->printscale = (float)atof(cfg[3].sval)) <= 0)
+	if ((fe->printscale = (float)atof(cfg[3].u.string.sval)) <= 0)
 	    return "Print size should be positive";
-	fe->printcurr = cfg[4].ival;
-	fe->printsolns = cfg[5].ival;
-	fe->printcolour = fe->game->can_print_in_colour && cfg[6].ival;
+	fe->printcurr = cfg[4].u.boolean.bval;
+	fe->printsolns = cfg[5].u.boolean.bval;
+	fe->printcolour = fe->game->can_print_in_colour &&
+            cfg[6].u.boolean.bval;
 	return NULL;
     } else {
 	assert(!"We should never get here");
@@ -2104,146 +1888,16 @@ static char *frontend_set_config(frontend *fe, int which, config_item *cfg)
     }
 }
 
-#ifdef _WIN32_WCE
-/* Separate version of mkctrl function for the Pocket PC. */
-/* Control coordinates should be specified in dialog units. */
-HWND mkctrl(frontend *fe, int x1, int x2, int y1, int y2,
-	    LPCTSTR wclass, int wstyle,
-	    int exstyle, const char *wtext, int wid)
-{
-    RECT rc;
-    TCHAR wwtext[256];
-
-    /* Convert dialog units into pixels */
-    rc.left = x1;  rc.right  = x2;
-    rc.top  = y1;  rc.bottom = y2;
-    MapDialogRect(fe->cfgbox, &rc);
-
-    MultiByteToWideChar (CP_ACP, 0, wtext, -1, wwtext, 256);
-
-    return CreateWindowEx(exstyle, wclass, wwtext,
-			  wstyle | WS_CHILD | WS_VISIBLE,
-			  rc.left, rc.top,
-			  rc.right - rc.left, rc.bottom - rc.top,
-			  fe->cfgbox, (HMENU) wid, fe->inst, NULL);
-}
-
-static void create_config_controls(frontend * fe)
-{
-    int id, nctrls;
-    int col1l, col1r, col2l, col2r, y;
-    config_item *i;
-    struct cfg_aux *j;
-    HWND ctl;
-
-    /* Control placement done in dialog units */
-    col1l = 4;   col1r = 96;   /* Label column */
-    col2l = 100; col2r = 154;  /* Input column (edit boxes and combo boxes) */
-
-    /*
-     * Count the controls so we can allocate cfgaux.
-     */
-    for (nctrls = 0, i = fe->cfg; i->type != C_END; i++)
-	nctrls++;
-    fe->cfgaux = snewn(nctrls, struct cfg_aux);
-
-    id = 1000;
-    y = 22; /* Leave some room for the dialog title */
-    for (i = fe->cfg, j = fe->cfgaux; i->type != C_END; i++, j++) {
-	switch (i->type) {
-	  case C_STRING:
-	    /*
-	     * Edit box with a label beside it.
-	     */
-	    mkctrl(fe, col1l, col1r, y + 1, y + 11,
-		   TEXT("Static"), SS_LEFTNOWORDWRAP, 0, i->name, id++);
-	    mkctrl(fe, col2l, col2r, y, y + 12,
-		   TEXT("EDIT"), WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
-		   0, "", (j->ctlid = id++));
-	    SetDlgItemTextA(fe->cfgbox, j->ctlid, i->sval);
-	    break;
-
-	  case C_BOOLEAN:
-	    /*
-	     * Simple checkbox.
-	     */
-	    mkctrl(fe, col1l, col2r, y + 1, y + 11, TEXT("BUTTON"),
-		   BS_NOTIFY | BS_AUTOCHECKBOX | WS_TABSTOP,
-		   0, i->name, (j->ctlid = id++));
-	    CheckDlgButton(fe->cfgbox, j->ctlid, (i->ival != 0));
-	    break;
-
-	  case C_CHOICES:
-	    /*
-	     * Drop-down list with a label beside it.
-	     */
-	    mkctrl(fe, col1l, col1r, y + 1, y + 11,
-		   TEXT("STATIC"), SS_LEFTNOWORDWRAP, 0, i->name, id++);
-	    ctl = mkctrl(fe, col2l, col2r, y, y + 48,
-			 TEXT("COMBOBOX"), WS_BORDER | WS_TABSTOP |
-			 CBS_DROPDOWNLIST | CBS_HASSTRINGS,
-			 0, "", (j->ctlid = id++));
-	    {
-		char c, *p, *q, *str;
-
-		p = i->sval;
-		c = *p++;
-		while (*p) {
-		    q = p;
-		    while (*q && *q != c) q++;
-		    str = snewn(q-p+1, char);
-		    strncpy(str, p, q-p);
-		    str[q-p] = '\0';
-		    {
-			TCHAR ws[50];
-			MultiByteToWideChar (CP_ACP, 0, str, -1, ws, 50);
-			SendMessage(ctl, CB_ADDSTRING, 0, (LPARAM)ws);
-		    }
-		    
-		    sfree(str);
-		    if (*q) q++;
-		    p = q;
-		}
-	    }
-	    SendMessage(ctl, CB_SETCURSEL, i->ival, 0);
-	    break;
-	}
-
-	y += 15;
-    }
-
-}
-#endif
-
 static int CALLBACK ConfigDlgProc(HWND hwnd, UINT msg,
 				  WPARAM wParam, LPARAM lParam)
 {
-    frontend *fe = (frontend *)GetWindowLong(hwnd, GWL_USERDATA);
+    frontend *fe = (frontend *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
     config_item *i;
     struct cfg_aux *j;
 
     switch (msg) {
       case WM_INITDIALOG:
-#ifdef _WIN32_WCE
-	{
-            char *title;
-
-	    fe = (frontend *) lParam;
-	    SetWindowLong(hwnd, GWL_USERDATA, lParam);
-	    fe->cfgbox = hwnd;
-
-            fe->cfg = frontend_get_config(fe, fe->cfg_which, &title);
-
-    	    make_dialog_full_screen(hwnd);
-
-	    SetDlgItemTextA(hwnd, IDC_CONFIG_CAPTION, title);
-	    SendDlgItemMessage(hwnd, IDC_CONFIG_CAPTION, WM_SETFONT,
-			       (WPARAM) dialog_title_font(), 0);
-
-	    create_config_controls(fe);
-	}
-#endif
-	return TRUE;
+	return 1;
 
       case WM_COMMAND:
 	/*
@@ -2251,24 +1905,17 @@ static int CALLBACK ConfigDlgProc(HWND hwnd, UINT msg,
 	 */
 	if ((LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)) {
 	    if (LOWORD(wParam) == IDOK) {
-		char *err = frontend_set_config(fe, fe->cfg_which, fe->cfg);
+		const char *err = frontend_set_config(
+                    fe, fe->cfg_which, fe->cfg);
 
 		if (err) {
 		    MessageBox(hwnd, err, "Validation error",
 			       MB_ICONERROR | MB_OK);
 		} else {
-#ifdef _WIN32_WCE
-		    EndDialog(hwnd, 2);
-#else
 		    fe->dlg_done = 2;
-#endif
 		}
 	    } else {
-#ifdef _WIN32_WCE
-		EndDialog(hwnd, 1);
-#else
 		fe->dlg_done = 1;
-#endif
 	    }
 	    return 0;
 	}
@@ -2285,24 +1932,18 @@ static int CALLBACK ConfigDlgProc(HWND hwnd, UINT msg,
 
 	if (i->type == C_STRING && HIWORD(wParam) == EN_CHANGE) {
 	    char buffer[4096];
-#ifdef _WIN32_WCE
-	    TCHAR wBuffer[4096];
-	    GetDlgItemText(fe->cfgbox, j->ctlid, wBuffer, 4096);
-	    WideCharToMultiByte(CP_ACP, 0, wBuffer, -1, buffer, 4096, NULL, NULL);
-#else
 	    GetDlgItemText(fe->cfgbox, j->ctlid, buffer, lenof(buffer));
-#endif
 	    buffer[lenof(buffer)-1] = '\0';
-	    sfree(i->sval);
-	    i->sval = dupstr(buffer);
+	    sfree(i->u.string.sval);
+	    i->u.string.sval = dupstr(buffer);
 	} else if (i->type == C_BOOLEAN && 
 		   (HIWORD(wParam) == BN_CLICKED ||
 		    HIWORD(wParam) == BN_DBLCLK)) {
-	    i->ival = IsDlgButtonChecked(fe->cfgbox, j->ctlid);
+	    i->u.boolean.bval = IsDlgButtonChecked(fe->cfgbox, j->ctlid);
 	} else if (i->type == C_CHOICES &&
 		   HIWORD(wParam) == CBN_SELCHANGE) {
-	    i->ival = SendDlgItemMessage(fe->cfgbox, j->ctlid,
-					 CB_GETCURSEL, 0, 0);
+	    i->u.choices.selected = SendDlgItemMessage(fe->cfgbox, j->ctlid,
+                                                       CB_GETCURSEL, 0, 0);
 	}
 
 	return 0;
@@ -2315,25 +1956,20 @@ static int CALLBACK ConfigDlgProc(HWND hwnd, UINT msg,
     return 0;
 }
 
-#ifndef _WIN32_WCE
 HWND mkctrl(frontend *fe, int x1, int x2, int y1, int y2,
 	    char *wclass, int wstyle,
-	    int exstyle, const char *wtext, int wid)
+	    int exstyle, const char *wtext, INT_PTR wid)
 {
     HWND ret;
     ret = CreateWindowEx(exstyle, wclass, wtext,
 			 wstyle | WS_CHILD | WS_VISIBLE, x1, y1, x2-x1, y2-y1,
 			 fe->cfgbox, (HMENU) wid, fe->inst, NULL);
-    SendMessage(ret, WM_SETFONT, (WPARAM)fe->cfgfont, MAKELPARAM(TRUE, 0));
+    SendMessage(ret, WM_SETFONT, (WPARAM)fe->cfgfont, MAKELPARAM(true, 0));
     return ret;
 }
-#endif
 
 static void about(frontend *fe)
 {
-#ifdef _WIN32_WCE
-    DialogBox(fe->inst, MAKEINTRESOURCE(IDD_ABOUT), fe->hwnd, AboutDlgProc);
-#else
     int i;
     WNDCLASS wc;
     MSG msg;
@@ -2370,11 +2006,11 @@ static void about(frontend *fe)
     hdc = GetDC(fe->hwnd);
     SetMapMode(hdc, MM_TEXT);
 
-    fe->dlg_done = FALSE;
+    fe->dlg_done = 0;
 
     fe->cfgfont = CreateFont(-MulDiv(8, GetDeviceCaps(hdc, LOGPIXELSY), 72),
 			     0, 0, 0, 0,
-			     FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+			     false, false, false, DEFAULT_CHARSET,
 			     OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
 			     DEFAULT_QUALITY,
 			     FF_SWISS,
@@ -2425,7 +2061,7 @@ static void about(frontend *fe)
 				DS_MODALFRAME | WS_POPUP | WS_VISIBLE |
 				WS_CAPTION | WS_SYSMENU*/) &~
 			   (WS_MAXIMIZEBOX | WS_OVERLAPPED),
-			   FALSE, 0);
+			   false, 0);
 
 	/*
 	 * Centre the dialog on its parent window.
@@ -2446,10 +2082,10 @@ static void about(frontend *fe)
 				    fe->hwnd, NULL, fe->inst, NULL);
     }
 
-    SendMessage(fe->cfgbox, WM_SETFONT, (WPARAM)fe->cfgfont, FALSE);
+    SendMessage(fe->cfgbox, WM_SETFONT, (WPARAM)fe->cfgfont, false);
 
-    SetWindowLong(fe->cfgbox, GWL_USERDATA, (LONG)fe);
-    SetWindowLong(fe->cfgbox, DWL_DLGPROC, (LONG)AboutDlgProc);
+    SetWindowLongPtr(fe->cfgbox, GWLP_USERDATA, (LONG_PTR)fe);
+    SetWindowLongPtr(fe->cfgbox, DWLP_DLGPROC, (LONG_PTR)AboutDlgProc);
 
     id = 1000;
     y = height/2;
@@ -2470,7 +2106,7 @@ static void about(frontend *fe)
 
     SendMessage(fe->cfgbox, WM_INITDIALOG, 0, 0);
 
-    EnableWindow(fe->hwnd, FALSE);
+    EnableWindow(fe->hwnd, false);
     ShowWindow(fe->cfgbox, SW_SHOWNORMAL);
     while ((gm=GetMessage(&msg, NULL, 0, 0)) > 0) {
 	if (!IsDialogMessage(fe->cfgbox, &msg))
@@ -2478,23 +2114,14 @@ static void about(frontend *fe)
 	if (fe->dlg_done)
 	    break;
     }
-    EnableWindow(fe->hwnd, TRUE);
+    EnableWindow(fe->hwnd, true);
     SetForegroundWindow(fe->hwnd);
     DestroyWindow(fe->cfgbox);
     DeleteObject(fe->cfgfont);
-#endif
 }
 
-static int get_config(frontend *fe, int which)
+static bool get_config(frontend *fe, int which)
 {
-#ifdef _WIN32_WCE
-    fe->cfg_which = which;
-
-    return DialogBoxParam(fe->inst,
-			  MAKEINTRESOURCE(IDD_CONFIG),
-			  fe->hwnd, ConfigDlgProc,
-			  (LPARAM) fe) == 2;
-#else
     config_item *i;
     struct cfg_aux *j;
     char *title;
@@ -2524,11 +2151,11 @@ static int get_config(frontend *fe, int which)
     hdc = GetDC(fe->hwnd);
     SetMapMode(hdc, MM_TEXT);
 
-    fe->dlg_done = FALSE;
+    fe->dlg_done = 0;
 
     fe->cfgfont = CreateFont(-MulDiv(8, GetDeviceCaps(hdc, LOGPIXELSY), 72),
 			     0, 0, 0, 0,
-			     FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+			     false, false, false, DEFAULT_CHARSET,
 			     OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
 			     DEFAULT_QUALITY,
 			     FF_SWISS,
@@ -2605,7 +2232,7 @@ static int get_config(frontend *fe, int which)
 				DS_MODALFRAME | WS_POPUP | WS_VISIBLE |
 				WS_CAPTION | WS_SYSMENU*/) &~
 			   (WS_MAXIMIZEBOX | WS_OVERLAPPED),
-			   FALSE, 0);
+			   false, 0);
 
 	/*
 	 * Centre the dialog on its parent window.
@@ -2627,10 +2254,10 @@ static int get_config(frontend *fe, int which)
 	sfree(title);
     }
 
-    SendMessage(fe->cfgbox, WM_SETFONT, (WPARAM)fe->cfgfont, FALSE);
+    SendMessage(fe->cfgbox, WM_SETFONT, (WPARAM)fe->cfgfont, false);
 
-    SetWindowLong(fe->cfgbox, GWL_USERDATA, (LONG)fe);
-    SetWindowLong(fe->cfgbox, DWL_DLGPROC, (LONG)ConfigDlgProc);
+    SetWindowLongPtr(fe->cfgbox, GWLP_USERDATA, (LONG_PTR)fe);
+    SetWindowLongPtr(fe->cfgbox, DWLP_DLGPROC, (LONG_PTR)ConfigDlgProc);
 
     /*
      * Count the controls so we can allocate cfgaux.
@@ -2652,7 +2279,7 @@ static int get_config(frontend *fe, int which)
 	    ctl = mkctrl(fe, col2l, col2r, y, y+height*3/2,
 			 "EDIT", WS_TABSTOP | ES_AUTOHSCROLL,
 			 WS_EX_CLIENTEDGE, "", (j->ctlid = id++));
-	    SetWindowText(ctl, i->sval);
+	    SetWindowText(ctl, i->u.string.sval);
 	    y += height*3/2;
 	    break;
 
@@ -2663,7 +2290,7 @@ static int get_config(frontend *fe, int which)
 	    mkctrl(fe, col1l, col2r, y, y+height, "BUTTON",
 		   BS_NOTIFY | BS_AUTOCHECKBOX | WS_TABSTOP,
 		   0, i->name, (j->ctlid = id++));
-	    CheckDlgButton(fe->cfgbox, j->ctlid, (i->ival != 0));
+	    CheckDlgButton(fe->cfgbox, j->ctlid, i->u.boolean.bval);
 	    y += height;
 	    break;
 
@@ -2678,10 +2305,12 @@ static int get_config(frontend *fe, int which)
 			 CBS_DROPDOWNLIST | CBS_HASSTRINGS,
 			 WS_EX_CLIENTEDGE, "", (j->ctlid = id++));
 	    {
-		char c, *p, *q, *str;
+		char c;
+                const char *p, *q;
+                char *str;
 
 		SendMessage(ctl, CB_RESETCONTENT, 0, 0);
-		p = i->sval;
+		p = i->u.choices.choicenames;
 		c = *p++;
 		while (*p) {
 		    q = p;
@@ -2696,7 +2325,7 @@ static int get_config(frontend *fe, int which)
 		}
 	    }
 
-	    SendMessage(ctl, CB_SETCURSEL, i->ival, 0);
+	    SendMessage(ctl, CB_SETCURSEL, i->u.choices.selected, 0);
 
 	    y += height*3/2;
 	    break;
@@ -2715,7 +2344,7 @@ static int get_config(frontend *fe, int which)
 
     SendMessage(fe->cfgbox, WM_INITDIALOG, 0, 0);
 
-    EnableWindow(fe->hwnd, FALSE);
+    EnableWindow(fe->hwnd, false);
     ShowWindow(fe->cfgbox, SW_SHOWNORMAL);
     while ((gm=GetMessage(&msg, NULL, 0, 0)) > 0) {
 	if (!IsDialogMessage(fe->cfgbox, &msg))
@@ -2723,7 +2352,7 @@ static int get_config(frontend *fe, int which)
 	if (fe->dlg_done)
 	    break;
     }
-    EnableWindow(fe->hwnd, TRUE);
+    EnableWindow(fe->hwnd, true);
     SetForegroundWindow(fe->hwnd);
     DestroyWindow(fe->cfgbox);
     DeleteObject(fe->cfgfont);
@@ -2732,38 +2361,8 @@ static int get_config(frontend *fe, int which)
     sfree(fe->cfgaux);
 
     return (fe->dlg_done == 2);
-#endif
 }
 
-#ifdef _WIN32_WCE
-static void calculate_bitmap_position(frontend *fe, int x, int y)
-{
-    /* Pocket PC - center the game in the full screen window */
-    int yMargin;
-    RECT rcClient;
-
-    GetClientRect(fe->hwnd, &rcClient);
-    fe->bitmapPosition.left = (rcClient.right  - x) / 2;
-    yMargin = rcClient.bottom - y;
-
-    if (fe->numpad != NULL) {
-	RECT rcPad;
-	GetWindowRect(fe->numpad, &rcPad);
-	yMargin -= rcPad.bottom - rcPad.top;
-    }
-
-    if (fe->statusbar != NULL) {
-	RECT rcStatus;
-	GetWindowRect(fe->statusbar, &rcStatus);
-	yMargin -= rcStatus.bottom - rcStatus.top;
-    }
-
-    fe->bitmapPosition.top = yMargin / 2;
-
-    fe->bitmapPosition.right  = fe->bitmapPosition.left + x;
-    fe->bitmapPosition.bottom = fe->bitmapPosition.top  + y;
-}
-#else
 static void calculate_bitmap_position(frontend *fe, int x, int y)
 {
     /* Plain Windows - position the game in the upper-left corner */
@@ -2772,7 +2371,6 @@ static void calculate_bitmap_position(frontend *fe, int x, int y)
     fe->bitmapPosition.right  = fe->bitmapPosition.left + x;
     fe->bitmapPosition.bottom = fe->bitmapPosition.top  + y;
 }
-#endif
 
 static void new_bitmap(frontend *fe, int x, int y)
 {
@@ -2792,45 +2390,38 @@ static void new_game_size(frontend *fe, float scale)
     int x, y;
 
     get_max_puzzle_size(fe, &x, &y);
-    midend_size(fe->me, &x, &y, FALSE);
+    midend_size(fe->me, &x, &y, false, 1.0);
 
     if (scale != 1.0) {
-      x = (int)((float)x * fe->puzz_scale);
-      y = (int)((float)y * fe->puzz_scale);
-      midend_size(fe->me, &x, &y, TRUE);
+        x = (int)((float)x * fe->puzz_scale);
+        y = (int)((float)y * fe->puzz_scale);
+        midend_size(fe->me, &x, &y, true, 1.0);
     }
     fe->ymin = (fe->xmin * y) / x;
 
     r.left = r.top = 0;
     r.right = x;
     r.bottom = y;
-    AdjustWindowRectEx(&r, WINFLAGS, TRUE, 0);
+    AdjustWindowRectEx(&r, WINFLAGS, true, 0);
 
     if (fe->statusbar != NULL) {
 	GetWindowRect(fe->statusbar, &sr);
     } else {
 	sr.left = sr.right = sr.top = sr.bottom = 0;
     }
-#ifndef _WIN32_WCE
     SetWindowPos(fe->hwnd, NULL, 0, 0,
 		 r.right - r.left,
 		 r.bottom - r.top + sr.bottom - sr.top,
 		 SWP_NOMOVE | SWP_NOZORDER);
-#endif
 
     check_window_size(fe, &x, &y);
 
-#ifndef _WIN32_WCE
     if (fe->statusbar != NULL)
 	SetWindowPos(fe->statusbar, NULL, 0, y, x,
 		     sr.bottom - sr.top, SWP_NOZORDER);
-#endif
 
     new_bitmap(fe, x, y);
 
-#ifdef _WIN32_WCE
-    InvalidateRect(fe->hwnd, NULL, TRUE);
-#endif
     midend_redraw(fe->me);
 }
 
@@ -2841,7 +2432,7 @@ static void new_game_size(frontend *fe, float scale)
  * new window size.
  */
 
-static void adjust_game_size(frontend *fe, RECT *proposed, int isedge,
+static void adjust_game_size(frontend *fe, RECT *proposed, bool isedge,
                              int *wx_r, int *wy_r)
 {
     RECT cr, wr;
@@ -2851,19 +2442,19 @@ static void adjust_game_size(frontend *fe, RECT *proposed, int isedge,
      * difference in size we're asking for. */
     GetClientRect(fe->hwnd, &cr);
     wr = cr;
-    AdjustWindowRectEx(&wr, WINFLAGS, TRUE, 0);
+    AdjustWindowRectEx(&wr, WINFLAGS, true, 0);
 
     xdiff = (proposed->right - proposed->left) - (wr.right - wr.left);
     ydiff = (proposed->bottom - proposed->top) - (wr.bottom - wr.top);
 
     if (isedge) {
-      /* These next four lines work around the fact that midend_size
-       * is happy to shrink _but not grow_ if you change one dimension
-       * but not the other. */
-      if (xdiff > 0 && ydiff == 0)
-        ydiff = (xdiff * (wr.right - wr.left)) / (wr.bottom - wr.top);
-      if (xdiff == 0 && ydiff > 0)
-        xdiff = (ydiff * (wr.bottom - wr.top)) / (wr.right - wr.left);
+        /* These next four lines work around the fact that midend_size
+         * is happy to shrink _but not grow_ if you change one dimension
+         * but not the other. */
+        if (xdiff > 0 && ydiff == 0)
+            ydiff = (xdiff * (wr.right - wr.left)) / (wr.bottom - wr.top);
+        if (xdiff == 0 && ydiff > 0)
+            xdiff = (ydiff * (wr.bottom - wr.top)) / (wr.right - wr.left);
     }
 
     if (check_window_resize(fe,
@@ -2892,17 +2483,157 @@ static void update_type_menu_tick(frontend *fe)
     if (fe->typemenu == INVALID_HANDLE_VALUE)
 	return;
 
-    total = GetMenuItemCount(fe->typemenu);
     n = midend_which_preset(fe->me);
-    if (n < 0)
-	n = total - 1;		       /* "Custom" item */
 
-    for (i = 0; i < total; i++) {
-	int flag = (i == n ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(fe->typemenu, i, MF_BYPOSITION | flag);
+    for (i = 0; i < fe->n_preset_menuitems; i++) {
+        if (fe->preset_menuitems[i].which_menu) {
+            int flag = (i == n ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(fe->preset_menuitems[i].which_menu,
+                          fe->preset_menuitems[i].item_index,
+                          MF_BYPOSITION | flag);
+        }
+    }
+
+    if (fe->game->can_configure) {
+	int flag = (n < 0 ? MF_CHECKED : MF_UNCHECKED);
+        /* "Custom" menu item is at the bottom of the top-level Type menu */
+        total = GetMenuItemCount(fe->typemenu);
+	CheckMenuItem(fe->typemenu, total - 1, MF_BYPOSITION | flag);
     }
 
     DrawMenuBar(fe->hwnd);
+}
+
+static char *prefs_dir(void)
+{
+    const char *var;
+    if ((var = getenv("APPDATA")) != NULL) {
+        size_t size = strlen(var) + 80;
+        char *dir = snewn(size, char);
+        sprintf(dir, "%s\\Simon Tatham's Portable Puzzle Collection", var);
+        return dir;
+    }
+    return NULL;
+}
+
+static char *prefs_path_general(const game *game, const char *suffix)
+{
+    char *dir, *path;
+
+    dir = prefs_dir();
+    if (!dir)
+        return NULL;
+
+    path = make_prefs_path(dir, "\\", game, suffix);
+
+    sfree(dir);
+    return path;
+}
+
+static char *prefs_path(const game *game)
+{
+    return prefs_path_general(game, ".conf");
+}
+
+static char *prefs_tmp_path(const game *game)
+{
+    return prefs_path_general(game, ".tmp");
+}
+
+static void load_prefs(midend *me)
+{
+    const game *game = midend_which_game(me);
+    char *path = prefs_path(game);
+    if (!path)
+        return;
+    FILE *fp = fopen(path, "r");
+    if (!fp)
+        return;
+    const char *err = midend_load_prefs(me, savefile_read, fp);
+    fclose(fp);
+    if (err)
+        fprintf(stderr, "Unable to load preferences file %s:\n%s\n",
+                path, err);
+    sfree(path);
+}
+
+static char *save_prefs(midend *me)
+{
+    const game *game = midend_which_game(me);
+    char *dir_path = prefs_dir();
+    char *file_path = prefs_path(game);
+    char *tmp_path = prefs_tmp_path(game);
+    HANDLE fh;
+    FILE *fp;
+    bool cleanup_dir = false, cleanup_tmpfile = false;
+    char *err = NULL;
+
+    if (!dir_path || !file_path || !tmp_path) {
+        sprintf(err = snewn(256, char),
+                "Unable to save preferences:\n"
+                "Could not determine pathname for configuration files");
+        goto out;
+    }
+
+    if (!CreateDirectory(dir_path, NULL)) {
+        /* Ignore errors while trying to make the directory. It may
+         * well already exist, and even if we got some error code
+         * other than EEXIST, it's still worth at least _trying_ to
+         * make the file inside it, and see if that goes wrong. */
+    } else {
+        cleanup_dir = true;
+    }
+
+    fh = CreateFile(tmp_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                    FILE_ATTRIBUTE_NORMAL, NULL);
+    if (fh == INVALID_HANDLE_VALUE) {
+        char *os_err = geterrstr();
+        sprintf(err = snewn(256 + strlen(tmp_path) + strlen(os_err), char),
+                "Unable to save preferences:\n"
+                "Unable to create file '%s':\n%s", tmp_path, os_err);
+        sfree(os_err);
+        goto out;
+    } else {
+        cleanup_tmpfile = true;
+    }
+
+    fp = _fdopen(_open_osfhandle((intptr_t)fh, 0), "w");
+    SetLastError(0);
+    midend_save_prefs(me, savefile_write, fp);
+    fclose(fp);
+    if (GetLastError()) {
+        char *os_err = geterrstr();
+        sprintf(err = snewn(80 + strlen(tmp_path) + strlen(os_err), char),
+                "Unable to write file '%s':\n%s", tmp_path, os_err);
+        sfree(os_err);
+        goto out;
+    }
+
+    if (MoveFileEx(tmp_path, file_path, MOVEFILE_REPLACE_EXISTING) < 0) {
+        char *os_err = geterrstr();
+        sprintf(err = snewn(256 + strlen(tmp_path) + strlen(file_path) +
+                            strlen(os_err), char),
+                "Unable to save preferences:\n"
+                "Unable to rename '%s' to '%s':\n%s", tmp_path, file_path,
+                os_err);
+        sfree(os_err);
+        goto out;
+    } else {
+        cleanup_dir = false;
+        cleanup_tmpfile = false;
+    }
+
+  out:
+    if (cleanup_tmpfile) {
+        if (!DeleteFile(tmp_path)) { /* can't do anything about this */ }
+    }
+    if (cleanup_dir) {
+        if (!RemoveDirectory(dir_path)) { /* can't do anything about this */ }
+    }
+    sfree(dir_path);
+    sfree(file_path);
+    sfree(tmp_path);
+    return err;
 }
 
 static void update_copy_menu_greying(frontend *fe)
@@ -2920,23 +2651,23 @@ static void new_game_type(frontend *fe)
     update_copy_menu_greying(fe);
 }
 
-static int is_alt_pressed(void)
+static bool is_alt_pressed(void)
 {
     BYTE keystate[256];
     int r = GetKeyboardState(keystate);
     if (!r)
-	return FALSE;
+	return false;
     if (keystate[VK_MENU] & 0x80)
-	return TRUE;
+	return true;
     if (keystate[VK_RMENU] & 0x80)
-	return TRUE;
-    return FALSE;
+	return true;
+    return false;
 }
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 				WPARAM wParam, LPARAM lParam)
 {
-    frontend *fe = (frontend *)GetWindowLong(hwnd, GWL_USERDATA);
+    frontend *fe = (frontend *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
     int cmd;
 
     switch (message) {
@@ -2944,28 +2675,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	DestroyWindow(hwnd);
 	return 0;
       case WM_COMMAND:
-#ifdef _WIN32_WCE
-	/* Numeric pad sends WM_COMMAND messages */
-	if ((wParam >= IDM_KEYEMUL) && (wParam < IDM_KEYEMUL + 256))
-	{
-	    midend_process_key(fe->me, 0, 0, wParam - IDM_KEYEMUL);
-	}
-#endif
 	cmd = wParam & ~0xF;	       /* low 4 bits reserved to Windows */
 	switch (cmd) {
 	  case IDM_NEW:
-	    if (!midend_process_key(fe->me, 0, 0, 'n'))
+	    if (midend_process_key(fe->me, 0, 0, UI_NEWGAME) == PKR_QUIT)
 		PostQuitMessage(0);
 	    break;
 	  case IDM_RESTART:
 	    midend_restart_game(fe->me);
 	    break;
 	  case IDM_UNDO:
-	    if (!midend_process_key(fe->me, 0, 0, 'u'))
+	    if (midend_process_key(fe->me, 0, 0, UI_UNDO) == PKR_QUIT)
 		PostQuitMessage(0);
 	    break;
 	  case IDM_REDO:
-	    if (!midend_process_key(fe->me, 0, 0, '\x12'))
+	    if (midend_process_key(fe->me, 0, 0, UI_REDO) == PKR_QUIT)
 		PostQuitMessage(0);
 	    break;
 	  case IDM_COPY:
@@ -2980,14 +2704,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    break;
 	  case IDM_SOLVE:
 	    {
-		char *msg = midend_solve(fe->me);
+		const char *msg = midend_solve(fe->me);
 		if (msg)
 		    MessageBox(hwnd, msg, "Unable to solve",
 			       MB_ICONERROR | MB_OK);
 	    }
 	    break;
 	  case IDM_QUIT:
-	    if (!midend_process_key(fe->me, 0, 0, 'q'))
+	    if (midend_process_key(fe->me, 0, 0, UI_QUIT) == PKR_QUIT)
 		PostQuitMessage(0);
 	    break;
 	  case IDM_CONFIG:
@@ -3005,6 +2729,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	  case IDM_PRINT:
 	    if (get_config(fe, CFG_PRINT))
 		print(fe);
+	    break;
+	  case IDM_PREFS:
+	    if (get_config(fe, CFG_PREFS)) {
+                char *prefs_err = save_prefs(fe->me);
+                if (prefs_err) {
+                    MessageBox(fe->hwnd, prefs_err, "Error saving preferences",
+                               MB_ICONERROR | MB_OK);
+                    sfree(prefs_err);
+                }
+            }
 	    break;
           case IDM_ABOUT:
 	    about(fe);
@@ -3072,7 +2806,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 			fclose(fp);
 		    } else {
 			FILE *fp = fopen(filename, "r");
-			char *err = NULL;
+			const char *err = NULL;
+                        char *err_w = NULL;
                         midend *me = fe->me;
 #ifdef COMBINED
                         char *id_name;
@@ -3100,7 +2835,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
                                     "supported by this program";
                             } else {
                                 me = midend_for_new_game(fe, gamelist[i], NULL,
-                                                         FALSE, FALSE, &err);
+                                                         false, false, &err_w);
+                                err = err_w;
                                 rewind(fp); /* for the actual load */
                             }
                             sfree(id_name);
@@ -3113,6 +2849,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 
 			if (err) {
 			    MessageBox(hwnd, err, "Error", MB_ICONERROR|MB_OK);
+                            sfree(err_w);
 			    break;
 			}
 
@@ -3124,7 +2861,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    }
 
 	    break;
-#ifndef _WIN32_WCE
           case IDM_HELPC:
 	    start_help(fe, NULL);
 	    break;
@@ -3133,32 +2869,38 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    start_help(fe, help_type == CHM ?
                        fe->game->htmlhelp_topic : fe->game->winhelp_topic);
             break;
-#endif
-	  default:
-#ifdef COMBINED
-            if (wParam >= IDM_GAMES && wParam < (IDM_GAMES + (WPARAM)gamecount)) {
-                int p = wParam - IDM_GAMES;
-                char *error = NULL;
-                fe_set_midend(fe, midend_for_new_game(fe, gamelist[p], NULL,
-                                                      FALSE, FALSE, &error));
-                sfree(error);
-            } else
-#endif
-	    {
-		int p = ((wParam &~ 0xF) - IDM_PRESETS) / 0x10;
+	  default: {
+            unsigned n;
 
-		if (p >= 0 && p < fe->npresets) {
-		    midend_set_params(fe->me, fe->presets[p]);
+#ifdef COMBINED
+            n = (wParam - IDM_GAME_BASE) / MENUITEM_STEP;
+            if (n < gamecount && wParam == IDM_GAME_BASE + MENUITEM_STEP * n) {
+                char *error = NULL;
+                fe_set_midend(fe, midend_for_new_game(fe, gamelist[n], NULL,
+                                                      false, false, &error));
+                sfree(error);
+                break;
+            }
+#endif
+
+            n = (wParam - IDM_PRESET_BASE) / MENUITEM_STEP;
+	    if (wParam == IDM_PRESET_BASE + MENUITEM_STEP * n) {
+                game_params *preset = preset_menu_lookup_by_id(
+                    fe->preset_menu, n);
+
+		if (preset) {
+		    midend_set_params(fe->me, preset);
 		    new_game_type(fe);
+                    break;
 		}
 	    }
-	    break;
+
+            break;
+          }
 	}
 	break;
       case WM_DESTROY:
-#ifndef _WIN32_WCE
 	stop_help(fe);
-#endif
         frontend_free(fe);
         PostQuitMessage(0);
 	return 0;
@@ -3172,9 +2914,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    hdc = BeginPaint(hwnd, &p);
 	    hdc2 = CreateCompatibleDC(hdc);
 	    prevbm = SelectObject(hdc2, fe->bitmap);
-#ifdef _WIN32_WCE
-	    FillRect(hdc, &(p.rcPaint), (HBRUSH) GetStockObject(WHITE_BRUSH));
-#endif
 	    IntersectRect(&rcDest, &(fe->bitmapPosition), &(p.rcPaint));
 	    BitBlt(hdc,
 		   rcDest.left, rcDest.top,
@@ -3259,7 +2998,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    }
 
 	    if (key != -1) {
-		if (!midend_process_key(fe->me, 0, 0, key))
+                if (midend_process_key(fe->me, 0, 0, key) == PKR_QUIT)
 		    PostQuitMessage(0);
 	    } else {
 		MSG m;
@@ -3287,32 +3026,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    else if (message == WM_RBUTTONDOWN || is_alt_pressed())
 		button = RIGHT_BUTTON;
 	    else
-#ifndef _WIN32_WCE
 		button = LEFT_BUTTON;
-#else
-		if ((fe->game->flags & REQUIRE_RBUTTON) == 0)
-		    button = LEFT_BUTTON;
-		else
-		{
-		    SHRGINFO shrgi;
 
-		    shrgi.cbSize     = sizeof(SHRGINFO);
-		    shrgi.hwndClient = hwnd;
-		    shrgi.ptDown.x   = (signed short)LOWORD(lParam);
-		    shrgi.ptDown.y   = (signed short)HIWORD(lParam);
-		    shrgi.dwFlags    = SHRG_RETURNCMD;
-
-		    if (GN_CONTEXTMENU == SHRecognizeGesture(&shrgi))
-			button = RIGHT_BUTTON;
-		    else
-			button = LEFT_BUTTON;
-		}
-#endif
-
-	    if (!midend_process_key(fe->me,
-				    (signed short)LOWORD(lParam) - fe->bitmapPosition.left,
-				    (signed short)HIWORD(lParam) - fe->bitmapPosition.top,
-				    button))
+	    if (midend_process_key(fe->me,
+                                   (signed short)LOWORD(lParam) - fe->bitmapPosition.left,
+                                   (signed short)HIWORD(lParam) - fe->bitmapPosition.top,
+				    button) == PKR_QUIT)
 		PostQuitMessage(0);
 
 	    SetCapture(hwnd);
@@ -3336,10 +3055,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    else
 		button = LEFT_RELEASE;
 
-	    if (!midend_process_key(fe->me,
-				    (signed short)LOWORD(lParam) - fe->bitmapPosition.left,
-				    (signed short)HIWORD(lParam) - fe->bitmapPosition.top,
-				    button))
+	    if (midend_process_key(fe->me,
+                                   (signed short)LOWORD(lParam) - fe->bitmapPosition.left,
+                                   (signed short)HIWORD(lParam) - fe->bitmapPosition.top,
+				    button) == PKR_QUIT)
 		PostQuitMessage(0);
 
 	    ReleaseCapture();
@@ -3356,16 +3075,26 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    else
 		button = LEFT_DRAG;
 	    
-	    if (!midend_process_key(fe->me,
-				    (signed short)LOWORD(lParam) - fe->bitmapPosition.left,
-				    (signed short)HIWORD(lParam) - fe->bitmapPosition.top,
-				    button))
+	    if (midend_process_key(fe->me,
+                                   (signed short)LOWORD(lParam) - fe->bitmapPosition.left,
+                                   (signed short)HIWORD(lParam) - fe->bitmapPosition.top,
+                                   button) == PKR_QUIT)
 		PostQuitMessage(0);
 	}
 	break;
       case WM_CHAR:
-	if (!midend_process_key(fe->me, 0, 0, (unsigned char)wParam))
-	    PostQuitMessage(0);
+        {
+            int key = (unsigned char)wParam;
+            if (key == '\x1A') {
+                BYTE keystate[256];
+                if (GetKeyboardState(keystate) &&
+                    (keystate[VK_SHIFT] & 0x80) &&
+                    (keystate[VK_CONTROL] & 0x80))
+                    key = UI_REDO;
+            }
+            if (midend_process_key(fe->me, 0, 0, key) == PKR_QUIT)
+                PostQuitMessage(0);
+        }
 	return 0;
       case WM_TIMER:
 	if (fe->timer) {
@@ -3375,16 +3104,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    fe->timer_last_tickcount = now;
 	}
 	return 0;
-#ifndef _WIN32_WCE
       case WM_SIZING:
         {
             RECT *sr = (RECT *)lParam;
-            int wx, wy, isedge = 0;
+            int wx, wy;
+            bool isedge = false;
 
             if (wParam == WMSZ_TOP ||
                 wParam == WMSZ_RIGHT ||
                 wParam == WMSZ_BOTTOM ||
-                wParam == WMSZ_LEFT) isedge = 1;
+                wParam == WMSZ_LEFT) isedge = true;
             adjust_game_size(fe, sr, isedge, &wx, &wy);
 
             /* Given the window size the puzzles constrain
@@ -3403,31 +3132,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
             } else {
                 sr->right = sr->left + wx;
             }
-            return TRUE;
+            return true;
         }
         break;
-#endif
     }
 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
-
-#ifdef _WIN32_WCE
-static int FindPreviousInstance()
-{
-    /* Check if application is running. If it's running then focus on the window */
-    HWND hOtherWnd = NULL;
-
-    hOtherWnd = FindWindow (wGameName, wGameName);
-    if (hOtherWnd)
-    {
-        SetForegroundWindow (hOtherWnd);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-#endif
 
 /*
  * Split a complete command line into argc/argv, attempting to do it
@@ -3579,7 +3290,7 @@ void split_into_argv(char *cmdline, int *argc, char ***argv,
     p = cmdline; q = outputline; outputargc = 0;
 
     while (*p) {
-	int quote;
+	bool quote;
 
 	/* Skip whitespace searching for start of argument. */
 	while (*p && isspace(*p)) p++;
@@ -3589,7 +3300,7 @@ void split_into_argv(char *cmdline, int *argc, char ***argv,
 	outputargv[outputargc] = q;
 	outputargstart[outputargc] = p;
 	outputargc++;
-	quote = 0;
+	quote = false;
 
 	/* Copy data into the argument until it's finished. */
 	while (*p) {
@@ -3623,7 +3334,7 @@ void split_into_argv(char *cmdline, int *argc, char ***argv,
 
 		    if (quotes > 0) {
 			/* Outside a quote segment, a quote starts one. */
-			if (!quote) quotes--, quote = 1;
+			if (!quote) quotes--, quote = true;
 
 			/* Now we produce (n+1)/3 literal quotes... */
 			for (i = 3; i <= quotes+1; i += 3) *q++ = '"';
@@ -3652,7 +3363,7 @@ void split_into_argv(char *cmdline, int *argc, char ***argv,
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 {
     MSG msg;
-    char *error;
+    char *error = NULL;
     const game *gg;
     frontend *fe;
     midend *me;
@@ -3660,12 +3371,6 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
     char **argv;
 
     split_into_argv(cmdline, &argc, &argv, NULL);
-
-#ifdef _WIN32_WCE
-    MultiByteToWideChar (CP_ACP, 0, CLASSNAME, -1, wClassName, 256);
-    if (FindPreviousInstance ())
-        return 0;
-#endif
 
     InitCommonControls();
 
@@ -3678,18 +3383,12 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 	wndclass.cbWndExtra = 0;
 	wndclass.hInstance = inst;
 	wndclass.hIcon = LoadIcon(inst, MAKEINTRESOURCE(200));
-#ifndef _WIN32_WCE
 	if (!wndclass.hIcon)	       /* in case resource file is absent */
 	    wndclass.hIcon = LoadIcon(inst, IDI_APPLICATION);
-#endif
 	wndclass.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wndclass.hbrBackground = NULL;
 	wndclass.lpszMenuName = NULL;
-#ifdef _WIN32_WCE
-	wndclass.lpszClassName = wClassName;
-#else
 	wndclass.lpszClassName = CLASSNAME;
-#endif
 
 	RegisterClass(&wndclass);
     }
@@ -3732,7 +3431,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 
     fe = frontend_new(inst);
     me = midend_for_new_game(fe, gg, argc > 0 ? argv[0] : NULL,
-                             TRUE, TRUE, &error);
+                             true, true, &error);
     if (!me) {
 	char buf[128];
 #ifdef COMBINED

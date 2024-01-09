@@ -1,0 +1,32 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :5:Salad
+PARAMS  :6:5n3Lde
+CPARAMS :6:5n3Lde
+SEED    :15:536000070726171
+DESC    :16:aAbBaBAaBbCbAd,y
+NSTATES :2:24
+STATEPOS:2:24
+MOVE    :6:R4,0,O
+MOVE    :6:R4,0,X
+MOVE    :6:R1,0,O
+MOVE    :6:R1,0,X
+MOVE    :6:R3,0,1
+MOVE    :6:R2,0,2
+MOVE    :6:R0,0,3
+MOVE    :6:R4,1,O
+MOVE    :6:R4,1,X
+MOVE    :6:R4,2,2
+MOVE    :6:R4,3,O
+MOVE    :6:R4,4,O
+MOVE    :6:R3,1,3
+MOVE    :6:R3,2,O
+MOVE    :6:R3,2,X
+MOVE    :6:R4,3,X
+MOVE    :6:R4,3,-
+MOVE    :6:R4,4,X
+MOVE    :6:R4,4,-
+MOVE    :6:R0,1,2
+MOVE    :6:R0,4,O
+MOVE    :6:R0,4,X
+MOVE    :6:R1,4,2

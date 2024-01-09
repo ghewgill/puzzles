@@ -1,0 +1,16 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :6:Bricks
+PARAMS  :5:4x4de
+CPARAMS :5:4x4de
+SEED    :15:320115648960775
+DESC    :8:1b1g4a2b
+NSTATES :1:8
+STATEPOS:1:8
+MOVE    :3:A9;
+MOVE    :3:B9;
+MOVE    :15:A8;A12;A17;A18;
+MOVE    :3:B3;
+MOVE    :8:B11;B15;
+MOVE    :6:A7;A2;
+MOVE    :7:B6;B10;

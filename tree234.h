@@ -28,14 +28,38 @@
 #ifndef TREE234_H
 #define TREE234_H
 
+#include <stdbool.h>
+
 /*
- * This typedef is opaque outside tree234.c itself.
+ * This typedef is typically opaque outside tree234.c itself. But you
+ * can define TREE234_INTERNALS to get a definition of it and its
+ * subsidiary node structure, as long as you're prepared to commit to
+ * responding to changes in the internals (which probably means you're
+ * tree234.c itself or tree234-test.c).
  */
 typedef struct tree234_Tag tree234;
 
 typedef int (*cmpfn234)(void *, void *);
 
 typedef void *(*copyfn234)(void *state, void *element);
+
+#ifdef TREE234_INTERNALS
+typedef struct node234_Tag node234;
+
+struct tree234_Tag {
+    node234 *root;
+    cmpfn234 cmp;
+};
+
+struct node234_Tag {
+    node234 *parent;
+    node234 *kids[4];
+    int counts[4];
+    void *elems[3];
+};
+
+int height234(tree234 *t);
+#endif
 
 /*
  * Create a 2-3-4 tree. If `cmp' is NULL, the tree is unsorted, and
@@ -162,9 +186,9 @@ int count234(tree234 *t);
 /*
  * Split a tree234 into two valid tree234s.
  * 
- * splitpos234 splits at a given index. If `before' is TRUE, the
+ * splitpos234 splits at a given index. If `before' is true, the
  * items at and after that index are left in t and the ones before
- * are returned; if `before' is FALSE, the items before that index
+ * are returned; if `before' is false, the items before that index
  * are left in t and the rest are returned.
  * 
  * split234 splits at a given key. You can pass any of the
@@ -172,7 +196,7 @@ int count234(tree234 *t);
  * in the tree that satisfy the relation are returned; the
  * remainder are left.
  */
-tree234 *splitpos234(tree234 *t, int index, int before);
+tree234 *splitpos234(tree234 *t, int index, bool before);
 tree234 *split234(tree234 *t, void *e, cmpfn234 cmp, int rel);
 
 /*

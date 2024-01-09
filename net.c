@@ -7,7 +7,12 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#include <limits.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 #include "tree234.h"
@@ -27,13 +32,6 @@
 #define USE_DRAGGING
 #endif
 
-#define MATMUL(xr,yr,m,x,y) do { \
-    float rx, ry, xx = (x), yy = (y), *mat = (m); \
-    rx = mat[0] * xx + mat[2] * yy; \
-    ry = mat[1] * xx + mat[3] * yy; \
-    (xr) = rx; (yr) = ry; \
-} while (0)
-
 /* Direction and other bitfields */
 #define R 0x01
 #define U 0x02
@@ -41,11 +39,11 @@
 #define D 0x08
 #define LOCKED 0x10
 #define ACTIVE 0x20
-#define RLOOP (R << 6)
-#define ULOOP (U << 6)
-#define LLOOP (L << 6)
-#define DLOOP (D << 6)
-#define LOOP(dir) ((dir) << 6)
+#define RERR (R << 6)
+#define UERR (U << 6)
+#define LERR (L << 6)
+#define DERR (D << 6)
+#define ERR(dir) ((dir) << 6)
 
 /* Rotations: Anticlockwise, Clockwise, Flip, general rotate */
 #define A(x) ( (((x) & 0x07) << 1) | (((x) & 0x08) >> 3) )
@@ -65,7 +63,7 @@
 
 #define PREFERRED_TILE_SIZE 32
 #define TILE_SIZE (ds->tilesize)
-#define TILE_BORDER 1
+#define LINE_THICK ((TILE_SIZE+47)/48)
 #ifdef SMALL_SCREEN
 #define WINDOW_OFFSET 4
 #else
@@ -75,13 +73,6 @@
 #define ROTATE_TIME 0.13F
 #define FLASH_FRAME 0.07F
 
-/* Transform physical coords to game coords using game_drawstate ds */
-#define GX(x) (((x) + ds->org_x) % ds->width)
-#define GY(y) (((y) + ds->org_y) % ds->height)
-/* ...and game coords to physical coords */
-#define RX(x) (((x) + ds->width - ds->org_x) % ds->width)
-#define RY(y) (((y) + ds->height - ds->org_y) % ds->height)
-
 enum {
     COL_BACKGROUND,
     COL_LOCKED,
@@ -90,24 +81,30 @@ enum {
     COL_ENDPOINT,
     COL_POWERED,
     COL_BARRIER,
-    COL_LOOP,
+    COL_ERR,
     NCOLOURS
 };
 
 struct game_params {
     int width;
     int height;
-    int wrapping;
-    int unique;
+    bool wrapping;
+    bool unique;
     float barrier_probability;
 };
 
-struct game_state {
-    int width, height, wrapping, completed;
-    int last_rotate_x, last_rotate_y, last_rotate_dir;
-    int used_solve;
-    unsigned char *tiles;
+typedef struct game_immutable_state {
+    int refcount;
     unsigned char *barriers;
+} game_immutable_state;
+
+struct game_state {
+    int width, height;
+    bool wrapping, completed;
+    int last_rotate_x, last_rotate_y, last_rotate_dir;
+    bool used_solve;
+    unsigned char *tiles;
+    struct game_immutable_state *imm;
 };
 
 #define OFFSETWH(x2,y2,x1,y1,dir,width,height) \
@@ -119,7 +116,7 @@ struct game_state {
 
 #define index(state, a, x, y) ( a[(y) * (state)->width + (x)] )
 #define tile(state, x, y)     index(state, (state)->tiles, x, y)
-#define barrier(state, x, y)  index(state, (state)->barriers, x, y)
+#define barrier(state, x, y)  index(state, (state)->imm->barriers, x, y)
 
 struct xyd {
     int x, y, direction;
@@ -163,37 +160,37 @@ static game_params *default_params(void)
 
     ret->width = 5;
     ret->height = 5;
-    ret->wrapping = FALSE;
-    ret->unique = TRUE;
+    ret->wrapping = false;
+    ret->unique = true;
     ret->barrier_probability = 0.0;
 
     return ret;
 }
 
 static const struct game_params net_presets[] = {
-    {5, 5, FALSE, TRUE, 0.0},
-    {7, 7, FALSE, TRUE, 0.0},
-    {9, 9, FALSE, TRUE, 0.0},
-    {11, 11, FALSE, TRUE, 0.0},
+    {5, 5, false, true, 0.0},
+    {7, 7, false, true, 0.0},
+    {9, 9, false, true, 0.0},
+    {11, 11, false, true, 0.0},
 #ifndef SMALL_SCREEN
-    {13, 11, FALSE, TRUE, 0.0},
+    {13, 11, false, true, 0.0},
 #endif
-    {5, 5, TRUE, TRUE, 0.0},
-    {7, 7, TRUE, TRUE, 0.0},
-    {9, 9, TRUE, TRUE, 0.0},
-    {11, 11, TRUE, TRUE, 0.0},
+    {5, 5, true, true, 0.0},
+    {7, 7, true, true, 0.0},
+    {9, 9, true, true, 0.0},
+    {11, 11, true, true, 0.0},
 #ifndef SMALL_SCREEN
-    {13, 11, TRUE, TRUE, 0.0},
+    {13, 11, true, true, 0.0},
 #endif
 };
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char str[80];
 
     if (i < 0 || i >= lenof(net_presets))
-        return FALSE;
+        return false;
 
     ret = snew(game_params);
     *ret = net_presets[i];
@@ -203,7 +200,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
 
     *name = dupstr(str);
     *params = ret;
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -235,20 +232,20 @@ static void decode_params(game_params *ret, char const *string)
     while (*p) {
         if (*p == 'w') {
             p++;
-	    ret->wrapping = TRUE;
+	    ret->wrapping = true;
 	} else if (*p == 'b') {
 	    p++;
             ret->barrier_probability = (float)atof(p);
 	    while (*p && (*p == '.' || isdigit((unsigned char)*p))) p++;
 	} else if (*p == 'a') {
             p++;
-	    ret->unique = FALSE;
+	    ret->unique = false;
 	} else
 	    p++;		       /* skip any other gunk */
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char ret[400];
     int len;
@@ -276,35 +273,28 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->width);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->height);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Walls wrap around";
     ret[2].type = C_BOOLEAN;
-    ret[2].sval = NULL;
-    ret[2].ival = params->wrapping;
+    ret[2].u.boolean.bval = params->wrapping;
 
     ret[3].name = "Barrier probability";
     ret[3].type = C_STRING;
     sprintf(buf, "%g", params->barrier_probability);
-    ret[3].sval = dupstr(buf);
-    ret[3].ival = 0;
+    ret[3].u.string.sval = dupstr(buf);
 
     ret[4].name = "Ensure unique solution";
     ret[4].type = C_BOOLEAN;
-    ret[4].sval = NULL;
-    ret[4].ival = params->unique;
+    ret[4].u.boolean.bval = params->unique;
 
     ret[5].name = NULL;
     ret[5].type = C_END;
-    ret[5].sval = NULL;
-    ret[5].ival = 0;
 
     return ret;
 }
@@ -313,21 +303,23 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->width = atoi(cfg[0].sval);
-    ret->height = atoi(cfg[1].sval);
-    ret->wrapping = cfg[2].ival;
-    ret->barrier_probability = (float)atof(cfg[3].sval);
-    ret->unique = cfg[4].ival;
+    ret->width = atoi(cfg[0].u.string.sval);
+    ret->height = atoi(cfg[1].u.string.sval);
+    ret->wrapping = cfg[2].u.boolean.bval;
+    ret->barrier_probability = (float)atof(cfg[3].u.string.sval);
+    ret->unique = cfg[4].u.boolean.bval;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->width <= 0 || params->height <= 0)
 	return "Width and height must both be greater than zero";
     if (params->width <= 1 && params->height <= 1)
 	return "At least one of width and height must be greater than one";
+    if (params->width > INT_MAX / params->height)
+        return "Width times height must not be unreasonably large";
     if (params->barrier_probability < 0)
 	return "Barrier probability may not be negative";
     if (params->barrier_probability > 1)
@@ -412,7 +404,7 @@ static char *validate_params(const game_params *params, int full)
  */
 
 struct todo {
-    unsigned char *marked;
+    bool *marked;
     int *buffer;
     int buflen;
     int head, tail;
@@ -421,7 +413,7 @@ struct todo {
 static struct todo *todo_new(int maxsize)
 {
     struct todo *todo = snew(struct todo);
-    todo->marked = snewn(maxsize, unsigned char);
+    todo->marked = snewn(maxsize, bool);
     memset(todo->marked, 0, maxsize);
     todo->buflen = maxsize + 1;
     todo->buffer = snewn(todo->buflen, int);
@@ -440,7 +432,7 @@ static void todo_add(struct todo *todo, int index)
 {
     if (todo->marked[index])
 	return;			       /* already on the list */
-    todo->marked[index] = TRUE;
+    todo->marked[index] = true;
     todo->buffer[todo->tail++] = index;
     if (todo->tail == todo->buflen)
 	todo->tail = 0;
@@ -454,22 +446,27 @@ static int todo_get(struct todo *todo) {
     ret = todo->buffer[todo->head++];
     if (todo->head == todo->buflen)
 	todo->head = 0;
-    todo->marked[ret] = FALSE;
+    todo->marked[ret] = false;
 
     return ret;
 }
 
+/*
+ * Return values: -1 means puzzle was proved inconsistent, 0 means we
+ * failed to narrow down to a unique solution, +1 means we solved it
+ * fully.
+ */
 static int net_solver(int w, int h, unsigned char *tiles,
-		      unsigned char *barriers, int wrapping)
+		      unsigned char *barriers, bool wrapping)
 {
     unsigned char *tilestate;
     unsigned char *edgestate;
     int *deadends;
-    int *equivalence;
+    DSF *equivalence;
     struct todo *todo;
     int i, j, x, y;
     int area;
-    int done_something;
+    bool done_something;
 
     /*
      * Set up the solver's data structures.
@@ -550,7 +547,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
      * classes) by finding the representative of each tile and
      * setting equivalence[one]=the_other.
      */
-    equivalence = snew_dsf(w * h);
+    equivalence = dsf_new(w * h);
 
     /*
      * On a non-wrapping grid, we instantly know that all the edges
@@ -602,7 +599,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
     /*
      * Main deductive loop.
      */
-    done_something = TRUE;	       /* prevent instant termination! */
+    done_something = true;	       /* prevent instant termination! */
     while (1) {
 	int index;
 
@@ -616,8 +613,8 @@ static int net_solver(int w, int h, unsigned char *tiles,
 	     * have no choice but to scan the whole grid for
 	     * longer-range things we've missed. Hence, I now add
 	     * every square on the grid back on to the to-do list.
-	     * I also set `done_something' to FALSE at this point;
-	     * if we later come back here and find it still FALSE,
+	     * I also set `done_something' to false at this point;
+	     * if we later come back here and find it still false,
 	     * we will know we've scanned the entire grid without
 	     * finding anything new to do, and we can terminate.
 	     */
@@ -625,7 +622,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 		break;
 	    for (i = 0; i < w*h; i++)
 		todo_add(todo, i);
-	    done_something = FALSE;
+	    done_something = false;
 
 	    index = todo_get(todo);
 	}
@@ -639,12 +636,12 @@ static int net_solver(int w, int h, unsigned char *tiles,
 	    deadendmax[1] = deadendmax[2] = deadendmax[4] = deadendmax[8] = 0;
 
 	    for (i = j = 0; i < 4 && tilestate[(y*w+x) * 4 + i] != 255; i++) {
-		int valid;
+		bool valid;
 		int nnondeadends, nondeadends[4], deadendtotal;
 		int nequiv, equiv[5];
 		int val = tilestate[(y*w+x) * 4 + i];
 
-		valid = TRUE;
+		valid = true;
 		nnondeadends = deadendtotal = 0;
 		equiv[0] = ourclass;
 		nequiv = 1;
@@ -655,7 +652,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 		     */
 		    if ((edgestate[(y*w+x) * 5 + d] == 1 && !(val & d)) ||
 			(edgestate[(y*w+x) * 5 + d] == 2 && (val & d)))
-			valid = FALSE;
+			valid = false;
 
 		    if (val & d) {
 			/*
@@ -683,7 +680,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 			    if (k == nequiv)
 				equiv[nequiv++] = c;
 			    else
-				valid = FALSE;
+				valid = false;
 			}
 		    }
 		}
@@ -700,7 +697,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 		     * with a total area of 6, not 5.)
 		     */
 		    if (deadendtotal > 0 && deadendtotal+1 < area)
-			valid = FALSE;
+			valid = false;
 		} else if (nnondeadends == 1) {
 		    /*
 		     * If this orientation links together one or
@@ -733,10 +730,14 @@ static int net_solver(int w, int h, unsigned char *tiles,
 #endif
 	    }
 
-	    assert(j > 0);	       /* we can't lose _all_ possibilities! */
+	    if (j == 0) {
+                /* If we've ruled out all possible orientations for a
+                 * tile, then our puzzle has no solution at all. */
+                return -1;
+            }
 
 	    if (j < i) {
-		done_something = TRUE;
+		done_something = true;
 
 		/*
 		 * We have ruled out at least one tile orientation.
@@ -771,7 +772,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 			    edgestate[(y*w+x) * 5 + d] = 1;
 			    edgestate[(y2*w+x2) * 5 + d2] = 1;
 			    dsf_merge(equivalence, y*w+x, y2*w+x2);
-			    done_something = TRUE;
+			    done_something = true;
 			    todo_add(todo, y2*w+x2);
 			} else if (!(o & d)) {
 			    /* This edge is closed in all orientations. */
@@ -780,7 +781,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 #endif
 			    edgestate[(y*w+x) * 5 + d] = 2;
 			    edgestate[(y2*w+x2) * 5 + d2] = 2;
-			    done_something = TRUE;
+			    done_something = true;
 			    todo_add(todo, y2*w+x2);
 			}
 		    }
@@ -802,7 +803,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
 			   x2, y2, d2, deadendmax[d]);
 #endif
 		    deadends[(y2*w+x2) * 5 + d2] = deadendmax[d];
-		    done_something = TRUE;
+		    done_something = true;
 		    todo_add(todo, y2*w+x2);
 		}
 	    }
@@ -813,14 +814,14 @@ static int net_solver(int w, int h, unsigned char *tiles,
     /*
      * Mark all completely determined tiles as locked.
      */
-    j = TRUE;
+    j = +1;
     for (i = 0; i < w*h; i++) {
 	if (tilestate[i * 4 + 1] == 255) {
 	    assert(tilestate[i * 4 + 0] != 255);
 	    tiles[i] = tilestate[i * 4] | LOCKED;
 	} else {
 	    tiles[i] &= ~LOCKED;
-	    j = FALSE;
+	    j = 0;
 	}
     }
 
@@ -831,7 +832,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
     sfree(tilestate);
     sfree(edgestate);
     sfree(deadends);
-    sfree(equivalence);
+    dsf_free(equivalence);
 
     return j;
 }
@@ -844,7 +845,7 @@ static int net_solver(int w, int h, unsigned char *tiles,
  * Function to randomly perturb an ambiguous section in a grid, to
  * attempt to ensure unique solvability.
  */
-static void perturb(int w, int h, unsigned char *tiles, int wrapping,
+static void perturb(int w, int h, unsigned char *tiles, bool wrapping,
 		    random_state *rs, int startx, int starty, int startd)
 {
     struct xyd *perimeter, *perim2, *loop[2], looppos[2];
@@ -1132,12 +1133,13 @@ static void perturb(int w, int h, unsigned char *tiles, int wrapping,
     sfree(perimeter);
 }
 
-static int *compute_loops_inner(int w, int h, int wrapping,
+static int *compute_loops_inner(int w, int h, bool wrapping,
                                 const unsigned char *tiles,
-                                const unsigned char *barriers);
+                                const unsigned char *barriers,
+                                bool include_unlocked_squares);
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     tree234 *possibilities, *barriertree;
     int w, h, x, y, cx, cy, nbarriers;
@@ -1334,7 +1336,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 	/*
 	 * Run the solver to check unique solubility.
 	 */
-	while (!net_solver(w, h, tiles, NULL, params->wrapping)) {
+	while (net_solver(w, h, tiles, NULL, params->wrapping) != 1) {
 	    int n = 0;
 
 	    /*
@@ -1463,7 +1465,8 @@ static char *new_game_desc(const game_params *params, random_state *rs,
          */
         prev_loopsquares = w*h+1;
         while (1) {
-            loops = compute_loops_inner(w, h, params->wrapping, tiles, NULL);
+            loops = compute_loops_inner(w, h, params->wrapping, tiles, NULL,
+                                        true);
             this_loopsquares = 0;
             for (i = 0; i < w*h; i++) {
                 if (loops[i]) {
@@ -1598,7 +1601,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return desc;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int w = params->width, h = params->height;
     int i;
@@ -1644,12 +1647,14 @@ static game_state *new_game(midend *me, const game_params *params,
     w = state->width = params->width;
     h = state->height = params->height;
     state->wrapping = params->wrapping;
+    state->imm = snew(game_immutable_state);
+    state->imm->refcount = 1;
     state->last_rotate_dir = state->last_rotate_x = state->last_rotate_y = 0;
-    state->completed = state->used_solve = FALSE;
+    state->completed = state->used_solve = false;
     state->tiles = snewn(state->width * state->height, unsigned char);
     memset(state->tiles, 0, state->width * state->height);
-    state->barriers = snewn(state->width * state->height, unsigned char);
-    memset(state->barriers, 0, state->width * state->height);
+    state->imm->barriers = snewn(state->width * state->height, unsigned char);
+    memset(state->imm->barriers, 0, state->width * state->height);
 
     /*
      * Parse the game description into the grid.
@@ -1701,15 +1706,15 @@ static game_state *new_game(midend *me, const game_params *params,
          * description of a non-wrapping game. This is so that we
          * can change some aspects of the UI behaviour.
          */
-        state->wrapping = FALSE;
+        state->wrapping = false;
         for (x = 0; x < state->width; x++)
             if (!(barrier(state, x, 0) & U) ||
                 !(barrier(state, x, state->height-1) & D))
-                state->wrapping = TRUE;
+                state->wrapping = true;
         for (y = 0; y < state->height; y++)
             if (!(barrier(state, 0, y) & L) ||
                 !(barrier(state, state->width-1, y) & R))
-                state->wrapping = TRUE;
+                state->wrapping = true;
     }
 
     return state;
@@ -1720,6 +1725,8 @@ static game_state *dup_game(const game_state *state)
     game_state *ret;
 
     ret = snew(game_state);
+    ret->imm = state->imm;
+    ret->imm->refcount++;
     ret->width = state->width;
     ret->height = state->height;
     ret->wrapping = state->wrapping;
@@ -1730,21 +1737,22 @@ static game_state *dup_game(const game_state *state)
     ret->last_rotate_y = state->last_rotate_y;
     ret->tiles = snewn(state->width * state->height, unsigned char);
     memcpy(ret->tiles, state->tiles, state->width * state->height);
-    ret->barriers = snewn(state->width * state->height, unsigned char);
-    memcpy(ret->barriers, state->barriers, state->width * state->height);
 
     return ret;
 }
 
 static void free_game(game_state *state)
 {
+    if (--state->imm->refcount == 0) {
+        sfree(state->imm->barriers);
+        sfree(state->imm);
+    }
     sfree(state->tiles);
-    sfree(state->barriers);
     sfree(state);
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     unsigned char *tiles;
     char *ret;
@@ -1758,9 +1766,17 @@ static char *solve_game(const game_state *state, const game_state *currstate,
 	 * Run the internal solver on the provided grid. This might
 	 * not yield a complete solution.
 	 */
+        int solver_result;
+
 	memcpy(tiles, state->tiles, state->width * state->height);
-	net_solver(state->width, state->height, tiles,
-		   state->barriers, state->wrapping);
+	solver_result = net_solver(state->width, state->height, tiles,
+                                   state->imm->barriers, state->wrapping);
+
+        if (solver_result < 0) {
+            *error = "No solution exists for this puzzle";
+            sfree(tiles);
+            return NULL;
+        }
     } else {
         for (i = 0; i < state->width * state->height; i++) {
             int c = aux[i];
@@ -1838,16 +1854,6 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
-{
-    return TRUE;
-}
-
-static char *game_text_format(const game_state *state)
-{
-    return NULL;
-}
-
 /* ----------------------------------------------------------------------
  * Utility routine.
  */
@@ -1868,6 +1874,8 @@ static unsigned char *compute_active(const game_state *state, int cx, int cy)
     active = snewn(state->width * state->height, unsigned char);
     memset(active, 0, state->width * state->height);
 
+    assert(0 <= cx && cx < state->width);
+    assert(0 <= cy && cy < state->height);
     /*
      * We only store (x,y) pairs in todo, but it's easier to reuse
      * xyd_cmp and just store direction 0 every time.
@@ -1909,229 +1917,112 @@ static unsigned char *compute_active(const game_state *state, int cx, int cy)
     return active;
 }
 
-static int *compute_loops_inner(int w, int h, int wrapping,
-                                const unsigned char *tiles,
-                                const unsigned char *barriers)
+struct net_neighbour_ctx {
+    int w, h;
+    const unsigned char *tiles, *barriers;
+    int i, n, neighbours[4];
+    bool include_unlocked_squares;
+};
+static int net_neighbour(int vertex, void *vctx)
 {
-    int *loops, *dsf;
-    int x, y;
+    struct net_neighbour_ctx *ctx = (struct net_neighbour_ctx *)vctx;
 
-    /*
-     * The loop-detecting algorithm I use here is not quite the same
-     * one as I've used in Slant and Loopy. Those two puzzles use a
-     * very similar algorithm which works by finding connected
-     * components, not of the graph _vertices_, but of the pieces of
-     * space in between them. You divide the plane into maximal areas
-     * that can't be intersected by a grid edge (faces in Loopy,
-     * diamond shapes centred on a grid edge in Slant); you form a dsf
-     * over those areas, and unify any pair _not_ separated by a graph
-     * edge; then you've identified the connected components of the
-     * space, and can now immediately tell whether an edge is part of
-     * a loop or not by checking whether the pieces of space on either
-     * side of it are in the same component.
-     *
-     * In Net, this doesn't work reliably, because of the toroidal
-     * wrapping mode. A torus has non-trivial homology, which is to
-     * say, there can exist a closed loop on its surface which is not
-     * the boundary of any proper subset of the torus's area. For
-     * example, consider the 'loop' consisting of a straight vertical
-     * line going off the top of the grid and coming back on the
-     * bottom to join up with itself. This certainly wants to be
-     * marked as a loop, but it won't be detected as one by the above
-     * algorithm, because all the area of the grid is still connected
-     * via the left- and right-hand edges, so the two sides of the
-     * loop _are_ in the same equivalence class.
-     *
-     * The replacement algorithm I use here is also dsf-based, but the
-     * dsf is now over _sides of edges_. That is to say, on a general
-     * graph, you would have two dsf elements per edge of the graph.
-     * The unification rule is: for each vertex, iterate round the
-     * edges leaving that vertex in cyclic order, and dsf-unify the
-     * _near sides_ of each pair of adjacent edges. The effect of this
-     * is to trace round the outside edge of each connected component
-     * of the graph (this time of the actual graph, not the space
-     * between), so that the outline of each component becomes its own
-     * equivalence class. And now, just as before, an edge is part of
-     * a loop iff its two sides are not in the same component.
-     *
-     * This correctly detects even homologically nontrivial loops on a
-     * torus, because a torus is still _orientable_ - there's no way
-     * that a loop can join back up with itself with the two sides
-     * swapped. It would stop working, however, on a Mobius strip or a
-     * Klein bottle - so if I ever implement either of those modes for
-     * Net, I'll have to revisit this algorithm yet again and probably
-     * replace it with a completely general and much more fiddly
-     * approach such as Tarjan's bridge-finding algorithm (which is
-     * linear-time, but looks to me as if it's going to take more
-     * effort to get it working, especially when the graph is
-     * represented so unlike an ordinary graph).
-     *
-     * In Net, the algorithm as I describe it above has to be fiddled
-     * with just a little, to deal with the fact that there are two
-     * kinds of 'vertex' in the graph - one set at face-centres, and
-     * another set at edge-midpoints where two wires either do or do
-     * not join. Since those two vertex classes have very different
-     * representations in the Net data structure, separate code is
-     * needed for them.
-     */
+    if (vertex >= 0) {
+        int x = vertex % ctx->w, y = vertex / ctx->w;
+        int tile, dir, x1, y1, v1;
 
-    /* Four potential edges per grid cell; one dsf node for each side
-     * of each one makes 8 per cell. */
-    dsf = snew_dsf(w*h*8);
+        ctx->i = ctx->n = 0;
 
-    /* Encode the dsf nodes. We imagine going round anticlockwise, so
-     * BEFORE(dir) indicates the clockwise side of an edge, e.g. the
-     * underside of R or the right-hand side of U. AFTER is the other
-     * side. */
-#define BEFORE(dir) ((dir)==R?7:(dir)==U?1:(dir)==L?3:5)
-#define AFTER(dir) ((dir)==R?0:(dir)==U?2:(dir)==L?4:6)
+        tile = ctx->tiles[vertex];
+        if (ctx->barriers)
+            tile &= ~ctx->barriers[vertex];
 
-#if 0
-    printf("--- begin\n");
-#endif
-    for (y = 0; y < h; y++) {
-        for (x = 0; x < w; x++) {
-            int tile = tiles[y*w+x]; 
-            int dir;
-            for (dir = 1; dir < 0x10; dir <<= 1) {
-                /*
-                 * To unify dsf nodes around a face-centre vertex,
-                 * it's easiest to do it _unconditionally_ - e.g. just
-                 * unify the top side of R with the right side of U
-                 * regardless of whether there's an edge in either
-                 * place. Later we'll also unify the top and bottom
-                 * sides of any nonexistent edge, which will e.g.
-                 * complete a connection BEFORE(U) - AFTER(R) -
-                 * BEFORE(R) - AFTER(D) in the absence of an R edge.
-                 *
-                 * This is a safe optimisation because these extra dsf
-                 * nodes unified into our equivalence class can't get
-                 * out of control - they are never unified with
-                 * anything _else_ elsewhere in the algorithm.
-                 */
-#if 0
-                printf("tile centre %d,%d: merge %d,%d\n",
-                       x, y,
-                       (y*w+x)*8+AFTER(C(dir)),
-                       (y*w+x)*8+BEFORE(dir));
-#endif
-                dsf_merge(dsf,
-                          (y*w+x)*8+AFTER(C(dir)),
-                          (y*w+x)*8+BEFORE(dir));
-
-                if (tile & dir) {
-                    int x1, y1;
-
-                    OFFSETWH(x1, y1, x, y, dir, w, h);
-
-                    /*
-                     * If the tile does have an edge going out in this
-                     * direction, we must check whether it joins up
-                     * (without being blocked by a barrier) to an edge
-                     * in the next cell along. If so, we unify around
-                     * the edge-centre vertex by joining each side of
-                     * this edge to the appropriate side of the next
-                     * cell's edge; otherwise, the edge is a stub (the
-                     * only one reaching the edge-centre vertex) and
-                     * so we join its own two sides together.
-                     */
-                    if ((barriers && barriers[y*w+x] & dir) ||
-                        !(tiles[y1*w+x1] & F(dir))) {
-#if 0
-                        printf("tile edge stub %d,%d -> %c: merge %d,%d\n",
-                               x, y, (dir==L?'L':dir==U?'U':dir==R?'R':'D'),
-                               (y*w+x)*8+BEFORE(dir),
-                               (y*w+x)*8+AFTER(dir));
-#endif
-                        dsf_merge(dsf,
-                                  (y*w+x)*8+BEFORE(dir),
-                                  (y*w+x)*8+AFTER(dir));
-                    } else {
-#if 0
-                        printf("tile edge conn %d,%d -> %c: merge %d,%d\n",
-                               x, y, (dir==L?'L':dir==U?'U':dir==R?'R':'D'),
-                               (y*w+x)*8+BEFORE(dir),
-                               (y*w+x)*8+AFTER(F(dir)));
-#endif
-                        dsf_merge(dsf,
-                                  (y*w+x)*8+BEFORE(dir),
-                                  (y1*w+x1)*8+AFTER(F(dir)));
-#if 0
-                        printf("tile edge conn %d,%d -> %c: merge %d,%d\n",
-                               x, y, (dir==L?'L':dir==U?'U':dir==R?'R':'D'),
-                               (y*w+x)*8+AFTER(dir),
-                               (y*w+x)*8+BEFORE(F(dir)));
-#endif
-                        dsf_merge(dsf,
-                                  (y*w+x)*8+AFTER(dir),
-                                  (y1*w+x1)*8+BEFORE(F(dir)));
-                    }
-                } else {
-                    /*
-                     * As discussed above, if this edge doesn't even
-                     * exist, we unify its two sides anyway to
-                     * complete the unification of whatever edges do
-                     * exist in this cell.
-                     */
-#if 0
-                    printf("tile edge missing %d,%d -> %c: merge %d,%d\n",
-                           x, y, (dir==L?'L':dir==U?'U':dir==R?'R':'D'),
-                           (y*w+x)*8+BEFORE(dir),
-                           (y*w+x)*8+AFTER(dir));
-#endif
-                    dsf_merge(dsf,
-                              (y*w+x)*8+BEFORE(dir),
-                              (y*w+x)*8+AFTER(dir));
-                }
-            }
+        for (dir = 1; dir < 0x10; dir <<= 1) {
+            if (!(tile & dir))
+                continue;
+            OFFSETWH(x1, y1, x, y, dir, ctx->w, ctx->h);
+            v1 = y1 * ctx->w + x1;
+            if (!ctx->include_unlocked_squares &&
+                !(tile & ctx->tiles[v1] & LOCKED))
+                continue;
+            if (ctx->tiles[v1] & F(dir))
+                ctx->neighbours[ctx->n++] = v1;
         }
     }
 
-#if 0
-    printf("--- end\n");
-#endif
+    if (ctx->i < ctx->n)
+        return ctx->neighbours[ctx->i++];
+    else
+        return -1;
+}
+
+static int *compute_loops_inner(int w, int h, bool wrapping,
+                                const unsigned char *tiles,
+                                const unsigned char *barriers,
+                                bool include_unlocked_squares)
+{
+    struct net_neighbour_ctx ctx;
+    struct findloopstate *fls;
+    int *loops;
+    int x, y, v;
+
+    fls = findloop_new_state(w*h);
+    ctx.w = w;
+    ctx.h = h;
+    ctx.tiles = tiles;
+    ctx.barriers = barriers;
+    ctx.include_unlocked_squares = include_unlocked_squares;
+    findloop_run(fls, w*h, net_neighbour, &ctx);
+
     loops = snewn(w*h, int);
 
-    /*
-     * Now we've done the loop detection and can read off the output
-     * flags trivially: any piece of connection whose two sides are
-     * not in the same dsf class is part of a loop.
-     */
     for (y = 0; y < h; y++) {
         for (x = 0; x < w; x++) {
-            int dir;
-            int tile = tiles[y*w+x];
+            int x1, y1, v1, dir;
             int flags = 0;
+
+            v = y * w + x;
             for (dir = 1; dir < 0x10; dir <<= 1) {
-                if ((tile & dir) &&
-                    (dsf_canonify(dsf, (y*w+x)*8+BEFORE(dir)) !=
-                     dsf_canonify(dsf, (y*w+x)*8+AFTER(dir)))) {
-                    flags |= LOOP(dir);
+                if ((tiles[v] & dir) &&
+                    !(barriers && (barriers[y*w+x] & dir))) {
+                    OFFSETWH(x1, y1, x, y, dir, w, h);
+                    v1 = y1 * w + x1;
+                    if (!include_unlocked_squares &&
+                        !(tiles[v] & tiles[v1] & LOCKED))
+                        continue;
+                    if ((tiles[v1] & F(dir)) &&
+                        findloop_is_loop_edge(fls, y*w+x, y1*w+x1))
+                        flags |= ERR(dir);
                 }
             }
             loops[y*w+x] = flags;
         }
     }
 
-    sfree(dsf);
+    findloop_free_state(fls);
     return loops;
 }
 
-static int *compute_loops(const game_state *state)
+static int *compute_loops(const game_state *state,
+                          bool include_unlocked_squares)
 {
     return compute_loops_inner(state->width, state->height, state->wrapping,
-                               state->tiles, state->barriers);
+                               state->tiles, state->imm->barriers,
+                               include_unlocked_squares);
 }
 
 struct game_ui {
     int org_x, org_y; /* origin */
     int cx, cy;       /* source tile (game coordinates) */
     int cur_x, cur_y;
-    int cur_visible;
+    bool cur_visible;
     random_state *rs; /* used for jumbling */
 #ifdef USE_DRAGGING
-    int dragtilex, dragtiley, dragstartx, dragstarty, dragged;
+    int dragtilex, dragtiley, dragstartx, dragstarty;
+    bool dragged;
 #endif
+
+    bool unlocked_loops;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -2139,20 +2030,28 @@ static game_ui *new_ui(const game_state *state)
     void *seed;
     int seedsize;
     game_ui *ui = snew(game_ui);
-    ui->org_x = ui->org_y = 0;
-    ui->cur_x = ui->cx = state->width / 2;
-    ui->cur_y = ui->cy = state->height / 2;
-    ui->cur_visible = FALSE;
-    get_random_seed(&seed, &seedsize);
-    ui->rs = random_new(seed, seedsize);
-    sfree(seed);
+
+    ui->unlocked_loops = true;
+
+    if (state) {
+        ui->org_x = ui->org_y = 0;
+        ui->cur_x = ui->cx = state->width / 2;
+        ui->cur_y = ui->cy = state->height / 2;
+        ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
+        get_random_seed(&seed, &seedsize);
+        ui->rs = random_new(seed, seedsize);
+        sfree(seed);
+    } else {
+        ui->rs = NULL;
+    }
 
     return ui;
 }
 
 static void free_ui(game_ui *ui)
 {
-    random_free(ui->rs);
+    if (ui->rs)
+        random_free(ui->rs);
     sfree(ui);
 }
 
@@ -2167,10 +2066,45 @@ static char *encode_ui(const game_ui *ui)
     return dupstr(buf);
 }
 
-static void decode_ui(game_ui *ui, const char *encoding)
+static void decode_ui(game_ui *ui, const char *encoding,
+                      const game_state *state)
 {
-    sscanf(encoding, "O%d,%d;C%d,%d",
-	   &ui->org_x, &ui->org_y, &ui->cx, &ui->cy);
+    int org_x, org_y, cx, cy;
+
+    if (sscanf(encoding, "O%d,%d;C%d,%d", &org_x, &org_y, &cx, &cy) == 4) {
+        if (0 <= org_x && org_x < state->width &&
+            0 <= org_y && org_y < state->height) {
+            ui->org_x = org_x;
+            ui->org_y = org_y;
+        }
+        if (0 <= cx && cx < state->width &&
+            0 <= cy && cy < state->height) {
+            ui->cx = cx;
+            ui->cy = cy;
+        }
+    }
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *ret;
+
+    ret = snewn(2, config_item);
+
+    ret[0].name = "Highlight loops involving unlocked squares";
+    ret[0].kw = "unlocked-loops";
+    ret[0].type = C_BOOLEAN;
+    ret[0].u.boolean.bval = ui->unlocked_loops;
+
+    ret[1].name = NULL;
+    ret[1].type = C_END;
+
+    return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->unlocked_loops = cfg[0].u.boolean.bval;
 }
 
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
@@ -2178,12 +2112,22 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 {
 }
 
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    if (tile(state, ui->cur_x, ui->cur_y) & LOCKED) {
+        if (button == CURSOR_SELECT2) return "Unlock";
+    } else {
+        if (button == CURSOR_SELECT) return "Rotate";
+        if (button == CURSOR_SELECT2) return "Lock";
+    }
+    return "";
+}
+
 struct game_drawstate {
-    int started;
     int width, height;
-    int org_x, org_y;
     int tilesize;
-    int *visible;
+    unsigned long *visible, *to_draw;
 };
 
 /* ----------------------------------------------------------------------
@@ -2195,7 +2139,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 {
     char *nullret;
     int tx = -1, ty = -1, dir = 0;
-    int shift = button & MOD_SHFT, ctrl = button & MOD_CTRL;
+    bool shift = button & MOD_SHFT, ctrl = button & MOD_CTRL;
     enum {
         NONE, ROTATE_LEFT, ROTATE_180, ROTATE_RIGHT, TOGGLE_LOCK, JUMBLE,
         MOVE_ORIGIN, MOVE_SOURCE, MOVE_ORIGIN_AND_SOURCE, MOVE_CURSOR,
@@ -2217,15 +2161,15 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	button == RIGHT_BUTTON) {
 
 	if (ui->cur_visible) {
-	    ui->cur_visible = FALSE;
-	    nullret = "";
+	    ui->cur_visible = false;
+	    nullret = MOVE_UI_UPDATE;
 	}
 
 	/*
 	 * The button must have been clicked on a valid tile.
 	 */
-	x -= WINDOW_OFFSET + TILE_BORDER;
-	y -= WINDOW_OFFSET + TILE_BORDER;
+	x -= WINDOW_OFFSET + LINE_THICK;
+	y -= WINDOW_OFFSET + LINE_THICK;
 	if (x < 0 || y < 0)
 	    return nullret;
 	tx = x / TILE_SIZE;
@@ -2235,8 +2179,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         /* Transform from physical to game coords */
         tx = (tx + ui->org_x) % state->width;
         ty = (ty + ui->org_y) % state->height;
-	if (x % TILE_SIZE >= TILE_SIZE - TILE_BORDER ||
-	    y % TILE_SIZE >= TILE_SIZE - TILE_BORDER)
+	if (x % TILE_SIZE >= TILE_SIZE - LINE_THICK ||
+	    y % TILE_SIZE >= TILE_SIZE - LINE_THICK)
 	    return nullret;
 
 #ifdef USE_DRAGGING
@@ -2262,7 +2206,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             ui->dragtiley = ty;
             ui->dragstartx = x % TILE_SIZE;
             ui->dragstarty = y % TILE_SIZE;
-            ui->dragged = FALSE;
+            ui->dragged = false;
             return nullret;            /* no actual action */
         } else if (button == LEFT_DRAG
 #ifndef STYLUS_BASED
@@ -2305,17 +2249,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                 action = ROTATE_180;
                 ui->dragstartx = xF;
                 ui->dragstarty = yF;
-                ui->dragged = TRUE;
+                ui->dragged = true;
             } else if (dA == dmin) {
                 action = ROTATE_LEFT;
                 ui->dragstartx = xA;
                 ui->dragstarty = yA;
-                ui->dragged = TRUE;
+                ui->dragged = true;
             } else /* dC == dmin */ {
                 action = ROTATE_RIGHT;
                 ui->dragstartx = xC;
                 ui->dragstarty = yC;
-                ui->dragged = TRUE;
+                ui->dragged = true;
             }
         } else if (button == LEFT_RELEASE
 #ifndef STYLUS_BASED
@@ -2371,7 +2315,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	    action = ROTATE_RIGHT;
         else if (button == 'f' || button == 'F')
             action = ROTATE_180;
-        ui->cur_visible = TRUE;
+        ui->cur_visible = true;
     } else if (button == 'j' || button == 'J') {
 	/* XXX should we have some mouse control for this? */
 	action = JUMBLE;
@@ -2458,12 +2402,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         }
         if (action == MOVE_CURSOR) {
             OFFSET(ui->cur_x, ui->cur_y, ui->cur_x, ui->cur_y, dir, state);
-            ui->cur_visible = TRUE;
+            ui->cur_visible = true;
         }
-        return "";
+        return MOVE_UI_UPDATE;
     } else if (action == SET_SOURCE) {
-	x -= WINDOW_OFFSET + TILE_BORDER;
-	y -= WINDOW_OFFSET + TILE_BORDER;
+	x -= WINDOW_OFFSET + LINE_THICK;
+	y -= WINDOW_OFFSET + LINE_THICK;
 	if (x < 0 || y < 0)
 	    return nullret;
 	tx = x / TILE_SIZE;
@@ -2473,12 +2417,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         /* Transform from physical to game coords */
         tx = (tx + ui->org_x) % state->width;
         ty = (ty + ui->org_y) % state->height;
-	if (x % TILE_SIZE >= TILE_SIZE - TILE_BORDER ||
-	    y % TILE_SIZE >= TILE_SIZE - TILE_BORDER)
+	if (x % TILE_SIZE >= TILE_SIZE - LINE_THICK ||
+	    y % TILE_SIZE >= TILE_SIZE - LINE_THICK)
 	    return nullret;
         ui->cx = tx;
         ui->cy = ty;
-        return "";
+        return MOVE_UI_UPDATE;
     } else {
 	return NULL;
     }
@@ -2487,20 +2431,21 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 static game_state *execute_move(const game_state *from, const char *move)
 {
     game_state *ret;
-    int tx = -1, ty = -1, n, noanim, orig;
+    int tx = -1, ty = -1, n, orig;
+    bool noanim;
 
     ret = dup_game(from);
 
     if (move[0] == 'J' || move[0] == 'S') {
 	if (move[0] == 'S')
-	    ret->used_solve = TRUE;
+	    ret->used_solve = true;
 
 	move++;
 	if (*move == ';')
 	    move++;
-	noanim = TRUE;
+	noanim = true;
     } else
-	noanim = FALSE;
+	noanim = false;
 
     ret->last_rotate_dir = 0;	       /* suppress animation */
     ret->last_rotate_x = ret->last_rotate_y = 0;
@@ -2544,27 +2489,34 @@ static game_state *execute_move(const game_state *from, const char *move)
     /*
      * Check whether the game has been completed.
      * 
-     * For this purpose it doesn't matter where the source square
-     * is, because we can start from anywhere and correctly
-     * determine whether the game is completed.
+     * For this purpose it doesn't matter where the source square is,
+     * because we can start from anywhere (or, at least, any square
+     * that's non-empty!), and correctly determine whether the game is
+     * completed.
      */
     {
-	unsigned char *active = compute_active(ret, 0, 0);
-	int x1, y1;
-	int complete = TRUE;
+	unsigned char *active;
+	int pos;
+        bool complete = true;
 
-	for (x1 = 0; x1 < ret->width; x1++)
-	    for (y1 = 0; y1 < ret->height; y1++)
-		if ((tile(ret, x1, y1) & 0xF) && !index(ret, active, x1, y1)) {
-		    complete = FALSE;
-		    goto break_label;  /* break out of two loops at once */
-		}
-	break_label:
+	for (pos = 0; pos < ret->width * ret->height; pos++)
+            if (ret->tiles[pos] & 0xF)
+                break;
 
-	sfree(active);
+        if (pos < ret->width * ret->height) {
+            active = compute_active(ret, pos % ret->width, pos / ret->width);
+
+            for (pos = 0; pos < ret->width * ret->height; pos++)
+                if ((ret->tiles[pos] & 0xF) && !active[pos]) {
+		    complete = false;
+                    break;
+                }
+
+            sfree(active);
+        }
 
 	if (complete)
-	    ret->completed = TRUE;
+	    ret->completed = true;
     }
 
     return ret;
@@ -2578,31 +2530,40 @@ static game_state *execute_move(const game_state *from, const char *move)
 static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 {
     game_drawstate *ds = snew(game_drawstate);
-    int i;
+    int i, ncells;
 
-    ds->started = FALSE;
     ds->width = state->width;
     ds->height = state->height;
-    ds->org_x = ds->org_y = -1;
-    ds->visible = snewn(state->width * state->height, int);
+    ncells = (state->width+2) * (state->height+2);
+    ds->visible = snewn(ncells, unsigned long);
+    ds->to_draw = snewn(ncells, unsigned long);
     ds->tilesize = 0;                  /* undecided yet */
-    for (i = 0; i < state->width * state->height; i++)
+    for (i = 0; i < ncells; i++)
         ds->visible[i] = -1;
 
     return ds;
 }
 
+#define dsindex(ds, field, x, y) ((ds)->field[((y)+1)*((ds)->width+2)+((x)+1)])
+#define visible(ds, x, y) dsindex(ds, visible, x, y)
+#define todraw(ds, x, y) dsindex(ds, to_draw, x, y)
+
 static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 {
     sfree(ds->visible);
+    sfree(ds->to_draw);
     sfree(ds);
 }
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
-    *x = WINDOW_OFFSET * 2 + tilesize * params->width + TILE_BORDER;
-    *y = WINDOW_OFFSET * 2 + tilesize * params->height + TILE_BORDER;
+    /* Ick: fake up `ds->tilesize' for macro expansion purposes */
+    struct { int tilesize; } ads, *ds = &ads;
+    ads.tilesize = tilesize;
+
+    *x = WINDOW_OFFSET * 2 + TILE_SIZE * params->width + LINE_THICK;
+    *y = WINDOW_OFFSET * 2 + TILE_SIZE * params->height + LINE_THICK;
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
@@ -2646,11 +2607,11 @@ static float *game_colours(frontend *fe, int *ncolours)
     ret[COL_BARRIER * 3 + 2] = 0.0F;
 
     /*
-     * Highlighted loops are red as well.
+     * Highlighted errors are red as well.
      */
-    ret[COL_LOOP * 3 + 0] = 1.0F;
-    ret[COL_LOOP * 3 + 1] = 0.0F;
-    ret[COL_LOOP * 3 + 2] = 0.0F;
+    ret[COL_ERR * 3 + 0] = 1.0F;
+    ret[COL_ERR * 3 + 1] = 0.0F;
+    ret[COL_ERR * 3 + 2] = 0.0F;
 
     /*
      * Unpowered endpoints are blue.
@@ -2676,297 +2637,286 @@ static float *game_colours(frontend *fe, int *ncolours)
     return ret;
 }
 
-static void draw_filled_line(drawing *dr, int x1, int y1, int x2, int y2,
-			     int colour)
+static void rotated_coords(float *ox, float *oy, const float matrix[4],
+                           float cx, float cy, float ix, float iy)
 {
-    draw_line(dr, x1-1, y1, x2-1, y2, COL_WIRE);
-    draw_line(dr, x1+1, y1, x2+1, y2, COL_WIRE);
-    draw_line(dr, x1, y1-1, x2, y2-1, COL_WIRE);
-    draw_line(dr, x1, y1+1, x2, y2+1, COL_WIRE);
-    draw_line(dr, x1, y1, x2, y2, colour);
+    *ox = matrix[0] * ix + matrix[2] * iy + cx;
+    *oy = matrix[1] * ix + matrix[3] * iy + cy;
 }
 
-static void draw_rect_coords(drawing *dr, int x1, int y1, int x2, int y2,
-                             int colour)
+/* Flags describing the visible features of a tile. */
+#define TILE_BARRIER_SHIFT            0  /* 4 bits: R U L D */
+#define TILE_BARRIER_CORNER_SHIFT     4  /* 4 bits: RU UL LD DR */
+#define TILE_KEYBOARD_CURSOR      (1<<8) /* 1 bit if cursor is here */
+#define TILE_WIRE_SHIFT               9  /* 8 bits: RR UU LL DD
+                                          * Each pair: 0=no wire, 1=unpowered,
+                                          * 2=powered, 3=error highlight */
+#define TILE_ENDPOINT_SHIFT          17  /* 2 bits: 0=no endpoint, 1=unpowered,
+                                          * 2=powered, 3=power-source square */
+#define TILE_WIRE_ON_EDGE_SHIFT      19  /* 8 bits: RR UU LL DD,
+                                          * same encoding as TILE_WIRE_SHIFT */
+#define TILE_ROTATING          (1UL<<27) /* 1 bit if tile is rotating */
+#define TILE_LOCKED            (1UL<<28) /* 1 bit if tile is locked */
+
+static void draw_wires(drawing *dr, int cx, int cy, int radius,
+                       unsigned long tile, int bitmap,
+                       int colour, int halfwidth, const float matrix[4])
 {
-    int mx = (x1 < x2 ? x1 : x2);
-    int my = (y1 < y2 ? y1 : y2);
-    int dx = (x2 + x1 - 2*mx + 1);
-    int dy = (y2 + y1 - 2*my + 1);
+    float fpoints[12*2];
+    int points[12*2];
+    int npoints, d, dsh, i;
+    bool any_wire_this_colour = false;
+    float xf, yf;
 
-    draw_rect(dr, mx, my, dx, dy, colour);
-}
+    npoints = 0;
+    for (d = 1, dsh = 0; d < 16; d *= 2, dsh++) {
+        int wiretype = (tile >> (TILE_WIRE_SHIFT + 2*dsh)) & 3;
 
-/*
- * draw_barrier_corner() and draw_barrier() are passed physical coords
- */
-static void draw_barrier_corner(drawing *dr, game_drawstate *ds,
-                                int x, int y, int dx, int dy, int phase)
-{
-    int bx = WINDOW_OFFSET + TILE_SIZE * x;
-    int by = WINDOW_OFFSET + TILE_SIZE * y;
-    int x1, y1;
+        fpoints[2*npoints+0] = halfwidth * (X(d) + X(C(d)));
+        fpoints[2*npoints+1] = halfwidth * (Y(d) + Y(C(d)));
+        npoints++;
 
-    x1 = (dx > 0 ? TILE_SIZE+TILE_BORDER-1 : 0);
-    y1 = (dy > 0 ? TILE_SIZE+TILE_BORDER-1 : 0);
+        if (bitmap & (1 << wiretype)) {
+            fpoints[2*npoints+0] = radius * X(d) + halfwidth * X(C(d));
+            fpoints[2*npoints+1] = radius * Y(d) + halfwidth * Y(C(d));
+            npoints++;
+            fpoints[2*npoints+0] = radius * X(d) + halfwidth * X(A(d));
+            fpoints[2*npoints+1] = radius * Y(d) + halfwidth * Y(A(d));
+            npoints++;
 
-    if (phase == 0) {
-        draw_rect_coords(dr, bx+x1+dx, by+y1,
-                         bx+x1-TILE_BORDER*dx, by+y1-(TILE_BORDER-1)*dy,
-                         COL_WIRE);
-        draw_rect_coords(dr, bx+x1, by+y1+dy,
-                         bx+x1-(TILE_BORDER-1)*dx, by+y1-TILE_BORDER*dy,
-                         COL_WIRE);
-    } else {
-        draw_rect_coords(dr, bx+x1, by+y1,
-                         bx+x1-(TILE_BORDER-1)*dx, by+y1-(TILE_BORDER-1)*dy,
-                         COL_BARRIER);
+            any_wire_this_colour = true;
+        }
     }
-}
 
-static void draw_barrier(drawing *dr, game_drawstate *ds,
-                         int x, int y, int dir, int phase)
-{
-    int bx = WINDOW_OFFSET + TILE_SIZE * x;
-    int by = WINDOW_OFFSET + TILE_SIZE * y;
-    int x1, y1, w, h;
+    if (!any_wire_this_colour)
+        return;
 
-    x1 = (X(dir) > 0 ? TILE_SIZE : X(dir) == 0 ? TILE_BORDER : 0);
-    y1 = (Y(dir) > 0 ? TILE_SIZE : Y(dir) == 0 ? TILE_BORDER : 0);
-    w = (X(dir) ? TILE_BORDER : TILE_SIZE - TILE_BORDER);
-    h = (Y(dir) ? TILE_BORDER : TILE_SIZE - TILE_BORDER);
-
-    if (phase == 0) {
-        draw_rect(dr, bx+x1-X(dir), by+y1-Y(dir), w, h, COL_WIRE);
-    } else {
-        draw_rect(dr, bx+x1, by+y1, w, h, COL_BARRIER);
+    for (i = 0; i < npoints; i++) {
+        rotated_coords(&xf, &yf, matrix, cx, cy, fpoints[2*i], fpoints[2*i+1]);
+        points[2*i] = 0.5F + xf;
+        points[2*i+1] = 0.5F + yf;
     }
+
+    draw_polygon(dr, points, npoints, colour, colour);
 }
 
-/*
- * draw_tile() is passed physical coordinates
- */
-static void draw_tile(drawing *dr, const game_state *state, game_drawstate *ds,
-                      int x, int y, int tile, int src, float angle, int cursor)
+static void draw_tile(drawing *dr, game_drawstate *ds, int x, int y,
+                      unsigned long tile, float angle)
 {
-    int bx = WINDOW_OFFSET + TILE_SIZE * x;
-    int by = WINDOW_OFFSET + TILE_SIZE * y;
+    int tx, ty;
+    int clipx, clipy, clipX, clipY, clipw, cliph;
+    int border_br = LINE_THICK/2, border_tl = LINE_THICK - border_br;
+    int barrier_outline_thick = (LINE_THICK+1)/2;
+    int bg, d, dsh, pass;
+    int cx, cy, radius;
     float matrix[4];
-    float cx, cy, ex, ey, tx, ty;
-    int dir, col, phase;
+
+    tx = WINDOW_OFFSET + TILE_SIZE * x + border_br;
+    ty = WINDOW_OFFSET + TILE_SIZE * y + border_br;
 
     /*
-     * When we draw a single tile, we must draw everything up to
-     * and including the borders around the tile. This means that
-     * if the neighbouring tiles have connections to those borders,
-     * we must draw those connections on the borders themselves.
+     * Clip to the tile boundary, with adjustments if we're drawing
+     * just outside the grid.
      */
-
-    clip(dr, bx, by, TILE_SIZE+TILE_BORDER, TILE_SIZE+TILE_BORDER);
+    clipx = tx; clipX = tx + TILE_SIZE;
+    clipy = ty; clipY = ty + TILE_SIZE;
+    if (x == -1) {
+        clipx = clipX - border_br - barrier_outline_thick;
+    } else if (x == ds->width) {
+        clipX = clipx + border_tl + barrier_outline_thick;
+    }
+    if (y == -1) {
+        clipy = clipY - border_br - barrier_outline_thick;
+    } else if (y == ds->height) {
+        clipY = clipy + border_tl + barrier_outline_thick;
+    }
+    clipw = clipX - clipx;
+    cliph = clipY - clipy;
+    clip(dr, clipx, clipy, clipw, cliph);
 
     /*
-     * So. First blank the tile out completely: draw a big
-     * rectangle in border colour, and a smaller rectangle in
-     * background colour to fill it in.
+     * Clear the clip region.
      */
-    draw_rect(dr, bx, by, TILE_SIZE+TILE_BORDER, TILE_SIZE+TILE_BORDER,
-              COL_BORDER);
-    draw_rect(dr, bx+TILE_BORDER, by+TILE_BORDER,
-              TILE_SIZE-TILE_BORDER, TILE_SIZE-TILE_BORDER,
-              tile & LOCKED ? COL_LOCKED : COL_BACKGROUND);
+    bg = (tile & TILE_LOCKED) ? COL_LOCKED : COL_BACKGROUND;
+    draw_rect(dr, clipx, clipy, clipw, cliph, bg);
 
     /*
-     * Draw an inset outline rectangle as a cursor, in whichever of
-     * COL_LOCKED and COL_BACKGROUND we aren't currently drawing
-     * in.
+     * Draw the grid lines.
      */
-    if (cursor) {
-	draw_line(dr, bx+TILE_SIZE/8, by+TILE_SIZE/8,
-		  bx+TILE_SIZE/8, by+TILE_SIZE-TILE_SIZE/8,
-		  tile & LOCKED ? COL_BACKGROUND : COL_LOCKED);
-	draw_line(dr, bx+TILE_SIZE/8, by+TILE_SIZE/8,
-		  bx+TILE_SIZE-TILE_SIZE/8, by+TILE_SIZE/8,
-		  tile & LOCKED ? COL_BACKGROUND : COL_LOCKED);
-	draw_line(dr, bx+TILE_SIZE-TILE_SIZE/8, by+TILE_SIZE/8,
-		  bx+TILE_SIZE-TILE_SIZE/8, by+TILE_SIZE-TILE_SIZE/8,
-		  tile & LOCKED ? COL_BACKGROUND : COL_LOCKED);
-	draw_line(dr, bx+TILE_SIZE/8, by+TILE_SIZE-TILE_SIZE/8,
-		  bx+TILE_SIZE-TILE_SIZE/8, by+TILE_SIZE-TILE_SIZE/8,
-		  tile & LOCKED ? COL_BACKGROUND : COL_LOCKED);
+    {
+        int gridl = (x == -1 ? tx+TILE_SIZE-border_br : tx);
+        int gridr = (x == ds->width ? tx+border_tl : tx+TILE_SIZE);
+        int gridu = (y == -1 ? ty+TILE_SIZE-border_br : ty);
+        int gridd = (y == ds->height ? ty+border_tl : ty+TILE_SIZE);
+        if (x >= 0)
+            draw_rect(dr, tx, gridu, border_tl, gridd-gridu, COL_BORDER);
+        if (y >= 0)
+            draw_rect(dr, gridl, ty, gridr-gridl, border_tl, COL_BORDER);
+        if (x < ds->width)
+            draw_rect(dr, tx+TILE_SIZE-border_br, gridu,
+                      border_br, gridd-gridu, COL_BORDER);
+        if (y < ds->height)
+            draw_rect(dr, gridl, ty+TILE_SIZE-border_br,
+                      gridr-gridl, border_br, COL_BORDER);
     }
 
     /*
-     * Set up the rotation matrix.
+     * Draw the keyboard cursor.
      */
-    matrix[0] = (float)cos(angle * PI / 180.0);
-    matrix[1] = (float)-sin(angle * PI / 180.0);
-    matrix[2] = (float)sin(angle * PI / 180.0);
-    matrix[3] = (float)cos(angle * PI / 180.0);
+    if (tile & TILE_KEYBOARD_CURSOR) {
+        int cursorcol = (tile & TILE_LOCKED) ? COL_BACKGROUND : COL_LOCKED;
+        int inset_outer = TILE_SIZE/8, inset_inner = inset_outer + LINE_THICK;
+        draw_rect(dr, tx + inset_outer, ty + inset_outer,
+                  TILE_SIZE - 2*inset_outer, TILE_SIZE - 2*inset_outer,
+                  cursorcol);
+        draw_rect(dr, tx + inset_inner, ty + inset_inner,
+                  TILE_SIZE - 2*inset_inner, TILE_SIZE - 2*inset_inner,
+                  bg);
+    }
+
+    radius = (TILE_SIZE+1)/2;
+    cx = tx + radius;
+    cy = ty + radius;
+    radius++;
+
+    /*
+     * Draw protrusions into this cell's edges of wires in
+     * neighbouring cells, as given by the TILE_WIRE_ON_EDGE_SHIFT
+     * flags. We only draw each of these if there _isn't_ a wire of
+     * our own that's going to overlap it, which means either the
+     * corresponding TILE_WIRE_SHIFT flag is zero, or else the
+     * TILE_ROTATING flag is set (so that our main wire won't be drawn
+     * in quite that place anyway).
+     */
+    for (d = 1, dsh = 0; d < 16; d *= 2, dsh++) {
+        int edgetype = ((tile >> (TILE_WIRE_ON_EDGE_SHIFT + 2*dsh)) & 3);
+        if (edgetype == 0)
+            continue;             /* there isn't a wire on the edge */
+        if (!(tile & TILE_ROTATING) &&
+            ((tile >> (TILE_WIRE_SHIFT + 2*dsh)) & 3) != 0)
+            continue;     /* wire on edge would be overdrawn anyway */
+
+        for (pass = 0; pass < 2; pass++) {
+            int x, y, w, h;
+            int col = (pass == 0 || edgetype == 1 ? COL_WIRE :
+                       edgetype == 2 ? COL_POWERED : COL_ERR);
+            int halfwidth = pass == 0 ? 2*LINE_THICK-1 : LINE_THICK-1;
+
+            if (X(d) < 0) {
+                x = tx;
+                w = border_tl;
+            } else if (X(d) > 0) {
+                x = tx + TILE_SIZE - border_br;
+                w = border_br;
+            } else {
+                x = cx - halfwidth;
+                w = 2 * halfwidth + 1;
+            }
+
+            if (Y(d) < 0) {
+                y = ty;
+                h = border_tl;
+            } else if (Y(d) > 0) {
+                y = ty + TILE_SIZE - border_br;
+                h = border_br;
+            } else {
+                y = cy - halfwidth;
+                h = 2 * halfwidth + 1;
+            }
+
+            draw_rect(dr, x, y, w, h, col);
+        }
+    }
+
+    /*
+     * Set up the rotation matrix for the main cell contents, i.e.
+     * everything that is centred in the grid square and optionally
+     * rotated by an arbitrary angle about that centre point.
+     */
+    if (tile & TILE_ROTATING) {
+        matrix[0] = (float)cos(angle * (float)PI / 180.0F);
+        matrix[2] = (float)sin(angle * (float)PI / 180.0F);
+    } else {
+        matrix[0] = 1.0F;
+        matrix[2] = 0.0F;
+    }
+    matrix[3] = matrix[0];
+    matrix[1] = -matrix[2];
 
     /*
      * Draw the wires.
      */
-    cx = cy = TILE_BORDER + (TILE_SIZE-TILE_BORDER) / 2.0F - 0.5F;
-    col = (tile & ACTIVE ? COL_POWERED : COL_WIRE);
-    for (dir = 1; dir < 0x10; dir <<= 1) {
-        if (tile & dir) {
-            ex = (TILE_SIZE - TILE_BORDER - 1.0F) / 2.0F * X(dir);
-            ey = (TILE_SIZE - TILE_BORDER - 1.0F) / 2.0F * Y(dir);
-            MATMUL(tx, ty, matrix, ex, ey);
-            draw_filled_line(dr, bx+(int)cx, by+(int)cy,
-			     bx+(int)(cx+tx), by+(int)(cy+ty),
-			     COL_WIRE);
-        }
-    }
-    for (dir = 1; dir < 0x10; dir <<= 1) {
-        if (tile & dir) {
-            ex = (TILE_SIZE - TILE_BORDER - 1.0F) / 2.0F * X(dir);
-            ey = (TILE_SIZE - TILE_BORDER - 1.0F) / 2.0F * Y(dir);
-            MATMUL(tx, ty, matrix, ex, ey);
-            draw_line(dr, bx+(int)cx, by+(int)cy,
-		      bx+(int)(cx+tx), by+(int)(cy+ty),
-                      (tile & LOOP(dir)) ? COL_LOOP : col);
-        }
-    }
-    /* If we've drawn any loop-highlighted arms, make sure the centre
-     * point is loop-coloured rather than a later arm overwriting it. */
-    if (tile & (RLOOP | ULOOP | LLOOP | DLOOP))
-        draw_rect(dr, bx+(int)cx, by+(int)cy, 1, 1, COL_LOOP);
+    draw_wires(dr, cx, cy, radius, tile,
+               0xE, COL_WIRE, 2*LINE_THICK-1, matrix);
+    draw_wires(dr, cx, cy, radius, tile,
+               0x4, COL_POWERED, LINE_THICK-1, matrix);
+    draw_wires(dr, cx, cy, radius, tile,
+               0x8, COL_ERR, LINE_THICK-1, matrix);
 
     /*
-     * Draw the box in the middle. We do this in blue if the tile
-     * is an unpowered endpoint, in cyan if the tile is a powered
-     * endpoint, in black if the tile is the centrepiece, and
-     * otherwise not at all.
+     * Draw the central box.
      */
-    col = -1;
-    if (src)
-        col = COL_WIRE;
-    else if (COUNT(tile) == 1) {
-        col = (tile & ACTIVE ? COL_POWERED : COL_ENDPOINT);
-    }
-    if (col >= 0) {
-        int i, points[8];
+    for (pass = 0; pass < 2; pass++) {
+        int endtype = (tile >> TILE_ENDPOINT_SHIFT) & 3;
+        if (endtype) {
+            int i, points[8], col;
+            float boxr = TILE_SIZE * 0.24F + (pass == 0 ? LINE_THICK-1 : 0);
 
-        points[0] = +1; points[1] = +1;
-        points[2] = +1; points[3] = -1;
-        points[4] = -1; points[5] = -1;
-        points[6] = -1; points[7] = +1;
+            col = (pass == 0 || endtype == 3 ? COL_WIRE :
+                   endtype == 2 ? COL_POWERED : COL_ENDPOINT);
 
-        for (i = 0; i < 8; i += 2) {
-            ex = (TILE_SIZE * 0.24F) * points[i];
-            ey = (TILE_SIZE * 0.24F) * points[i+1];
-            MATMUL(tx, ty, matrix, ex, ey);
-            points[i] = bx+(int)(cx+tx);
-            points[i+1] = by+(int)(cy+ty);
-        }
+            points[0] = +1; points[1] = +1;
+            points[2] = +1; points[3] = -1;
+            points[4] = -1; points[5] = -1;
+            points[6] = -1; points[7] = +1;
 
-        draw_polygon(dr, points, 4, col, COL_WIRE);
-    }
-
-    /*
-     * Draw the points on the border if other tiles are connected
-     * to us.
-     */
-    for (dir = 1; dir < 0x10; dir <<= 1) {
-        int dx, dy, px, py, lx, ly, vx, vy, ox, oy;
-
-        dx = X(dir);
-        dy = Y(dir);
-
-        ox = x + dx;
-        oy = y + dy;
-
-        if (ox < 0 || ox >= state->width || oy < 0 || oy >= state->height)
-            continue;
-
-        if (!(tile(state, GX(ox), GY(oy)) & F(dir)))
-            continue;
-
-        px = bx + (int)(dx>0 ? TILE_SIZE + TILE_BORDER - 1 : dx<0 ? 0 : cx);
-        py = by + (int)(dy>0 ? TILE_SIZE + TILE_BORDER - 1 : dy<0 ? 0 : cy);
-        lx = dx * (TILE_BORDER-1);
-        ly = dy * (TILE_BORDER-1);
-        vx = (dy ? 1 : 0);
-        vy = (dx ? 1 : 0);
-
-        if (angle == 0.0 && (tile & dir)) {
-            /*
-             * If we are fully connected to the other tile, we must
-             * draw right across the tile border. (We can use our
-             * own ACTIVE state to determine what colour to do this
-             * in: if we are fully connected to the other tile then
-             * the two ACTIVE states will be the same.)
-             */
-            draw_rect_coords(dr, px-vx, py-vy, px+lx+vx, py+ly+vy, COL_WIRE);
-            draw_rect_coords(dr, px, py, px+lx, py+ly,
-                             ((tile & LOOP(dir)) ? COL_LOOP :
-                              (tile & ACTIVE) ? COL_POWERED :
-                              COL_WIRE));
-        } else {
-            /*
-             * The other tile extends into our border, but isn't
-             * actually connected to us. Just draw a single black
-             * dot.
-             */
-            draw_rect_coords(dr, px, py, px, py, COL_WIRE);
-        }
-    }
-
-    /*
-     * Draw barrier corners, and then barriers.
-     */
-    for (phase = 0; phase < 2; phase++) {
-        for (dir = 1; dir < 0x10; dir <<= 1) {
-            int x1, y1, corner = FALSE;
-            /*
-             * If at least one barrier terminates at the corner
-             * between dir and A(dir), draw a barrier corner.
-             */
-            if (barrier(state, GX(x), GY(y)) & (dir | A(dir))) {
-                corner = TRUE;
-            } else {
-                /*
-                 * Only count barriers terminating at this corner
-                 * if they're physically next to the corner. (That
-                 * is, if they've wrapped round from the far side
-                 * of the screen, they don't count.)
-                 */
-                x1 = x + X(dir);
-                y1 = y + Y(dir);
-                if (x1 >= 0 && x1 < state->width &&
-                    y1 >= 0 && y1 < state->height &&
-                    (barrier(state, GX(x1), GY(y1)) & A(dir))) {
-                    corner = TRUE;
-                } else {
-                    x1 = x + X(A(dir));
-                    y1 = y + Y(A(dir));
-                    if (x1 >= 0 && x1 < state->width &&
-                        y1 >= 0 && y1 < state->height &&
-                        (barrier(state, GX(x1), GY(y1)) & dir))
-                        corner = TRUE;
-                }
+            for (i = 0; i < 8; i += 2) {
+                float x, y;
+                rotated_coords(&x, &y, matrix, cx, cy,
+                               boxr * points[i], boxr * points[i+1]);
+                points[i] = x + 0.5F;
+                points[i+1] = y + 0.5F;
             }
 
-            if (corner) {
-                /*
-                 * At least one barrier terminates here. Draw a
-                 * corner.
-                 */
-                draw_barrier_corner(dr, ds, x, y,
-                                    X(dir)+X(A(dir)), Y(dir)+Y(A(dir)),
-                                    phase);
-            }
+            draw_polygon(dr, points, 4, col, COL_WIRE);
         }
-
-        for (dir = 1; dir < 0x10; dir <<= 1)
-            if (barrier(state, GX(x), GY(y)) & dir)
-                draw_barrier(dr, ds, x, y, dir, phase);
     }
 
+    /*
+     * Draw barriers along grid edges.
+     */
+    for (pass = 0; pass < 2; pass++) {
+        int btl = border_tl, bbr = border_br, col = COL_BARRIER;
+        if (pass == 0) {
+            btl += barrier_outline_thick;
+            bbr += barrier_outline_thick;
+            col = COL_WIRE;
+        }
+
+        if (tile & (L << TILE_BARRIER_SHIFT))
+            draw_rect(dr, tx, ty, btl, TILE_SIZE, col);
+        if (tile & (R << TILE_BARRIER_SHIFT))
+            draw_rect(dr, tx+TILE_SIZE-bbr, ty, bbr, TILE_SIZE, col);
+        if (tile & (U << TILE_BARRIER_SHIFT))
+            draw_rect(dr, tx, ty, TILE_SIZE, btl, col);
+        if (tile & (D << TILE_BARRIER_SHIFT))
+            draw_rect(dr, tx, ty+TILE_SIZE-bbr, TILE_SIZE, bbr, col);
+
+        if (tile & (R << TILE_BARRIER_CORNER_SHIFT))
+            draw_rect(dr, tx+TILE_SIZE-bbr, ty, bbr, btl, col);
+        if (tile & (U << TILE_BARRIER_CORNER_SHIFT))
+            draw_rect(dr, tx, ty, btl, btl, col);
+        if (tile & (L << TILE_BARRIER_CORNER_SHIFT))
+            draw_rect(dr, tx, ty+TILE_SIZE-bbr, btl, bbr, col);
+        if (tile & (D << TILE_BARRIER_CORNER_SHIFT))
+            draw_rect(dr, tx+TILE_SIZE-bbr, ty+TILE_SIZE-bbr, bbr, bbr, col);
+    }
+
+    /*
+     * Unclip and draw update, to finish.
+     */
     unclip(dr);
-
-    draw_update(dr, bx, by, TILE_SIZE+TILE_BORDER, TILE_SIZE+TILE_BORDER);
+    draw_update(dr, clipx, clipy, clipw, cliph);
 }
 
 static void game_redraw(drawing *dr, game_drawstate *ds,
@@ -2974,74 +2924,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                         int dir, const game_ui *ui,
                         float t, float ft)
 {
-    int x, y, tx, ty, frame, last_rotate_dir, moved_origin = FALSE;
+    int tx, ty, dx, dy, d, dsh, last_rotate_dir, frame;
     unsigned char *active;
     int *loops;
     float angle = 0.0;
-
-    /*
-     * Clear the screen, and draw the exterior barrier lines, if
-     * this is our first call or if the origin has changed.
-     */
-    if (!ds->started || ui->org_x != ds->org_x || ui->org_y != ds->org_y) {
-        int phase;
-
-        ds->started = TRUE;
-
-        draw_rect(dr, 0, 0, 
-                  WINDOW_OFFSET * 2 + TILE_SIZE * state->width + TILE_BORDER,
-                  WINDOW_OFFSET * 2 + TILE_SIZE * state->height + TILE_BORDER,
-                  COL_BACKGROUND);
-
-        ds->org_x = ui->org_x;
-        ds->org_y = ui->org_y;
-        moved_origin = TRUE;
-
-        draw_update(dr, 0, 0, 
-                    WINDOW_OFFSET*2 + TILE_SIZE*state->width + TILE_BORDER,
-                    WINDOW_OFFSET*2 + TILE_SIZE*state->height + TILE_BORDER);
-
-        for (phase = 0; phase < 2; phase++) {
-
-            for (x = 0; x < ds->width; x++) {
-                if (x+1 < ds->width) {
-                    if (barrier(state, GX(x), GY(0)) & R)
-                        draw_barrier_corner(dr, ds, x, -1, +1, +1, phase);
-                    if (barrier(state, GX(x), GY(ds->height-1)) & R)
-                        draw_barrier_corner(dr, ds, x, ds->height, +1, -1, phase);
-                }
-                if (barrier(state, GX(x), GY(0)) & U) {
-                    draw_barrier_corner(dr, ds, x, -1, -1, +1, phase);
-                    draw_barrier_corner(dr, ds, x, -1, +1, +1, phase);
-                    draw_barrier(dr, ds, x, -1, D, phase);
-                }
-                if (barrier(state, GX(x), GY(ds->height-1)) & D) {
-                    draw_barrier_corner(dr, ds, x, ds->height, -1, -1, phase);
-                    draw_barrier_corner(dr, ds, x, ds->height, +1, -1, phase);
-                    draw_barrier(dr, ds, x, ds->height, U, phase);
-                }
-            }
-
-            for (y = 0; y < ds->height; y++) {
-                if (y+1 < ds->height) {
-                    if (barrier(state, GX(0), GY(y)) & D)
-                        draw_barrier_corner(dr, ds, -1, y, +1, +1, phase);
-                    if (barrier(state, GX(ds->width-1), GY(y)) & D)
-                        draw_barrier_corner(dr, ds, ds->width, y, -1, +1, phase);
-                }
-                if (barrier(state, GX(0), GY(y)) & L) {
-                    draw_barrier_corner(dr, ds, -1, y, +1, -1, phase);
-                    draw_barrier_corner(dr, ds, -1, y, +1, +1, phase);
-                    draw_barrier(dr, ds, -1, y, R, phase);
-                }
-                if (barrier(state, GX(ds->width-1), GY(y)) & R) {
-                    draw_barrier_corner(dr, ds, ds->width, y, -1, -1, phase);
-                    draw_barrier_corner(dr, ds, ds->width, y, -1, +1, phase);
-                    draw_barrier(dr, ds, ds->width, y, L, phase);
-                }
-            }
-        }
-    }
 
     tx = ty = -1;
     last_rotate_dir = dir==-1 ? oldstate->last_rotate_dir :
@@ -3057,30 +2943,101 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         state = oldstate;
     }
 
-    frame = -1;
     if (ft > 0) {
         /*
          * We're animating a completion flash. Find which frame
          * we're at.
          */
         frame = (int)(ft / FLASH_FRAME);
+    } else {
+        frame = 0;
     }
 
     /*
-     * Draw any tile which differs from the way it was last drawn.
+     * Build up a map of what we want every tile to look like. We
+     * include tiles one square outside the grid, for the outer edges
+     * of barriers.
      */
     active = compute_active(state, ui->cx, ui->cy);
-    loops = compute_loops(state);
+    loops = compute_loops(state, ui->unlocked_loops);
 
-    for (x = 0; x < ds->width; x++)
-        for (y = 0; y < ds->height; y++) {
-            int c = tile(state, GX(x), GY(y)) |
-                index(state, active, GX(x), GY(y)) |
-                index(state, loops, GX(x), GY(y));
-            int is_src = GX(x) == ui->cx && GY(y) == ui->cy;
-            int is_anim = GX(x) == tx && GY(y) == ty;
-            int is_cursor = ui->cur_visible &&
-                            GX(x) == ui->cur_x && GY(y) == ui->cur_y;
+    for (dy = -1; dy < ds->height+1; dy++) {
+        for (dx = -1; dx < ds->width+1; dx++) {
+            todraw(ds, dx, dy) = 0;
+        }
+    }
+
+    for (dy = 0; dy < ds->height; dy++) {
+        int gy = (dy + ui->org_y) % ds->height;
+        for (dx = 0; dx < ds->width; dx++) {
+            int gx = (dx + ui->org_x) % ds->width;
+            int t = (tile(state, gx, gy) |
+                     index(state, loops, gx, gy) |
+                     index(state, active, gx, gy));
+
+            for (d = 1, dsh = 0; d < 16; d *= 2, dsh++) {
+                if (barrier(state, gx, gy) & d) {
+                    todraw(ds, dx, dy) |=
+                        d << TILE_BARRIER_SHIFT;
+                    todraw(ds, dx + X(d), dy + Y(d)) |=
+                        F(d) << TILE_BARRIER_SHIFT;
+                    todraw(ds, dx + X(A(d)), dy + Y(A(d))) |=
+                        C(d) << TILE_BARRIER_CORNER_SHIFT;
+                    todraw(ds, dx + X(A(d)) + X(d), dy + Y(A(d)) + Y(d)) |=
+                        F(d) << TILE_BARRIER_CORNER_SHIFT;
+                    todraw(ds, dx + X(C(d)), dy + Y(C(d))) |=
+                        d << TILE_BARRIER_CORNER_SHIFT;
+                    todraw(ds, dx + X(C(d)) + X(d), dy + Y(C(d)) + Y(d)) |=
+                        A(d) << TILE_BARRIER_CORNER_SHIFT;
+                }
+
+                if (t & d) {
+                    int edgeval;
+
+                    /* Highlight as an error any edge in a locked tile that
+                     * is adjacent to a lack-of-edge in another locked tile,
+                     * or to a barrier */
+                    if (t & LOCKED) {
+                        if (barrier(state, gx, gy) & d) {
+                            t |= ERR(d);
+                        } else {
+                            int ox, oy, t2;
+                            OFFSET(ox, oy, gx, gy, d, state);
+                            t2 = tile(state, ox, oy);
+                            if ((t2 & LOCKED) && !(t2 & F(d))) {
+                                t |= ERR(d);
+                            }
+                        }
+                    }
+
+                    edgeval = (t & ERR(d) ? 3 : t & ACTIVE ? 2 : 1);
+                    todraw(ds, dx, dy) |= edgeval << (TILE_WIRE_SHIFT + dsh*2);
+                    if (!(gx == tx && gy == ty)) {
+                        todraw(ds, dx + X(d), dy + Y(d)) |=
+                            edgeval << (TILE_WIRE_ON_EDGE_SHIFT + (dsh ^ 2)*2);
+                    }
+                }
+            }
+
+            if (ui->cur_visible && gx == ui->cur_x && gy == ui->cur_y)
+                todraw(ds, dx, dy) |= TILE_KEYBOARD_CURSOR;
+
+            if (gx == tx && gy == ty)
+                todraw(ds, dx, dy) |= TILE_ROTATING;
+
+            if (gx == ui->cx && gy == ui->cy) {
+                todraw(ds, dx, dy) |= 3 << TILE_ENDPOINT_SHIFT;
+            } else if ((t & 0xF) != R && (t & 0xF) != U && 
+                       (t & 0xF) != L && (t & 0xF) != D) {
+                /* this is not an endpoint tile */
+            } else if (t & ACTIVE) {
+                todraw(ds, dx, dy) |= 2 << TILE_ENDPOINT_SHIFT;
+            } else {
+                todraw(ds, dx, dy) |= 1 << TILE_ENDPOINT_SHIFT;
+            }
+
+            if (t & LOCKED)
+                todraw(ds, dx, dy) |= TILE_LOCKED;
 
             /*
              * In a completion flash, we adjust the LOCKED bit
@@ -3088,50 +3045,78 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
              * the frame number.
              */
             if (frame >= 0) {
-                int rcx = RX(ui->cx), rcy = RY(ui->cy);
+                int rcx = (ui->cx + ds->width - ui->org_x) % ds->width;
+                int rcy = (ui->cy + ds->height - ui->org_y) % ds->height;
                 int xdist, ydist, dist;
-                xdist = (x < rcx ? rcx - x : x - rcx);
-                ydist = (y < rcy ? rcy - y : y - rcy);
+                xdist = (dx < rcx ? rcx - dx : dx - rcx);
+                ydist = (dy < rcy ? rcy - dy : dy - rcy);
                 dist = (xdist > ydist ? xdist : ydist);
 
-                if (frame >= dist && frame < dist+4) {
-                    int lock = (frame - dist) & 1;
-                    lock = lock ? LOCKED : 0;
-                    c = (c &~ LOCKED) | lock;
-                }
-            }
-
-            if (moved_origin ||
-                index(state, ds->visible, x, y) != c ||
-                index(state, ds->visible, x, y) == -1 ||
-                is_src || is_anim || is_cursor) {
-                draw_tile(dr, state, ds, x, y, c,
-                          is_src, (is_anim ? angle : 0.0F), is_cursor);
-                if (is_src || is_anim || is_cursor)
-                    index(state, ds->visible, x, y) = -1;
-                else
-                    index(state, ds->visible, x, y) = c;
+                if (frame >= dist && frame < dist+4 &&
+                    ((frame - dist) & 1))
+                    todraw(ds, dx, dy) ^= TILE_LOCKED;
             }
         }
+    }
+
+    /*
+     * Now draw any tile that differs from the way it was last drawn.
+     * An exception is that if either the previous _or_ current state
+     * has the TILE_ROTATING bit set, we must draw it regardless,
+     * because it will have rotated to a different angle.q
+     */
+    for (dy = -1; dy < ds->height+1; dy++) {
+        for (dx = -1; dx < ds->width+1; dx++) {
+            int prev = visible(ds, dx, dy);
+            int curr = todraw(ds, dx, dy);
+            if (prev != curr || ((prev | curr) & TILE_ROTATING) != 0) {
+                draw_tile(dr, ds, dx, dy, curr, angle);
+                visible(ds, dx, dy) = curr;
+            }
+        }
+    }
 
     /*
      * Update the status bar.
      */
     {
-	char statusbuf[256];
+	char statusbuf[256], *p;
 	int i, n, n2, a;
+        bool complete = false;
 
-	n = state->width * state->height;
-	for (i = a = n2 = 0; i < n; i++) {
-	    if (active[i])
-		a++;
-            if (state->tiles[i] & 0xF)
-                n2++;
+        p = statusbuf;
+        *p = '\0';     /* ensure even an empty status string is terminated */
+
+        if (state->used_solve) {
+            p += sprintf(p, "Auto-solved. ");
+            complete = true;
+        } else if (state->completed) {
+            p += sprintf(p, "COMPLETED! ");
+            complete = true;
         }
 
-	sprintf(statusbuf, "%sActive: %d/%d",
-		(state->used_solve ? "Auto-solved. " :
-		 state->completed ? "COMPLETED! " : ""), a, n2);
+        /*
+         * Omit the 'Active: n/N' counter completely if the source
+         * tile is a completely empty one, because then the active
+         * count can't help but read '1'.
+         */
+        if (tile(state, ui->cx, ui->cy) & 0xF) {
+            n = state->width * state->height;
+            for (i = a = n2 = 0; i < n; i++) {
+                if (active[i])
+                    a++;
+                if (state->tiles[i] & 0xF)
+                    n2++;
+            }
+
+            /*
+             * Also, if we're displaying a completion indicator and
+             * the game is still in its completed state (i.e. every
+             * tile is active), we might as well omit this too.
+             */
+            if (!complete || a < n2)
+                p += sprintf(p, "Active: %d/%d", a, n2);
+        }
 
 	status_bar(dr, statusbuf);
     }
@@ -3176,30 +3161,40 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        *x = WINDOW_OFFSET + TILE_SIZE * ui->cur_x;
+        *y = WINDOW_OFFSET + TILE_SIZE * ui->cur_y;
+
+        *w = *h = TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
-{
-    return TRUE;
-}
-
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
     /*
      * I'll use 8mm squares by default.
      */
-    game_compute_size(params, 800, &pw, &ph);
+    game_compute_size(params, 800, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
 static void draw_diagram(drawing *dr, game_drawstate *ds, int x, int y,
-			 int topleft, int v, int drawlines, int ink)
+			 bool topleft, int v, bool drawlines, int ink)
 {
     int tx, ty, cx, cy, r, br, k, thick;
 
@@ -3244,7 +3239,8 @@ static void draw_diagram(drawing *dr, game_drawstate *ds, int x, int y,
     }
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int w = state->width, h = state->height;
     int ink = print_mono_colour(dr, 0);
@@ -3312,12 +3308,12 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 	    /*
 	     * Draw the top left corner diagram.
 	     */
-	    draw_diagram(dr, ds, x, y, TRUE, vx, TRUE, ink);
+	    draw_diagram(dr, ds, x, y, true, vx, true, ink);
 
 	    /*
 	     * Draw the real solution diagram, if we're doing so.
 	     */
-	    draw_diagram(dr, ds, x, y, FALSE, v, locked, ink);
+	    draw_diagram(dr, ds, x, y, false, v, locked, ink);
 	}
 }
 
@@ -3328,25 +3324,28 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Net", "games.net", "net",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    FALSE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    false, NULL, NULL, /* can_format_as_text_now, text_format */
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
     encode_ui,
     decode_ui,
+    NULL, /* game_request_keys */
     game_changed_state,
+    current_key_label,
     interpret_move,
     execute_move,
     PREFERRED_TILE_SIZE, game_compute_size, game_set_size,
@@ -3356,9 +3355,10 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    TRUE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    true,			       /* wants_statusbar */
+    false, NULL,                       /* timing_state */
     0,				       /* flags */
 };

@@ -38,7 +38,6 @@
 		3701DC7D16E734A800896D7D /* magnets.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4516E734A800896D7D /* magnets.c */; };
 		3701DC7E16E734A800896D7D /* malloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4616E734A800896D7D /* malloc.c */; };
 		3701DC7F16E734A800896D7D /* map.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4716E734A800896D7D /* map.c */; };
-		3701DC8016E734A800896D7D /* maxflow.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4816E734A800896D7D /* maxflow.c */; };
 		3701DC8116E734A800896D7D /* midend.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4916E734A800896D7D /* midend.c */; };
 		3701DC8216E734A800896D7D /* mines.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4A16E734A800896D7D /* mines.c */; };
 		3701DC8316E734A800896D7D /* misc.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701DC4B16E734A800896D7D /* misc.c */; };
@@ -219,6 +218,68 @@
 		37DDFDC116F78FE2007B6287 /* inprogress.png in Resources */ = {isa = PBXBuildFile; fileRef = 37DDFDC016F78FE2007B6287 /* inprogress.png */; };
 		37F367892513250000E35EFD /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 37F367882513250000E35EFD /* Images.xcassets */; };
 		37F3678B251603D900E35EFD /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37F3678A251603D900E35EFD /* WebKit.framework */; };
+		F1189C452232F99E0036C0CE /* abcd.c in Sources */ = {isa = PBXBuildFile; fileRef = F1189C442232F99E0036C0CE /* abcd.c */; };
+		F1189C472232F9B40036C0CE /* crossing.c in Sources */ = {isa = PBXBuildFile; fileRef = F1189C462232F9B40036C0CE /* crossing.c */; };
+		F1189C492232F9C00036C0CE /* mathrax.c in Sources */ = {isa = PBXBuildFile; fileRef = F1189C482232F9C00036C0CE /* mathrax.c */; };
+		F1189C4B2232F9CB0036C0CE /* seismic.c in Sources */ = {isa = PBXBuildFile; fileRef = F1189C4A2232F9CB0036C0CE /* seismic.c */; };
+		F119658A2233205C006AC204 /* mathrax-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965822233205B006AC204 /* mathrax-96d24.png */; };
+		F119658B2233205C006AC204 /* abcd-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965832233205B006AC204 /* abcd-96d24@2x.png */; };
+		F119658C2233205C006AC204 /* seismic-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965842233205B006AC204 /* seismic-96d24.png */; };
+		F119658D2233205C006AC204 /* abcd-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965852233205B006AC204 /* abcd-96d24.png */; };
+		F119658E2233205C006AC204 /* crossing-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965862233205B006AC204 /* crossing-96d24@2x.png */; };
+		F119658F2233205C006AC204 /* crossing-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965872233205B006AC204 /* crossing-96d24.png */; };
+		F11965902233205C006AC204 /* mathrax-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965882233205C006AC204 /* mathrax-96d24@2x.png */; };
+		F11965912233205C006AC204 /* seismic-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F11965892233205C006AC204 /* seismic-96d24@2x.png */; };
+		F149196A2280E28500C21C88 /* sort.c in Sources */ = {isa = PBXBuildFile; fileRef = F14919692280E28500C21C88 /* sort.c */; };
+		F14F8EC62A4E5ED600904ADE /* spectre.c in Sources */ = {isa = PBXBuildFile; fileRef = F14F8EC32A4E5ED600904ADE /* spectre.c */; };
+		F15D1D36209A1DF800499142 /* matching.c in Sources */ = {isa = PBXBuildFile; fileRef = F15D1D35209A1DF800499142 /* matching.c */; };
+		F1729A172724FD6B00F0BE01 /* bricks-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F1729A152724FD6B00F0BE01 /* bricks-96d24.png */; };
+		F1729A182724FD6B00F0BE01 /* bricks-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F1729A162724FD6B00F0BE01 /* bricks-96d24@2x.png */; };
+		F1729A1A2724FDF000F0BE01 /* bricks.c in Sources */ = {isa = PBXBuildFile; fileRef = F1729A192724FDF000F0BE01 /* bricks.c */; };
+		F175DA061FD5BFD8001ADB23 /* salad.c in Sources */ = {isa = PBXBuildFile; fileRef = F175DA041FD5BFD8001ADB23 /* salad.c */; };
+		F175DA071FD5BFD8001ADB23 /* rome.c in Sources */ = {isa = PBXBuildFile; fileRef = F175DA051FD5BFD8001ADB23 /* rome.c */; };
+		F175DA091FD5BFFD001ADB23 /* clusters.c in Sources */ = {isa = PBXBuildFile; fileRef = F175DA081FD5BFFD001ADB23 /* clusters.c */; };
+		F17810D31F8BC690007B8547 /* rect.html in Resources */ = {isa = PBXBuildFile; fileRef = F17810CF1F8BC690007B8547 /* rect.html */; };
+		F17810D41F8BC690007B8547 /* ascent.c in Sources */ = {isa = PBXBuildFile; fileRef = F17810D01F8BC690007B8547 /* ascent.c */; };
+		F17810D51F8BC690007B8547 /* spokes.c in Sources */ = {isa = PBXBuildFile; fileRef = F17810D11F8BC690007B8547 /* spokes.c */; };
+		F17810D61F8BC690007B8547 /* boats.c in Sources */ = {isa = PBXBuildFile; fileRef = F17810D21F8BC690007B8547 /* boats.c */; };
+		F17810DF1F8BD232007B8547 /* boats-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810D71F8BD231007B8547 /* boats-96d24@2x.png */; };
+		F17810E01F8BD232007B8547 /* palisade-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810D81F8BD231007B8547 /* palisade-96d24@2x.png */; };
+		F17810E11F8BD232007B8547 /* boats-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810D91F8BD231007B8547 /* boats-96d24.png */; };
+		F17810E21F8BD232007B8547 /* spokes-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810DA1F8BD231007B8547 /* spokes-96d24@2x.png */; };
+		F17810E31F8BD232007B8547 /* palisade-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810DB1F8BD232007B8547 /* palisade-96d24.png */; };
+		F17810E41F8BD232007B8547 /* ascent-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810DC1F8BD232007B8547 /* ascent-96d24@2x.png */; };
+		F17810E51F8BD232007B8547 /* spokes-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810DD1F8BD232007B8547 /* spokes-96d24.png */; };
+		F17810E61F8BD232007B8547 /* ascent-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F17810DE1F8BD232007B8547 /* ascent-96d24.png */; };
+		F1A3B40129E7142C007C01D9 /* mosaic.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3F429E7142C007C01D9 /* mosaic.html */; };
+		F1A3B40229E7142C007C01D9 /* seismic.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3F529E7142C007C01D9 /* seismic.html */; };
+		F1A3B40329E7142C007C01D9 /* clusters.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3F629E7142C007C01D9 /* clusters.html */; };
+		F1A3B40429E7142C007C01D9 /* abcd.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3F729E7142C007C01D9 /* abcd.html */; };
+		F1A3B40529E7142C007C01D9 /* boats.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3F829E7142C007C01D9 /* boats.html */; };
+		F1A3B40629E7142C007C01D9 /* ascent.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3F929E7142C007C01D9 /* ascent.html */; };
+		F1A3B40729E7142C007C01D9 /* spokes.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3FA29E7142C007C01D9 /* spokes.html */; };
+		F1A3B40829E7142C007C01D9 /* mathrax.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3FB29E7142C007C01D9 /* mathrax.html */; };
+		F1A3B40929E7142C007C01D9 /* crossing.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3FC29E7142C007C01D9 /* crossing.html */; };
+		F1A3B40A29E7142C007C01D9 /* sticks.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3FD29E7142C007C01D9 /* sticks.html */; };
+		F1A3B40B29E7142C007C01D9 /* rome.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3FE29E7142C007C01D9 /* rome.html */; };
+		F1A3B40C29E7142C007C01D9 /* bricks.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B3FF29E7142C007C01D9 /* bricks.html */; };
+		F1A3B40D29E7142C007C01D9 /* salad.html in Resources */ = {isa = PBXBuildFile; fileRef = F1A3B40029E7142C007C01D9 /* salad.html */; };
+		F1AEADF729D39D8C00F466BE /* hat.c in Sources */ = {isa = PBXBuildFile; fileRef = F1AEADF429D39D8C00F466BE /* hat.c */; };
+		F1BD570F25C9331B00F15F78 /* sticks-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F1BD570D25C9331B00F15F78 /* sticks-96d24@2x.png */; };
+		F1BD571025C9331B00F15F78 /* sticks-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F1BD570E25C9331B00F15F78 /* sticks-96d24.png */; };
+		F1BD571325C9334500F15F78 /* sticks.c in Sources */ = {isa = PBXBuildFile; fileRef = F1BD571225C9334500F15F78 /* sticks.c */; };
+		F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA971DE3A09C008C6D7F /* findloop.c */; };
+		F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */ = {isa = PBXBuildFile; fileRef = F1EFAA981DE3A09C008C6D7F /* palisade.c */; };
+		F1EFAA9C1DE3A88C008C6D7F /* palisade.html in Resources */ = {isa = PBXBuildFile; fileRef = F1EFAA9B1DE3A88C008C6D7F /* palisade.html */; };
+		F1F269C920004348000C4E56 /* salad-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F269C320004347000C4E56 /* salad-96d24@2x.png */; };
+		F1F269CA20004348000C4E56 /* rome-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F269C420004347000C4E56 /* rome-96d24@2x.png */; };
+		F1F269CB20004348000C4E56 /* rome-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F269C520004347000C4E56 /* rome-96d24.png */; };
+		F1F269CC20004348000C4E56 /* clusters-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F269C620004348000C4E56 /* clusters-96d24.png */; };
+		F1F269CD20004348000C4E56 /* salad-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F269C720004348000C4E56 /* salad-96d24.png */; };
+		F1F269CE20004348000C4E56 /* clusters-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F269C820004348000C4E56 /* clusters-96d24@2x.png */; };
+		F1F6F9952638F95D00BB7BB0 /* mosaic.c in Sources */ = {isa = PBXBuildFile; fileRef = F1F6F9942638F95D00BB7BB0 /* mosaic.c */; };
+		F1F6F9992638F9E500BB7BB0 /* mosaic-96d24.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F6F9972638F9E500BB7BB0 /* mosaic-96d24.png */; };
+		F1F6F99A2638F9E500BB7BB0 /* mosaic-96d24@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F1F6F9982638F9E500BB7BB0 /* mosaic-96d24@2x.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -257,7 +318,6 @@
 		3701DC4516E734A800896D7D /* magnets.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = magnets.c; sourceTree = SOURCE_ROOT; };
 		3701DC4616E734A800896D7D /* malloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = malloc.c; sourceTree = "<group>"; };
 		3701DC4716E734A800896D7D /* map.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = map.c; sourceTree = SOURCE_ROOT; };
-		3701DC4816E734A800896D7D /* maxflow.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = maxflow.c; sourceTree = SOURCE_ROOT; };
 		3701DC4916E734A800896D7D /* midend.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = midend.c; sourceTree = "<group>"; };
 		3701DC4A16E734A800896D7D /* mines.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mines.c; sourceTree = "<group>"; };
 		3701DC4B16E734A800896D7D /* misc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = misc.c; sourceTree = "<group>"; };
@@ -289,7 +349,6 @@
 		3701DC6516E734A800896D7D /* untangle.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = untangle.c; sourceTree = "<group>"; };
 		3701DC9E16E734DD00896D7D /* tree234.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = tree234.h; sourceTree = SOURCE_ROOT; };
 		3701DC9F16E734F100896D7D /* grid.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = grid.h; sourceTree = SOURCE_ROOT; };
-		3701DCA016E7350900896D7D /* maxflow.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = maxflow.h; sourceTree = SOURCE_ROOT; };
 		3701DCA116E7351C00896D7D /* latin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = latin.h; sourceTree = SOURCE_ROOT; };
 		3701DCA216E7353300896D7D /* penrose.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = penrose.h; sourceTree = SOURCE_ROOT; };
 		3701DCA316E7355500896D7D /* loopgen.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = loopgen.h; sourceTree = SOURCE_ROOT; };
@@ -452,6 +511,76 @@
 		37DDFDC016F78FE2007B6287 /* inprogress.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = inprogress.png; sourceTree = SOURCE_ROOT; };
 		37F367882513250000E35EFD /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		37F3678A251603D900E35EFD /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		F1189C442232F99E0036C0CE /* abcd.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = abcd.c; sourceTree = "<group>"; };
+		F1189C462232F9B40036C0CE /* crossing.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = crossing.c; sourceTree = "<group>"; };
+		F1189C482232F9C00036C0CE /* mathrax.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mathrax.c; sourceTree = "<group>"; };
+		F1189C4A2232F9CB0036C0CE /* seismic.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = seismic.c; sourceTree = "<group>"; };
+		F11965822233205B006AC204 /* mathrax-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "mathrax-96d24.png"; path = "icons/mathrax-96d24.png"; sourceTree = "<group>"; };
+		F11965832233205B006AC204 /* abcd-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "abcd-96d24@2x.png"; path = "icons/abcd-96d24@2x.png"; sourceTree = "<group>"; };
+		F11965842233205B006AC204 /* seismic-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "seismic-96d24.png"; path = "icons/seismic-96d24.png"; sourceTree = "<group>"; };
+		F11965852233205B006AC204 /* abcd-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "abcd-96d24.png"; path = "icons/abcd-96d24.png"; sourceTree = "<group>"; };
+		F11965862233205B006AC204 /* crossing-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "crossing-96d24@2x.png"; path = "icons/crossing-96d24@2x.png"; sourceTree = "<group>"; };
+		F11965872233205B006AC204 /* crossing-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "crossing-96d24.png"; path = "icons/crossing-96d24.png"; sourceTree = "<group>"; };
+		F11965882233205C006AC204 /* mathrax-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "mathrax-96d24@2x.png"; path = "icons/mathrax-96d24@2x.png"; sourceTree = "<group>"; };
+		F11965892233205C006AC204 /* seismic-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "seismic-96d24@2x.png"; path = "icons/seismic-96d24@2x.png"; sourceTree = "<group>"; };
+		F148CEBD2629315100CA17E1 /* generated-games.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "generated-games.h"; sourceTree = SOURCE_ROOT; };
+		F14919692280E28500C21C88 /* sort.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = sort.c; sourceTree = "<group>"; };
+		F14F8EC12A4E5ED600904ADE /* spectre-internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "spectre-internal.h"; sourceTree = "<group>"; };
+		F14F8EC22A4E5ED600904ADE /* spectre-tables-manual.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "spectre-tables-manual.h"; sourceTree = "<group>"; };
+		F14F8EC32A4E5ED600904ADE /* spectre.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = spectre.c; sourceTree = "<group>"; };
+		F14F8EC42A4E5ED600904ADE /* spectre.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = spectre.h; sourceTree = "<group>"; };
+		F14F8EC52A4E5ED600904ADE /* spectre-tables-auto.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "spectre-tables-auto.h"; sourceTree = "<group>"; };
+		F15D1D34209A1DEB00499142 /* matching.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = matching.h; sourceTree = "<group>"; };
+		F15D1D35209A1DF800499142 /* matching.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = matching.c; sourceTree = "<group>"; };
+		F1729A152724FD6B00F0BE01 /* bricks-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "bricks-96d24.png"; path = "icons/bricks-96d24.png"; sourceTree = "<group>"; };
+		F1729A162724FD6B00F0BE01 /* bricks-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "bricks-96d24@2x.png"; path = "icons/bricks-96d24@2x.png"; sourceTree = "<group>"; };
+		F1729A192724FDF000F0BE01 /* bricks.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = bricks.c; sourceTree = "<group>"; };
+		F175DA041FD5BFD8001ADB23 /* salad.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = salad.c; sourceTree = "<group>"; };
+		F175DA051FD5BFD8001ADB23 /* rome.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = rome.c; sourceTree = "<group>"; };
+		F175DA081FD5BFFD001ADB23 /* clusters.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = clusters.c; sourceTree = "<group>"; };
+		F17810CF1F8BC690007B8547 /* rect.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = rect.html; sourceTree = "<group>"; };
+		F17810D01F8BC690007B8547 /* ascent.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ascent.c; sourceTree = "<group>"; };
+		F17810D11F8BC690007B8547 /* spokes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = spokes.c; sourceTree = "<group>"; };
+		F17810D21F8BC690007B8547 /* boats.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = boats.c; sourceTree = "<group>"; };
+		F17810D71F8BD231007B8547 /* boats-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "boats-96d24@2x.png"; path = "icons/boats-96d24@2x.png"; sourceTree = "<group>"; };
+		F17810D81F8BD231007B8547 /* palisade-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "palisade-96d24@2x.png"; path = "icons/palisade-96d24@2x.png"; sourceTree = "<group>"; };
+		F17810D91F8BD231007B8547 /* boats-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "boats-96d24.png"; path = "icons/boats-96d24.png"; sourceTree = "<group>"; };
+		F17810DA1F8BD231007B8547 /* spokes-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "spokes-96d24@2x.png"; path = "icons/spokes-96d24@2x.png"; sourceTree = "<group>"; };
+		F17810DB1F8BD232007B8547 /* palisade-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "palisade-96d24.png"; path = "icons/palisade-96d24.png"; sourceTree = "<group>"; };
+		F17810DC1F8BD232007B8547 /* ascent-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "ascent-96d24@2x.png"; path = "icons/ascent-96d24@2x.png"; sourceTree = "<group>"; };
+		F17810DD1F8BD232007B8547 /* spokes-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "spokes-96d24.png"; path = "icons/spokes-96d24.png"; sourceTree = "<group>"; };
+		F17810DE1F8BD232007B8547 /* ascent-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "ascent-96d24.png"; path = "icons/ascent-96d24.png"; sourceTree = "<group>"; };
+		F1A3B3F429E7142C007C01D9 /* mosaic.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = mosaic.html; sourceTree = "<group>"; };
+		F1A3B3F529E7142C007C01D9 /* seismic.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = seismic.html; sourceTree = "<group>"; };
+		F1A3B3F629E7142C007C01D9 /* clusters.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = clusters.html; sourceTree = "<group>"; };
+		F1A3B3F729E7142C007C01D9 /* abcd.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = abcd.html; sourceTree = "<group>"; };
+		F1A3B3F829E7142C007C01D9 /* boats.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = boats.html; sourceTree = "<group>"; };
+		F1A3B3F929E7142C007C01D9 /* ascent.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = ascent.html; sourceTree = "<group>"; };
+		F1A3B3FA29E7142C007C01D9 /* spokes.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = spokes.html; sourceTree = "<group>"; };
+		F1A3B3FB29E7142C007C01D9 /* mathrax.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = mathrax.html; sourceTree = "<group>"; };
+		F1A3B3FC29E7142C007C01D9 /* crossing.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = crossing.html; sourceTree = "<group>"; };
+		F1A3B3FD29E7142C007C01D9 /* sticks.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = sticks.html; sourceTree = "<group>"; };
+		F1A3B3FE29E7142C007C01D9 /* rome.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = rome.html; sourceTree = "<group>"; };
+		F1A3B3FF29E7142C007C01D9 /* bricks.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = bricks.html; sourceTree = "<group>"; };
+		F1A3B40029E7142C007C01D9 /* salad.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = salad.html; sourceTree = "<group>"; };
+		F1AEADF429D39D8C00F466BE /* hat.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = hat.c; sourceTree = "<group>"; };
+		F1AEADF529D39D8C00F466BE /* hat.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hat.h; sourceTree = "<group>"; };
+		F1AEADF629D39D8C00F466BE /* hat-tables.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "hat-tables.h"; sourceTree = "<group>"; };
+		F1BD570D25C9331B00F15F78 /* sticks-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "sticks-96d24@2x.png"; path = "icons/sticks-96d24@2x.png"; sourceTree = "<group>"; };
+		F1BD570E25C9331B00F15F78 /* sticks-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "sticks-96d24.png"; path = "icons/sticks-96d24.png"; sourceTree = "<group>"; };
+		F1BD571225C9334500F15F78 /* sticks.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = sticks.c; sourceTree = "<group>"; };
+		F1EFAA971DE3A09C008C6D7F /* findloop.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = findloop.c; sourceTree = "<group>"; };
+		F1EFAA981DE3A09C008C6D7F /* palisade.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = palisade.c; sourceTree = "<group>"; };
+		F1EFAA9B1DE3A88C008C6D7F /* palisade.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = palisade.html; sourceTree = "<group>"; };
+		F1F269C320004347000C4E56 /* salad-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "salad-96d24@2x.png"; path = "icons/salad-96d24@2x.png"; sourceTree = "<group>"; };
+		F1F269C420004347000C4E56 /* rome-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "rome-96d24@2x.png"; path = "icons/rome-96d24@2x.png"; sourceTree = "<group>"; };
+		F1F269C520004347000C4E56 /* rome-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "rome-96d24.png"; path = "icons/rome-96d24.png"; sourceTree = "<group>"; };
+		F1F269C620004348000C4E56 /* clusters-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "clusters-96d24.png"; path = "icons/clusters-96d24.png"; sourceTree = "<group>"; };
+		F1F269C720004348000C4E56 /* salad-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "salad-96d24.png"; path = "icons/salad-96d24.png"; sourceTree = "<group>"; };
+		F1F269C820004348000C4E56 /* clusters-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "clusters-96d24@2x.png"; path = "icons/clusters-96d24@2x.png"; sourceTree = "<group>"; };
+		F1F6F9942638F95D00BB7BB0 /* mosaic.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mosaic.c; sourceTree = "<group>"; };
+		F1F6F9972638F9E500BB7BB0 /* mosaic-96d24.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "mosaic-96d24.png"; path = "icons/mosaic-96d24.png"; sourceTree = "<group>"; };
+		F1F6F9982638F9E500BB7BB0 /* mosaic-96d24@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "mosaic-96d24@2x.png"; path = "icons/mosaic-96d24@2x.png"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -512,6 +641,7 @@
 				3701DCAA16E9D93F00896D7D /* GameListViewController.m */,
 				3701DCAC16E9DBC000896D7D /* GameViewController.h */,
 				3701DCAD16E9DBC100896D7D /* GameViewController.m */,
+				F148CEBD2629315100CA17E1 /* generated-games.h */,
 				3701DCA616E85D5D00896D7D /* GameView.h */,
 				3701DCA716E85D5D00896D7D /* GameView.m */,
 				3701DD2D16EDBC9E00896D7D /* GameTypeController.h */,
@@ -554,18 +684,20 @@
 		3701DC2E16E7330700896D7D /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				3701DD3B16F398EA00896D7D /* help */,
-				3701DCE116EB16B400896D7D /* icons */,
-				3701DCA416E7391800896D7D /* printing.c */,
-				3701DCA316E7355500896D7D /* loopgen.h */,
-				3701DCA216E7353300896D7D /* penrose.h */,
-				3701DCA116E7351C00896D7D /* latin.h */,
-				3701DCA016E7350900896D7D /* maxflow.h */,
-				3701DC9F16E734F100896D7D /* grid.h */,
-				3701DC9E16E734DD00896D7D /* tree234.h */,
+				F14F8EC12A4E5ED600904ADE /* spectre-internal.h */,
+				F14F8EC52A4E5ED600904ADE /* spectre-tables-auto.h */,
+				F14F8EC22A4E5ED600904ADE /* spectre-tables-manual.h */,
+				F14F8EC32A4E5ED600904ADE /* spectre.c */,
+				F14F8EC42A4E5ED600904ADE /* spectre.h */,
+				F1189C442232F99E0036C0CE /* abcd.c */,
+				F17810D01F8BC690007B8547 /* ascent.c */,
 				3701DC2F16E734A800896D7D /* blackbox.c */,
+				F17810D21F8BC690007B8547 /* boats.c */,
+				F1729A192724FDF000F0BE01 /* bricks.c */,
 				3701DC3016E734A800896D7D /* bridges.c */,
+				F175DA081FD5BFFD001ADB23 /* clusters.c */,
 				3701DC3116E734A800896D7D /* combi.c */,
+				F1189C462232F9B40036C0CE /* crossing.c */,
 				3701DC3216E734A800896D7D /* cube.c */,
 				3701DC3316E734A800896D7D /* divvy.c */,
 				3701DC3416E734A800896D7D /* dominosa.c */,
@@ -573,54 +705,77 @@
 				3701DC3616E734A800896D7D /* dsf.c */,
 				3701DC3716E734A800896D7D /* fifteen.c */,
 				3701DC3816E734A800896D7D /* filling.c */,
+				F1EFAA971DE3A09C008C6D7F /* findloop.c */,
 				3701DC3916E734A800896D7D /* flip.c */,
 				3786A3251AA83A9000B052ED /* flood.c */,
 				3701DC3A16E734A800896D7D /* galaxies.c */,
 				3701DC3B16E734A800896D7D /* grid.c */,
+				3701DC9F16E734F100896D7D /* grid.h */,
 				3701DC3C16E734A800896D7D /* guess.c */,
+				F1AEADF629D39D8C00F466BE /* hat-tables.h */,
+				F1AEADF429D39D8C00F466BE /* hat.c */,
+				F1AEADF529D39D8C00F466BE /* hat.h */,
+				3701DD3B16F398EA00896D7D /* help */,
+				3701DCE116EB16B400896D7D /* icons */,
 				3701DC3D16E734A800896D7D /* inertia.c */,
 				3701DC3E16E734A800896D7D /* keen.c */,
 				3701DC3F16E734A800896D7D /* latin.c */,
+				3701DCA116E7351C00896D7D /* latin.h */,
 				3701DC4016E734A800896D7D /* laydomino.c */,
 				3701DC4116E734A800896D7D /* lightup.c */,
 				3701DC4216E734A800896D7D /* list.c */,
 				3701DC4316E734A800896D7D /* loopgen.c */,
+				3701DCA316E7355500896D7D /* loopgen.h */,
 				3701DC4416E734A800896D7D /* loopy.c */,
 				3701DC4516E734A800896D7D /* magnets.c */,
 				3701DC4616E734A800896D7D /* malloc.c */,
 				3701DC4716E734A800896D7D /* map.c */,
-				3701DC4816E734A800896D7D /* maxflow.c */,
+				F15D1D35209A1DF800499142 /* matching.c */,
+				F15D1D34209A1DEB00499142 /* matching.h */,
+				F1189C482232F9C00036C0CE /* mathrax.c */,
 				3701DC4916E734A800896D7D /* midend.c */,
 				3701DC4A16E734A800896D7D /* mines.c */,
 				3701DC4B16E734A800896D7D /* misc.c */,
+				F1F6F9942638F95D00BB7BB0 /* mosaic.c */,
 				3701DC4C16E734A800896D7D /* net.c */,
 				3701DC4D16E734A800896D7D /* netslide.c */,
 				3701DC4E16E734A800896D7D /* nullgame.c */,
+				F1EFAA981DE3A09C008C6D7F /* palisade.c */,
 				3701DC4F16E734A800896D7D /* pattern.c */,
 				3701DC5016E734A800896D7D /* pearl.c */,
 				3701DC5116E734A800896D7D /* pegs.c */,
 				3701DC5216E734A800896D7D /* penrose.c */,
+				3701DCA216E7353300896D7D /* penrose.h */,
+				3701DCA416E7391800896D7D /* printing.c */,
 				3701DC5316E734A800896D7D /* puzzles.h */,
 				3701DC5416E734A800896D7D /* random.c */,
 				3701DC5516E734A800896D7D /* range.c */,
 				3701DC5616E734A800896D7D /* rect.c */,
+				F17810CF1F8BC690007B8547 /* rect.html */,
+				F175DA051FD5BFD8001ADB23 /* rome.c */,
+				F175DA041FD5BFD8001ADB23 /* salad.c */,
 				3701DC5716E734A800896D7D /* samegame.c */,
+				F1189C4A2232F9CB0036C0CE /* seismic.c */,
 				3701DC5816E734A800896D7D /* signpost.c */,
 				3701DC5916E734A800896D7D /* singles.c */,
 				3701DC5A16E734A800896D7D /* sixteen.c */,
 				3701DC5B16E734A800896D7D /* slant.c */,
 				3701DC5C16E734A800896D7D /* solo.c */,
+				F14919692280E28500C21C88 /* sort.c */,
+				F17810D11F8BC690007B8547 /* spokes.c */,
+				F1BD571225C9334500F15F78 /* sticks.c */,
+				3782E85C16FE488F0040B261 /* svnversion.c */,
 				3701DC5D16E734A800896D7D /* tdq.c */,
 				3701DC5E16E734A800896D7D /* tents.c */,
 				3701DC5F16E734A800896D7D /* towers.c */,
 				3786A3261AA83A9000B052ED /* tracks.c */,
 				3701DC6016E734A800896D7D /* tree234.c */,
+				3701DC9E16E734DD00896D7D /* tree234.h */,
 				3701DC6116E734A800896D7D /* twiddle.c */,
 				3701DC6216E734A800896D7D /* undead.c */,
 				3701DC6316E734A800896D7D /* unequal.c */,
 				3701DC6416E734A800896D7D /* unruly.c */,
 				3701DC6516E734A800896D7D /* untangle.c */,
-				3782E85C16FE488F0040B261 /* svnversion.c */,
 			);
 			name = Core;
 			sourceTree = SOURCE_ROOT;
@@ -628,6 +783,34 @@
 		3701DCE116EB16B400896D7D /* icons */ = {
 			isa = PBXGroup;
 			children = (
+				F1729A152724FD6B00F0BE01 /* bricks-96d24.png */,
+				F1729A162724FD6B00F0BE01 /* bricks-96d24@2x.png */,
+				F1F6F9972638F9E500BB7BB0 /* mosaic-96d24.png */,
+				F1F6F9982638F9E500BB7BB0 /* mosaic-96d24@2x.png */,
+				F1BD570E25C9331B00F15F78 /* sticks-96d24.png */,
+				F1BD570D25C9331B00F15F78 /* sticks-96d24@2x.png */,
+				F11965852233205B006AC204 /* abcd-96d24.png */,
+				F11965832233205B006AC204 /* abcd-96d24@2x.png */,
+				F11965872233205B006AC204 /* crossing-96d24.png */,
+				F11965862233205B006AC204 /* crossing-96d24@2x.png */,
+				F11965822233205B006AC204 /* mathrax-96d24.png */,
+				F11965882233205C006AC204 /* mathrax-96d24@2x.png */,
+				F11965842233205B006AC204 /* seismic-96d24.png */,
+				F11965892233205C006AC204 /* seismic-96d24@2x.png */,
+				F1F269C620004348000C4E56 /* clusters-96d24.png */,
+				F1F269C820004348000C4E56 /* clusters-96d24@2x.png */,
+				F1F269C520004347000C4E56 /* rome-96d24.png */,
+				F1F269C420004347000C4E56 /* rome-96d24@2x.png */,
+				F1F269C720004348000C4E56 /* salad-96d24.png */,
+				F1F269C320004347000C4E56 /* salad-96d24@2x.png */,
+				F17810DE1F8BD232007B8547 /* ascent-96d24.png */,
+				F17810DC1F8BD232007B8547 /* ascent-96d24@2x.png */,
+				F17810D91F8BD231007B8547 /* boats-96d24.png */,
+				F17810D71F8BD231007B8547 /* boats-96d24@2x.png */,
+				F17810DB1F8BD232007B8547 /* palisade-96d24.png */,
+				F17810D81F8BD231007B8547 /* palisade-96d24@2x.png */,
+				F17810DD1F8BD232007B8547 /* spokes-96d24.png */,
+				F17810DA1F8BD231007B8547 /* spokes-96d24@2x.png */,
 				3786A32D1AA845E200B052ED /* flood-96d24.png */,
 				3786A32E1AA845E200B052ED /* flood-96d24@2x.png */,
 				3786A32F1AA845E200B052ED /* tracks-96d24.png */,
@@ -711,6 +894,19 @@
 		3701DD3B16F398EA00896D7D /* help */ = {
 			isa = PBXGroup;
 			children = (
+				F1A3B3F729E7142C007C01D9 /* abcd.html */,
+				F1A3B3F929E7142C007C01D9 /* ascent.html */,
+				F1A3B3F829E7142C007C01D9 /* boats.html */,
+				F1A3B3FF29E7142C007C01D9 /* bricks.html */,
+				F1A3B3F629E7142C007C01D9 /* clusters.html */,
+				F1A3B3FC29E7142C007C01D9 /* crossing.html */,
+				F1A3B3FB29E7142C007C01D9 /* mathrax.html */,
+				F1A3B3F429E7142C007C01D9 /* mosaic.html */,
+				F1A3B3FE29E7142C007C01D9 /* rome.html */,
+				F1A3B40029E7142C007C01D9 /* salad.html */,
+				F1A3B3F529E7142C007C01D9 /* seismic.html */,
+				F1A3B3FA29E7142C007C01D9 /* spokes.html */,
+				F1A3B3FD29E7142C007C01D9 /* sticks.html */,
 				3782E80316F9B30F0040B261 /* help-back.png */,
 				3782E80716F9B9040040B261 /* help-back@2x.png */,
 				3782E80516F9B6700040B261 /* help-forward.png */,
@@ -741,6 +937,7 @@
 				3701DD5016F3997400896D7D /* mines.html */,
 				3701DD5116F3997400896D7D /* net.html */,
 				3701DD5216F3997400896D7D /* netslide.html */,
+				F1EFAA9B1DE3A88C008C6D7F /* palisade.html */,
 				3701DD5316F3997400896D7D /* pattern.html */,
 				3701DD5416F3997400896D7D /* pearl.html */,
 				3701DD5516F3997400896D7D /* pegs.html */,
@@ -827,8 +1024,11 @@
 				3701DD0616EB171800896D7D /* blackbox-96d24.png in Resources */,
 				3701DD0716EB171800896D7D /* bridges-96d24.png in Resources */,
 				3701DD0816EB171800896D7D /* cube-96d24.png in Resources */,
+				F1729A182724FD6B00F0BE01 /* bricks-96d24@2x.png in Resources */,
 				3701DD0916EB171800896D7D /* dominosa-96d24.png in Resources */,
 				3701DD0A16EB171800896D7D /* fifteen-96d24.png in Resources */,
+				F17810D31F8BC690007B8547 /* rect.html in Resources */,
+				F1A3B40229E7142C007C01D9 /* seismic.html in Resources */,
 				3701DD0B16EB171800896D7D /* filling-96d24.png in Resources */,
 				3786A3311AA845E200B052ED /* flood-96d24.png in Resources */,
 				3765B77A2512A47400F36932 /* Icon-167@2x.png in Resources */,
@@ -837,24 +1037,34 @@
 				3701DD0D16EB171800896D7D /* galaxies-96d24.png in Resources */,
 				3701DD0E16EB171800896D7D /* guess-96d24.png in Resources */,
 				37BB83101803D7300065C058 /* Icon-120.png in Resources */,
+				F1729A172724FD6B00F0BE01 /* bricks-96d24.png in Resources */,
 				3701DD0F16EB171800896D7D /* inertia-96d24.png in Resources */,
 				3701DD1016EB171800896D7D /* keen-96d24.png in Resources */,
 				3701DD1116EB171800896D7D /* lightup-96d24.png in Resources */,
+				F1BD571025C9331B00F15F78 /* sticks-96d24.png in Resources */,
 				37BB830E1803D7300065C058 /* Icon-76.png in Resources */,
 				3701DD1216EB171800896D7D /* loopy-96d24.png in Resources */,
+				F11965902233205C006AC204 /* mathrax-96d24@2x.png in Resources */,
+				F17810E11F8BD232007B8547 /* boats-96d24.png in Resources */,
 				3701DD1316EB171800896D7D /* magnets-96d24.png in Resources */,
 				3701DD1416EB171800896D7D /* map-96d24.png in Resources */,
+				F17810E21F8BD232007B8547 /* spokes-96d24@2x.png in Resources */,
+				F1A3B40A29E7142C007C01D9 /* sticks.html in Resources */,
 				3701DD1516EB171800896D7D /* mines-96d24.png in Resources */,
+				F11965912233205C006AC204 /* seismic-96d24@2x.png in Resources */,
 				3701DD1616EB171800896D7D /* net-96d24.png in Resources */,
 				3701DD1716EB171800896D7D /* netslide-96d24.png in Resources */,
 				3701DD1816EB171800896D7D /* pattern-96d24.png in Resources */,
 				3701DD1916EB171800896D7D /* pearl-96d24.png in Resources */,
 				3701DD1A16EB171800896D7D /* pegs-96d24.png in Resources */,
 				3701DD1B16EB171800896D7D /* range-96d24.png in Resources */,
+				F119658C2233205C006AC204 /* seismic-96d24.png in Resources */,
 				3701DD1C16EB171800896D7D /* rect-96d24.png in Resources */,
 				3701DD1D16EB171800896D7D /* samegame-96d24.png in Resources */,
 				3701DD1E16EB171800896D7D /* signpost-96d24.png in Resources */,
 				3701DD1F16EB171800896D7D /* singles-96d24.png in Resources */,
+				F1A3B40D29E7142C007C01D9 /* salad.html in Resources */,
+				F119658E2233205C006AC204 /* crossing-96d24@2x.png in Resources */,
 				3701DD2016EB171800896D7D /* sixteen-96d24.png in Resources */,
 				3786A32B1AA83C5D00B052ED /* flood.html in Resources */,
 				3701DD2116EB171800896D7D /* slant-96d24.png in Resources */,
@@ -878,29 +1088,42 @@
 				3701DD6E16F3997400896D7D /* galaxies.html in Resources */,
 				3701DD6F16F3997400896D7D /* guess.html in Resources */,
 				3701DD7016F3997400896D7D /* index.html in Resources */,
+				F1F6F9992638F9E500BB7BB0 /* mosaic-96d24.png in Resources */,
+				F1EFAA9C1DE3A88C008C6D7F /* palisade.html in Resources */,
 				3701DD7116F3997400896D7D /* inertia.html in Resources */,
 				3701DD7216F3997400896D7D /* intro.html in Resources */,
 				3701DD7316F3997400896D7D /* keen.html in Resources */,
 				3701DD7416F3997400896D7D /* licence.html in Resources */,
 				3701DD7516F3997400896D7D /* lightup.html in Resources */,
 				3701DD7616F3997400896D7D /* loopy.html in Resources */,
+				F1A3B40529E7142C007C01D9 /* boats.html in Resources */,
 				3701DD7716F3997400896D7D /* magnets.html in Resources */,
+				F17810E41F8BD232007B8547 /* ascent-96d24@2x.png in Resources */,
 				3701DD7816F3997400896D7D /* map.html in Resources */,
 				3701DD7916F3997400896D7D /* mines.html in Resources */,
+				F1A3B40C29E7142C007C01D9 /* bricks.html in Resources */,
+				F1A3B40929E7142C007C01D9 /* crossing.html in Resources */,
 				3701DD7A16F3997400896D7D /* net.html in Resources */,
 				3701DD7B16F3997400896D7D /* netslide.html in Resources */,
+				F1A3B40129E7142C007C01D9 /* mosaic.html in Resources */,
 				3701DD7C16F3997400896D7D /* pattern.html in Resources */,
+				F1A3B40429E7142C007C01D9 /* abcd.html in Resources */,
+				F1F269CD20004348000C4E56 /* salad-96d24.png in Resources */,
 				3701DD7D16F3997400896D7D /* pearl.html in Resources */,
 				3701DD7E16F3997400896D7D /* pegs.html in Resources */,
 				3701DD7F16F3997400896D7D /* range.html in Resources */,
+				F119658A2233205C006AC204 /* mathrax-96d24.png in Resources */,
 				3701DD8016F3997400896D7D /* rectangles.html in Resources */,
 				3701DD8116F3997400896D7D /* samegame.html in Resources */,
 				3701DD8216F3997400896D7D /* signpost.html in Resources */,
 				3701DD8316F3997400896D7D /* singles.html in Resources */,
 				3701DD8416F3997400896D7D /* sixteen.html in Resources */,
+				F1A3B40B29E7142C007C01D9 /* rome.html in Resources */,
 				3701DD8516F3997400896D7D /* slant.html in Resources */,
+				F17810E31F8BD232007B8547 /* palisade-96d24.png in Resources */,
 				3701DD8616F3997400896D7D /* solo.html in Resources */,
 				3701DD8716F3997400896D7D /* tents.html in Resources */,
+				F17810E01F8BD232007B8547 /* palisade-96d24@2x.png in Resources */,
 				3701DD8816F3997400896D7D /* towers.html in Resources */,
 				3701DD8916F3997400896D7D /* twiddle.html in Resources */,
 				3701DD8A16F3997400896D7D /* undead.html in Resources */,
@@ -912,54 +1135,71 @@
 				37DDFDC116F78FE2007B6287 /* inprogress.png in Resources */,
 				3782E80416F9B30F0040B261 /* help-back.png in Resources */,
 				3786A3331AA845E200B052ED /* tracks-96d24.png in Resources */,
+				F119658F2233205C006AC204 /* crossing-96d24.png in Resources */,
 				3782E80616F9B6700040B261 /* help-forward.png in Resources */,
+				F1F269CE20004348000C4E56 /* clusters-96d24@2x.png in Resources */,
 				3782E80816F9B9040040B261 /* help-back@2x.png in Resources */,
 				3782E80A16F9B90D0040B261 /* help-forward@2x.png in Resources */,
+				F17810DF1F8BD232007B8547 /* boats-96d24@2x.png in Resources */,
 				3782E82116FD637E0040B261 /* blackbox-96d24@2x.png in Resources */,
 				37F367892513250000E35EFD /* Images.xcassets in Resources */,
 				3782E82216FD637E0040B261 /* bridges-96d24@2x.png in Resources */,
 				3782E82316FD637E0040B261 /* cube-96d24@2x.png in Resources */,
 				3786A3341AA845E200B052ED /* tracks-96d24@2x.png in Resources */,
 				3782E82416FD637E0040B261 /* dominosa-96d24@2x.png in Resources */,
+				F1F269CC20004348000C4E56 /* clusters-96d24.png in Resources */,
 				3782E82516FD637E0040B261 /* fifteen-96d24@2x.png in Resources */,
 				3782E82616FD637E0040B261 /* filling-96d24@2x.png in Resources */,
 				3782E82716FD637E0040B261 /* flip-96d24@2x.png in Resources */,
 				3782E82816FD637E0040B261 /* galaxies-96d24@2x.png in Resources */,
 				3782E82916FD637E0040B261 /* guess-96d24@2x.png in Resources */,
+				F1A3B40629E7142C007C01D9 /* ascent.html in Resources */,
 				3782E82A16FD637E0040B261 /* inertia-96d24@2x.png in Resources */,
 				3782E82B16FD637E0040B261 /* keen-96d24@2x.png in Resources */,
+				F17810E51F8BD232007B8547 /* spokes-96d24.png in Resources */,
 				3782E82C16FD637E0040B261 /* lightup-96d24@2x.png in Resources */,
 				3782E82D16FD637E0040B261 /* loopy-96d24@2x.png in Resources */,
 				3782E82E16FD637E0040B261 /* magnets-96d24@2x.png in Resources */,
 				3782E82F16FD637E0040B261 /* map-96d24@2x.png in Resources */,
+				F1F269C920004348000C4E56 /* salad-96d24@2x.png in Resources */,
 				3782E83016FD637E0040B261 /* mines-96d24@2x.png in Resources */,
 				3782E83116FD637E0040B261 /* net-96d24@2x.png in Resources */,
+				F1F6F99A2638F9E500BB7BB0 /* mosaic-96d24@2x.png in Resources */,
 				3782E83216FD637E0040B261 /* netslide-96d24@2x.png in Resources */,
 				3782E83316FD637E0040B261 /* pattern-96d24@2x.png in Resources */,
 				3782E83416FD637E0040B261 /* pearl-96d24@2x.png in Resources */,
 				3782E83516FD637E0040B261 /* pegs-96d24@2x.png in Resources */,
+				F119658D2233205C006AC204 /* abcd-96d24.png in Resources */,
 				3782E83616FD637E0040B261 /* range-96d24@2x.png in Resources */,
 				3782E84516FD63AF0040B261 /* rect-96d24@2x.png in Resources */,
+				F1A3B40729E7142C007C01D9 /* spokes.html in Resources */,
+				F1A3B40829E7142C007C01D9 /* mathrax.html in Resources */,
 				3782E84616FD63AF0040B261 /* samegame-96d24@2x.png in Resources */,
+				F1F269CA20004348000C4E56 /* rome-96d24@2x.png in Resources */,
 				3782E84716FD63AF0040B261 /* signpost-96d24@2x.png in Resources */,
 				3782E84816FD63AF0040B261 /* singles-96d24@2x.png in Resources */,
 				3782E84916FD63AF0040B261 /* sixteen-96d24@2x.png in Resources */,
 				3782E84A16FD63AF0040B261 /* slant-96d24@2x.png in Resources */,
+				F1BD570F25C9331B00F15F78 /* sticks-96d24@2x.png in Resources */,
 				37BB830F1803D7300065C058 /* Icon-76@2x.png in Resources */,
 				3782E84B16FD63AF0040B261 /* solo-96d24@2x.png in Resources */,
+				F1A3B40329E7142C007C01D9 /* clusters.html in Resources */,
 				3782E84C16FD63AF0040B261 /* tents-96d24@2x.png in Resources */,
+				F17810E61F8BD232007B8547 /* ascent-96d24.png in Resources */,
 				3782E84D16FD63AF0040B261 /* towers-96d24@2x.png in Resources */,
 				3782E84E16FD63AF0040B261 /* twiddle-96d24@2x.png in Resources */,
 				3782E84F16FD63AF0040B261 /* undead-96d24@2x.png in Resources */,
 				3782E85016FD63AF0040B261 /* unequal-96d24@2x.png in Resources */,
 				3786A3321AA845E200B052ED /* flood-96d24@2x.png in Resources */,
 				3786A32C1AA83C5D00B052ED /* tracks.html in Resources */,
+				F1F269CB20004348000C4E56 /* rome-96d24.png in Resources */,
 				3782E85116FD63AF0040B261 /* unruly-96d24@2x.png in Resources */,
 				3782E85216FD63AF0040B261 /* untangle-96d24@2x.png in Resources */,
 				3782E85716FDAA610040B261 /* Icon-72.png in Resources */,
 				3782E85816FDAA610040B261 /* Icon-72@2x.png in Resources */,
 				3782E85916FDAA610040B261 /* Icon.png in Resources */,
 				3782E85A16FDAA610040B261 /* Icon@2x.png in Resources */,
+				F119658B2233205C006AC204 /* abcd-96d24@2x.png in Resources */,
 				3782E85F16FEBFA20040B261 /* inprogress@2x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -992,6 +1232,7 @@
 				3701DC1916E730ED00896D7D /* AppDelegate.m in Sources */,
 				3701DC6716E734A800896D7D /* blackbox.c in Sources */,
 				3701DC6816E734A800896D7D /* bridges.c in Sources */,
+				F1EFAA9A1DE3A09C008C6D7F /* palisade.c in Sources */,
 				3701DC6916E734A800896D7D /* combi.c in Sources */,
 				3701DC6A16E734A800896D7D /* cube.c in Sources */,
 				3701DC6B16E734A800896D7D /* divvy.c in Sources */,
@@ -1008,18 +1249,26 @@
 				3786A3281AA83A9000B052ED /* tracks.c in Sources */,
 				3701DC7616E734A800896D7D /* keen.c in Sources */,
 				3701DC7716E734A800896D7D /* latin.c in Sources */,
+				F14F8EC62A4E5ED600904ADE /* spectre.c in Sources */,
 				3701DC7816E734A800896D7D /* laydomino.c in Sources */,
 				3701DC7916E734A800896D7D /* lightup.c in Sources */,
+				F1189C4B2232F9CB0036C0CE /* seismic.c in Sources */,
 				3701DC7A16E734A800896D7D /* list.c in Sources */,
+				F175DA091FD5BFFD001ADB23 /* clusters.c in Sources */,
+				F1189C472232F9B40036C0CE /* crossing.c in Sources */,
+				F1BD571325C9334500F15F78 /* sticks.c in Sources */,
 				3701DC7B16E734A800896D7D /* loopgen.c in Sources */,
 				3701DC7C16E734A800896D7D /* loopy.c in Sources */,
 				3701DC7D16E734A800896D7D /* magnets.c in Sources */,
 				3701DC7E16E734A800896D7D /* malloc.c in Sources */,
 				3701DC7F16E734A800896D7D /* map.c in Sources */,
-				3701DC8016E734A800896D7D /* maxflow.c in Sources */,
+				F17810D51F8BC690007B8547 /* spokes.c in Sources */,
 				3701DC8116E734A800896D7D /* midend.c in Sources */,
+				F17810D41F8BC690007B8547 /* ascent.c in Sources */,
 				3701DC8216E734A800896D7D /* mines.c in Sources */,
 				3701DC8316E734A800896D7D /* misc.c in Sources */,
+				F1189C492232F9C00036C0CE /* mathrax.c in Sources */,
+				F1189C452232F99E0036C0CE /* abcd.c in Sources */,
 				3701DC8416E734A800896D7D /* net.c in Sources */,
 				3701DC8516E734A800896D7D /* netslide.c in Sources */,
 				3701DC8616E734A800896D7D /* nullgame.c in Sources */,
@@ -1027,20 +1276,26 @@
 				3701DC8816E734A800896D7D /* pearl.c in Sources */,
 				3701DC8916E734A800896D7D /* pegs.c in Sources */,
 				3701DC8A16E734A800896D7D /* penrose.c in Sources */,
+				F175DA071FD5BFD8001ADB23 /* rome.c in Sources */,
 				3701DC8B16E734A800896D7D /* random.c in Sources */,
+				F175DA061FD5BFD8001ADB23 /* salad.c in Sources */,
 				3701DC8C16E734A800896D7D /* range.c in Sources */,
 				3701DC8D16E734A800896D7D /* rect.c in Sources */,
 				3701DC8E16E734A800896D7D /* samegame.c in Sources */,
 				3701DC8F16E734A800896D7D /* signpost.c in Sources */,
 				3701DC9016E734A800896D7D /* singles.c in Sources */,
+				F1729A1A2724FDF000F0BE01 /* bricks.c in Sources */,
 				3701DC9116E734A800896D7D /* sixteen.c in Sources */,
 				3701DC9216E734A800896D7D /* slant.c in Sources */,
 				3701DC9316E734A800896D7D /* solo.c in Sources */,
 				3701DC9416E734A800896D7D /* tdq.c in Sources */,
+				F15D1D36209A1DF800499142 /* matching.c in Sources */,
 				3701DC9516E734A800896D7D /* tents.c in Sources */,
 				3701DC9616E734A800896D7D /* towers.c in Sources */,
+				F1AEADF729D39D8C00F466BE /* hat.c in Sources */,
 				3701DC9716E734A800896D7D /* tree234.c in Sources */,
 				3701DC9816E734A800896D7D /* twiddle.c in Sources */,
+				F149196A2280E28500C21C88 /* sort.c in Sources */,
 				3701DC9916E734A800896D7D /* undead.c in Sources */,
 				3701DC9A16E734A800896D7D /* unequal.c in Sources */,
 				3701DC9B16E734A800896D7D /* unruly.c in Sources */,
@@ -1053,7 +1308,10 @@
 				3701DD3216EDC7F200896D7D /* GameSettingsController.m in Sources */,
 				3701DD3516EEEC9A00896D7D /* GameSettingsChoiceController.m in Sources */,
 				3701DD3A16F3959400896D7D /* GameHelpController.m in Sources */,
+				F1EFAA991DE3A09C008C6D7F /* findloop.c in Sources */,
 				3786A3271AA83A9000B052ED /* flood.c in Sources */,
+				F1F6F9952638F95D00BB7BB0 /* mosaic.c in Sources */,
+				F17810D61F8BC690007B8547 /* boats.c in Sources */,
 				3782E85D16FE488F0040B261 /* svnversion.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

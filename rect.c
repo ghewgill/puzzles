@@ -26,7 +26,11 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 
@@ -44,7 +48,7 @@ enum {
 struct game_params {
     int w, h;
     float expandfactor;
-    int unique;
+    bool unique;
 };
 
 #define INDEX(state, x, y)    (((y) * (state)->w) + (x))
@@ -80,7 +84,7 @@ struct game_state {
     int *grid;			       /* contains the numbers */
     unsigned char *vedge;	       /* (w+1) x h */
     unsigned char *hedge;	       /* w x (h+1) */
-    int completed, cheated;
+    bool completed, cheated;
     unsigned char *correct;
 };
 
@@ -90,12 +94,12 @@ static game_params *default_params(void)
 
     ret->w = ret->h = 7;
     ret->expandfactor = 0.0F;
-    ret->unique = TRUE;
+    ret->unique = true;
 
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     int w, h;
@@ -111,7 +115,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
       case 5: w = 17, h = 17; break;
       case 6: w = 19, h = 19; break;
 #endif
-      default: return FALSE;
+      default: return false;
     }
 
     sprintf(buf, "%dx%d", w, h);
@@ -120,8 +124,8 @@ static int game_fetch_preset(int i, char **name, game_params **params)
     ret->w = w;
     ret->h = h;
     ret->expandfactor = 0.0F;
-    ret->unique = TRUE;
-    return TRUE;
+    ret->unique = true;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -153,11 +157,11 @@ static void decode_params(game_params *ret, char const *string)
     }
     if (*string == 'a') {
 	string++;
-	ret->unique = FALSE;
+	ret->unique = false;
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char data[256];
 
@@ -180,30 +184,24 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Expansion factor";
     ret[2].type = C_STRING;
     sprintf(buf, "%g", params->expandfactor);
-    ret[2].sval = dupstr(buf);
-    ret[2].ival = 0;
+    ret[2].u.string.sval = dupstr(buf);
 
     ret[3].name = "Ensure unique solution";
     ret[3].type = C_BOOLEAN;
-    ret[3].sval = NULL;
-    ret[3].ival = params->unique;
+    ret[3].u.boolean.bval = params->unique;
 
     ret[4].name = NULL;
     ret[4].type = C_END;
-    ret[4].sval = NULL;
-    ret[4].ival = 0;
 
     return ret;
 }
@@ -212,18 +210,20 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->expandfactor = (float)atof(cfg[2].sval);
-    ret->unique = cfg[3].ival;
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->expandfactor = (float)atof(cfg[2].u.string.sval);
+    ret->unique = cfg[3].u.boolean.bval;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->w <= 0 || params->h <= 0)
 	return "Width and height must both be greater than zero";
+    if (params->w > INT_MAX / params->h)
+        return "Width times height must not be unreasonably large";
     if (params->w*params->h < 2)
 	return "Grid area must be greater than one";
     if (params->expandfactor < 0.0F)
@@ -499,7 +499,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
      * Now run the actual deduction loop.
      */
     while (1) {
-        int done_something = FALSE;
+        bool done_something = false;
 
 #ifdef SOLVER_DIAGNOSTICS
         printf("starting deduction loop\n");
@@ -612,7 +612,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
 
             for (j = 0; j < rectpositions[i].n; j++) {
                 int xx, yy, k;
-                int del = FALSE;
+                bool del = false;
 
                 for (k = 0; k < nrects; k++)
                     workspace[k] = 0;
@@ -638,7 +638,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
                                    rectpositions[i].rects[j].h,
                                    x, y);
 #endif
-                            del = TRUE;
+                            del = true;
                         }
 
                         if (rectbyplace[y * w + x] != -1) {
@@ -671,7 +671,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
                                    rectpositions[i].rects[j].h,
                                    k);
 #endif
-                            del = TRUE;
+                            del = true;
                             break;
                         }
 
@@ -692,7 +692,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
                                rectpositions[i].rects[j].w,
                                rectpositions[i].rects[j].h);
 #endif
-                        del = TRUE;
+                        del = true;
                     }
                 }
 
@@ -701,7 +701,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
 
                     j--;               /* don't skip over next placement */
 
-                    done_something = TRUE;
+                    done_something = true;
                 }
             }
         }
@@ -745,7 +745,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
                         remove_rect_placement(w, h, rectpositions, overlaps,
                                               index, j);
                         j--;           /* don't skip over next placement */
-                        done_something = TRUE;
+                        done_something = true;
                     }
                 }
             }
@@ -853,7 +853,7 @@ static int rect_solver(int w, int h, int nrects, struct numberdata *numbers,
                         remove_number_placement(w, h, &numbers[k],
                                                 m, rectbyplace);
                         m--;           /* don't skip the next one */
-                        done_something = TRUE;
+                        done_something = true;
                     }
                 }
             }
@@ -1147,7 +1147,7 @@ static void display_grid(game_params *params, int *grid, int *numbers, int all)
 #endif
 
 static char *new_game_desc(const game_params *params_in, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     game_params params_copy = *params_in; /* structure copy */
     game_params *params = &params_copy;
@@ -1273,7 +1273,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
                     int dirs[4], ndirs;
 
 #ifdef GENERATION_DIAGNOSTICS
-                    display_grid(params2, grid, NULL, FALSE);
+                    display_grid(params2, grid, NULL, false);
                     printf("singleton at %d,%d\n", x, y);
 #endif
 
@@ -1317,7 +1317,8 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
                     if (ndirs > 0) {
                         int which, dir;
                         struct rect r1, r2;
-
+                        memset(&r1, 0, sizeof(struct rect));
+                        memset(&r2, 0, sizeof(struct rect));
                         which = random_upto(rs, ndirs);
                         dir = dirs[which];
 
@@ -1450,7 +1451,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
 
 #ifdef GENERATION_DIAGNOSTICS
             printf("before expansion:\n");
-            display_grid(params2, grid, NULL, TRUE);
+            display_grid(params2, grid, NULL, true);
 #endif
 
             /*
@@ -1578,7 +1579,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
 
 #ifdef GENERATION_DIAGNOSTICS
             printf("after expansion:\n");
-            display_grid(params3, grid2, NULL, TRUE);
+            display_grid(params3, grid2, NULL, true);
 #endif
             /*
              * Transpose.
@@ -1609,7 +1610,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
 
 #ifdef GENERATION_DIAGNOSTICS
             printf("after transposition:\n");
-            display_grid(params2, grid, NULL, TRUE);
+            display_grid(params2, grid, NULL, true);
 #endif
         }
 
@@ -1736,7 +1737,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
     }
 
 #ifdef GENERATION_DIAGNOSTICS
-    display_grid(params, grid, numbers, FALSE);
+    display_grid(params, grid, numbers, false);
 #endif
 
     desc = snewn(11 * params->w * params->h, char);
@@ -1778,7 +1779,7 @@ static char *new_game_desc(const game_params *params_in, random_state *rs,
     return desc;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int area = params->w * params->h;
     int squares = 0;
@@ -1819,7 +1820,8 @@ static unsigned char *get_correct(game_state *state)
 	    if (index(state,ret,x,y) == 0xFF) {
 		int rw, rh;
 		int xx, yy;
-		int num, area, valid;
+		int num, area;
+                bool valid;
 
 		/*
 		 * Find a rectangle starting at this point.
@@ -1836,14 +1838,14 @@ static unsigned char *get_correct(game_state *state)
 		 * should be if it's there at all. Find out if we
 		 * really have a valid rectangle.
 		 */
-		valid = TRUE;
+		valid = true;
 		/* Check the horizontal edges. */
 		for (xx = x; xx < x+rw; xx++) {
 		    for (yy = y; yy <= y+rh; yy++) {
 			int e = !HRANGE(state,xx,yy) || hedge(state,xx,yy);
 			int ec = (yy == y || yy == y+rh);
 			if (e != ec)
-			    valid = FALSE;
+			    valid = false;
 		    }
 		}
 		/* Check the vertical edges. */
@@ -1852,7 +1854,7 @@ static unsigned char *get_correct(game_state *state)
 			int e = !VRANGE(state,xx,yy) || vedge(state,xx,yy);
 			int ec = (xx == x || xx == x+rw);
 			if (e != ec)
-			    valid = FALSE;
+			    valid = false;
 		    }
 		}
 
@@ -1877,13 +1879,13 @@ static unsigned char *get_correct(game_state *state)
 			area++;
 			if (grid(state,xx,yy)) {
 			    if (num > 0)
-				valid = FALSE;   /* two numbers */
+				valid = false;   /* two numbers */
 			    num = grid(state,xx,yy);
 			}
 		    }
 		}
 		if (num != area)
-		    valid = FALSE;
+		    valid = false;
 
 		/*
 		 * Now fill in the whole rectangle based on the
@@ -1913,7 +1915,8 @@ static game_state *new_game(midend *me, const game_params *params,
     state->grid = snewn(area, int);
     state->vedge = snewn(area, unsigned char);
     state->hedge = snewn(area, unsigned char);
-    state->completed = state->cheated = FALSE;
+    state->completed = false;
+    state->cheated = false;
 
     i = 0;
     while (*desc) {
@@ -1979,7 +1982,7 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *ai, char **error)
+                        const char *ai, const char **error)
 {
     unsigned char *vedge, *hedge;
     int x, y, len;
@@ -2047,9 +2050,9 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
@@ -2166,12 +2169,12 @@ struct game_ui {
      * the pointer _returns_ to its starting point the action is
      * treated as a small drag rather than a click.
      */
-    int dragged;
+    bool dragged;
     /* This flag is set if we're doing an erase operation (i.e.
      * removing edges in the centre of the rectangle without altering
      * the outlines).
      */
-    int erasing;
+    bool erasing;
     /*
      * These are the co-ordinates of the top-left and bottom-right squares
      * in the drag box, respectively, or -1 otherwise.
@@ -2184,37 +2187,37 @@ struct game_ui {
      * These are the coordinates of a cursor, whether it's visible, and
      * whether it was used to start a drag.
      */
-    int cur_x, cur_y, cur_visible, cur_dragging;
+    int cur_x, cur_y;
+    bool cur_visible, cur_dragging;
 };
 
-static game_ui *new_ui(const game_state *state)
+static void reset_ui(game_ui *ui)
 {
-    game_ui *ui = snew(game_ui);
     ui->drag_start_x = -1;
     ui->drag_start_y = -1;
     ui->drag_end_x = -1;
     ui->drag_end_y = -1;
-    ui->dragged = ui->erasing = FALSE;
     ui->x1 = -1;
     ui->y1 = -1;
     ui->x2 = -1;
     ui->y2 = -1;
-    ui->cur_x = ui->cur_y = ui->cur_visible = ui->cur_dragging = 0;
+    ui->dragged = false;
+}
+
+static game_ui *new_ui(const game_state *state)
+{
+    game_ui *ui = snew(game_ui);
+    reset_ui(ui);
+    ui->erasing = false;
+    ui->cur_x = ui->cur_y = 0;
+    ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
+    ui->cur_dragging = false;
     return ui;
 }
 
 static void free_ui(game_ui *ui)
 {
     sfree(ui);
-}
-
-static char *encode_ui(const game_ui *ui)
-{
-    return NULL;
-}
-
-static void decode_ui(game_ui *ui, const char *encoding)
-{
 }
 
 static void coord_round(float x, float y, int *xr, int *yr)
@@ -2302,15 +2305,15 @@ static void coord_round(float x, float y, int *xr, int *yr)
 }
 
 /*
- * Returns TRUE if it has made any change to the grid.
+ * Returns true if it has made any change to the grid.
  */
-static int grid_draw_rect(const game_state *state,
+static bool grid_draw_rect(const game_state *state,
 			  unsigned char *hedge, unsigned char *vedge,
-			  int c, int really, int outline,
+			  int c, bool really, bool outline,
 			  int x1, int y1, int x2, int y2)
 {
     int x, y;
-    int changed = FALSE;
+    bool changed = false;
 
     /*
      * Draw horizontal edges of rectangles.
@@ -2349,9 +2352,9 @@ static int grid_draw_rect(const game_state *state,
     return changed;
 }
 
-static int ui_draw_rect(const game_state *state, const game_ui *ui,
+static bool ui_draw_rect(const game_state *state, const game_ui *ui,
 			unsigned char *hedge, unsigned char *vedge, int c,
-			int really, int outline)
+			bool really, bool outline)
 {
     return grid_draw_rect(state, hedge, vedge, c, really, outline,
 			  ui->x1, ui->y1, ui->x2, ui->y2);
@@ -2363,17 +2366,32 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 }
 
 struct game_drawstate {
-    int started;
+    bool started;
     int w, h, tilesize;
     unsigned long *visible;
 };
+
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    if (IS_CURSOR_SELECT(button) && ui->cur_visible &&
+        !(ui->drag_start_x >= 0 && !ui->cur_dragging)) {
+        if (ui->cur_dragging) {
+            if (!ui->dragged) return "Cancel";
+            if ((button == CURSOR_SELECT2) == ui->erasing) return "Done";
+            return "Cancel";
+        }
+        return button == CURSOR_SELECT ? "Mark" : "Erase";
+    }
+    return "";
+}
 
 static char *interpret_move(const game_state *from, game_ui *ui,
                             const game_drawstate *ds,
                             int x, int y, int button)
 {
     int xc, yc;
-    int startdrag = FALSE, enddrag = FALSE, active = FALSE, erasing = FALSE;
+    bool startdrag = false, enddrag = false, active = false, erasing = false;
     char buf[80], *ret;
 
     button &= ~MOD_MASK;
@@ -2381,39 +2399,27 @@ static char *interpret_move(const game_state *from, game_ui *ui,
     coord_round(FROMCOORD((float)x), FROMCOORD((float)y), &xc, &yc);
 
     if (button == LEFT_BUTTON || button == RIGHT_BUTTON) {
-        if (ui->drag_start_x >= 0 && ui->cur_dragging) {
-            /*
-             * If a keyboard drag is in progress, unceremoniously
-             * cancel it.
-             */
-            ui->drag_start_x = -1;
-            ui->drag_start_y = -1;
-            ui->drag_end_x = -1;
-            ui->drag_end_y = -1;
-            ui->x1 = -1;
-            ui->y1 = -1;
-            ui->x2 = -1;
-            ui->y2 = -1;
-            ui->dragged = FALSE;
-        }
-        startdrag = TRUE;
-        ui->cur_visible = ui->cur_dragging = FALSE;
-        active = TRUE;
+        if (ui->drag_start_x >= 0 && ui->cur_dragging)
+            reset_ui(ui); /* cancel keyboard dragging */
+        startdrag = true;
+        ui->cur_visible = ui->cur_dragging = false;
+        active = true;
         erasing = (button == RIGHT_BUTTON);
     } else if (button == LEFT_RELEASE || button == RIGHT_RELEASE) {
         /* We assert we should have had a LEFT_BUTTON first. */
         if (ui->cur_visible) {
-            ui->cur_visible = FALSE;
-            active = TRUE;
+            ui->cur_visible = false;
+            active = true;
         }
         assert(!ui->cur_dragging);
-        enddrag = TRUE;
+        enddrag = true;
         erasing = (button == RIGHT_RELEASE);
     } else if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cur_x, &ui->cur_y, from->w, from->h, 0);
-        ui->cur_visible = TRUE;
-        active = TRUE;
-        if (!ui->cur_dragging) return "";
+        char *ret;
+        ret = move_cursor(button, &ui->cur_x, &ui->cur_y, from->w, from->h,
+                          false, &ui->cur_visible);
+        active = true;
+        if (!ui->cur_dragging || ret != MOVE_UI_UPDATE) return ret;
         coord_round((float)ui->cur_x + 0.5F, (float)ui->cur_y + 0.5F, &xc, &yc);
     } else if (IS_CURSOR_SELECT(button)) {
         if (ui->drag_start_x >= 0 && !ui->cur_dragging) {
@@ -2425,20 +2431,29 @@ static char *interpret_move(const game_state *from, game_ui *ui,
         }
         if (!ui->cur_visible) {
             assert(!ui->cur_dragging);
-            ui->cur_visible = TRUE;
-            return "";
+            ui->cur_visible = true;
+            return MOVE_UI_UPDATE;
         }
         coord_round((float)ui->cur_x + 0.5F, (float)ui->cur_y + 0.5F, &xc, &yc);
         erasing = (button == CURSOR_SELECT2);
         if (ui->cur_dragging) {
-            ui->cur_dragging = FALSE;
-            enddrag = TRUE;
-            active = TRUE;
+            ui->cur_dragging = false;
+            enddrag = true;
+            active = true;
         } else {
-            ui->cur_dragging = TRUE;
-            startdrag = TRUE;
-            active = TRUE;
+            ui->cur_dragging = true;
+            startdrag = true;
+            active = true;
         }
+    } else if (button == '\b' || button == 27) {
+        if (!ui->cur_dragging) {
+            ui->cur_visible = false;
+        } else {
+            assert(ui->cur_visible);
+            reset_ui(ui); /* cancel keyboard dragging */
+            ui->cur_dragging = false;
+        }
+        return MOVE_UI_UPDATE;
     } else if (button != LEFT_DRAG && button != RIGHT_DRAG) {
         return NULL;
     }
@@ -2451,9 +2466,9 @@ static char *interpret_move(const game_state *from, game_ui *ui,
         ui->drag_start_y = yc;
         ui->drag_end_x = -1;
         ui->drag_end_y = -1;
-        ui->dragged = FALSE;
+        ui->dragged = false;
         ui->erasing = erasing;
-        active = TRUE;
+        active = true;
     }
 
     if (ui->drag_start_x >= 0 &&
@@ -2461,10 +2476,10 @@ static char *interpret_move(const game_state *from, game_ui *ui,
 	int t;
 
 	if (ui->drag_end_x != -1 && ui->drag_end_y != -1)
-	    ui->dragged = TRUE;
+	    ui->dragged = true;
         ui->drag_end_x = xc;
         ui->drag_end_y = yc;
-        active = TRUE;
+        active = true;
 
 	if (xc >= 0 && xc <= 2*from->w &&
 	    yc >= 0 && yc <= 2*from->h) {
@@ -2497,7 +2512,7 @@ static char *interpret_move(const game_state *from, game_ui *ui,
 
 	    if (ui->dragged) {
 		if (ui_draw_rect(from, ui, from->hedge,
-				 from->vedge, 1, FALSE, !ui->erasing)) {
+				 from->vedge, 1, false, !ui->erasing)) {
 		    sprintf(buf, "%c%d,%d,%d,%d",
 			    (int)(ui->erasing ? 'E' : 'R'),
 			    ui->x1, ui->y1, ui->x2 - ui->x1, ui->y2 - ui->y1);
@@ -2515,22 +2530,14 @@ static char *interpret_move(const game_state *from, game_ui *ui,
 	    }
 	}
 
-	ui->drag_start_x = -1;
-	ui->drag_start_y = -1;
-	ui->drag_end_x = -1;
-	ui->drag_end_y = -1;
-	ui->x1 = -1;
-	ui->y1 = -1;
-	ui->x2 = -1;
-	ui->y2 = -1;
-	ui->dragged = FALSE;
-	active = TRUE;
+        reset_ui(ui);
+	active = true;
     }
 
     if (ret)
 	return ret;		       /* a move has been made */
     else if (active)
-        return "";		       /* UI activity has occurred */
+        return MOVE_UI_UPDATE;
     else
 	return NULL;
 }
@@ -2545,7 +2552,7 @@ static game_state *execute_move(const game_state *from, const char *move)
 	int x, y;
 
 	ret = dup_game(from);
-	ret->cheated = TRUE;
+	ret->cheated = true;
 
 	for (y = 0; y < ret->h; y++)
 	    for (x = 1; x < ret->w; x++) {
@@ -2581,7 +2588,7 @@ static game_state *execute_move(const game_state *from, const char *move)
     ret = dup_game(from);
 
     if (mode == 'R' || mode == 'E') {
-	grid_draw_rect(ret, ret->hedge, ret->vedge, 1, TRUE,
+	grid_draw_rect(ret, ret->hedge, ret->vedge, 1, true,
                        mode == 'R', x1, y1, x2, y2);
     } else if (mode == 'H') {
 	hedge(ret,x1,y1) = !hedge(ret,x1,y1);
@@ -2597,16 +2604,17 @@ static game_state *execute_move(const game_state *from, const char *move)
      * if the game has been completed.
      */
     if (!ret->completed) {
-	int x, y, ok;
+	int x, y;
+        bool ok;
 
-	ok = TRUE;
+	ok = true;
 	for (x = 0; x < ret->w; x++)
 	    for (y = 0; y < ret->h; y++)
 		if (!index(ret, ret->correct, x, y))
-		    ok = FALSE;
+		    ok = false;
 
 	if (ok)
-	    ret->completed = TRUE;
+	    ret->completed = true;
     }
 
     return ret;
@@ -2623,7 +2631,7 @@ static game_state *execute_move(const game_state *from, const char *move)
 #define MAX4(x,y,z,w) ( max(max(x,y),max(z,w)) )
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     /* Ick: fake up `ds->tilesize' for macro expansion purposes */
     struct { int tilesize; } ads, *ds = &ads;
@@ -2682,7 +2690,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     struct game_drawstate *ds = snew(struct game_drawstate);
     int i;
 
-    ds->started = FALSE;
+    ds->started = false;
     ds->w = state->w;
     ds->h = state->h;
     ds->visible = snewn(ds->w * ds->h, unsigned long);
@@ -2769,7 +2777,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         vedge = snewn(state->w*state->h, unsigned char);
         memcpy(hedge, state->hedge, state->w*state->h);
         memcpy(vedge, state->vedge, state->w*state->h);
-        ui_draw_rect(state, ui, hedge, vedge, ui->erasing ? 3 : 2, TRUE, TRUE);
+        ui_draw_rect(state, ui, hedge, vedge, ui->erasing ? 3 : 2, true, true);
     } else {
         hedge = state->hedge;
         vedge = state->vedge;
@@ -2798,12 +2806,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	}
 
     if (!ds->started) {
-	draw_rect(dr, 0, 0,
-		  state->w * TILE_SIZE + 2*BORDER + 1,
-		  state->h * TILE_SIZE + 2*BORDER + 1, COL_BACKGROUND);
 	draw_rect(dr, COORD(0)-1, COORD(0)-1,
 		  ds->w*TILE_SIZE+3, ds->h*TILE_SIZE+3, COL_LINE);
-	ds->started = TRUE;
+	ds->started = true;
 	draw_update(dr, 0, 0,
 		    state->w * TILE_SIZE + 2*BORDER + 1,
 		    state->h * TILE_SIZE + 2*BORDER + 1);
@@ -2885,29 +2890,39 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        *x = COORD(ui->cur_x);
+        *y = COORD(ui->cur_y);
+        *w = *h = TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
-{
-    return TRUE;
-}
-
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
     /*
      * I'll use 5mm squares by default.
      */
-    game_compute_size(params, 500, &pw, &ph);
+    game_compute_size(params, 500, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int w = state->w, h = state->h;
     int ink = print_mono_colour(dr, 0);
@@ -2965,27 +2980,30 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 #endif
 
 const struct game thegame = {
-    "Rectangles", "games.rectangles", "rectangles",
+    "Rectangles", "games.rectangles", "rect",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
-    encode_ui,
-    decode_ui,
+    NULL, /* encode_ui */
+    NULL, /* decode_ui */
+    NULL, /* game_request_keys */
     game_changed_state,
+    current_key_label,
     interpret_move,
     execute_move,
     PREFERRED_TILE_SIZE, game_compute_size, game_set_size,
@@ -2995,10 +3013,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    TRUE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    true,			       /* wants_statusbar */
+    false, NULL,                       /* timing_state */
     0,				       /* flags */
 };
 

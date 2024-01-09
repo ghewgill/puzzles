@@ -10,7 +10,12 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#include <limits.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 
@@ -37,17 +42,17 @@ enum {
 
 struct game_params {
     int w, h, n;
-    int rowsonly;
-    int orientable;
+    bool rowsonly;
+    bool orientable;
     int movetarget;
 };
 
 struct game_state {
     int w, h, n;
-    int orientable;
+    bool orientable;
     int *grid;
     int completed;
-    int used_solve;		       /* used to suppress completion flash */
+    bool used_solve;		       /* used to suppress completion flash */
     int movecount, movetarget;
     int lastx, lasty, lastr;	       /* coordinates of last rotation */
 };
@@ -58,7 +63,7 @@ static game_params *default_params(void)
 
     ret->w = ret->h = 3;
     ret->n = 2;
-    ret->rowsonly = ret->orientable = FALSE;
+    ret->rowsonly = ret->orientable = false;
     ret->movetarget = 0;
 
     return ret;
@@ -77,36 +82,37 @@ static game_params *dup_params(const game_params *params)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     static struct {
-        char *title;
+        const char *title;
         game_params params;
-    } presets[] = {
-        { "3x3 rows only", { 3, 3, 2, TRUE, FALSE } },
-        { "3x3 normal", { 3, 3, 2, FALSE, FALSE } },
-        { "3x3 orientable", { 3, 3, 2, FALSE, TRUE } },
-        { "4x4 normal", { 4, 4, 2, FALSE } },
-        { "4x4 orientable", { 4, 4, 2, FALSE, TRUE } },
-        { "4x4, rotating 3x3 blocks", { 4, 4, 3, FALSE } },
-        { "5x5, rotating 3x3 blocks", { 5, 5, 3, FALSE } },
-        { "6x6, rotating 4x4 blocks", { 6, 6, 4, FALSE } },
+    } const presets[] = {
+        { "3x3 rows only", { 3, 3, 2, true, false } },
+        { "3x3 normal", { 3, 3, 2, false, false } },
+        { "3x3 orientable", { 3, 3, 2, false, true } },
+        { "4x4 normal", { 4, 4, 2, false } },
+        { "4x4 orientable", { 4, 4, 2, false, true } },
+        { "4x4, rotating 3x3 blocks", { 4, 4, 3, false } },
+        { "5x5, rotating 3x3 blocks", { 5, 5, 3, false } },
+        { "6x6, rotating 4x4 blocks", { 6, 6, 4, false } },
     };
 
     if (i < 0 || i >= lenof(presets))
-        return FALSE;
+        return false;
 
     *name = dupstr(presets[i].title);
     *params = dup_params(&presets[i].params);
 
-    return TRUE;
+    return true;
 }
 
 static void decode_params(game_params *ret, char const *string)
 {
     ret->w = ret->h = atoi(string);
     ret->n = 2;
-    ret->rowsonly = ret->orientable = FALSE;
+    ret->rowsonly = false;
+    ret->orientable = false;
     ret->movetarget = 0;
     while (*string && isdigit((unsigned char)*string)) string++;
     if (*string == 'x') {
@@ -121,19 +127,21 @@ static void decode_params(game_params *ret, char const *string)
     }
     while (*string) {
 	if (*string == 'r') {
-	    ret->rowsonly = TRUE;
+	    ret->rowsonly = true;
+            string++;
 	} else if (*string == 'o') {
-	    ret->orientable = TRUE;
+	    ret->orientable = true;
+            string++;
 	} else if (*string == 'm') {
             string++;
 	    ret->movetarget = atoi(string);
-            while (string[1] && isdigit((unsigned char)string[1])) string++;
-	}
-	string++;
+            while (*string && isdigit((unsigned char)*string)) string++;
+	} else
+            string++;
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[256];
     sprintf(buf, "%dx%dn%d%s%s", params->w, params->h, params->n,
@@ -156,41 +164,33 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "Rotating block size";
     ret[2].type = C_STRING;
     sprintf(buf, "%d", params->n);
-    ret[2].sval = dupstr(buf);
-    ret[2].ival = 0;
+    ret[2].u.string.sval = dupstr(buf);
 
     ret[3].name = "One number per row";
     ret[3].type = C_BOOLEAN;
-    ret[3].sval = NULL;
-    ret[3].ival = params->rowsonly;
+    ret[3].u.boolean.bval = params->rowsonly;
 
     ret[4].name = "Orientation matters";
     ret[4].type = C_BOOLEAN;
-    ret[4].sval = NULL;
-    ret[4].ival = params->orientable;
+    ret[4].u.boolean.bval = params->orientable;
 
     ret[5].name = "Number of shuffling moves";
     ret[5].type = C_STRING;
     sprintf(buf, "%d", params->movetarget);
-    ret[5].sval = dupstr(buf);
-    ret[5].ival = 0;
+    ret[5].u.string.sval = dupstr(buf);
 
     ret[6].name = NULL;
     ret[6].type = C_END;
-    ret[6].sval = NULL;
-    ret[6].ival = 0;
 
     return ret;
 }
@@ -199,17 +199,17 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w = atoi(cfg[0].sval);
-    ret->h = atoi(cfg[1].sval);
-    ret->n = atoi(cfg[2].sval);
-    ret->rowsonly = cfg[3].ival;
-    ret->orientable = cfg[4].ival;
-    ret->movetarget = atoi(cfg[5].sval);
+    ret->w = atoi(cfg[0].u.string.sval);
+    ret->h = atoi(cfg[1].u.string.sval);
+    ret->n = atoi(cfg[2].u.string.sval);
+    ret->rowsonly = cfg[3].u.boolean.bval;
+    ret->orientable = cfg[4].u.boolean.bval;
+    ret->movetarget = atoi(cfg[5].u.string.sval);
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->n < 2)
 	return "Rotating block size must be at least two";
@@ -217,6 +217,8 @@ static char *validate_params(const game_params *params, int full)
 	return "Width must be at least the rotating block size";
     if (params->h < params->n)
 	return "Height must be at least the rotating block size";
+    if (params->w > INT_MAX / params->h)
+        return "Width times height must not be unreasonably large";
     return NULL;
 }
 
@@ -228,7 +230,7 @@ static char *validate_params(const game_params *params, int full)
  * the centre is good for a user interface, but too inconvenient to
  * use internally.)
  */
-static void do_rotate(int *grid, int w, int h, int n, int orientable,
+static void do_rotate(int *grid, int w, int h, int n, bool orientable,
 		      int x, int y, int dir)
 {
     int i, j;
@@ -291,23 +293,23 @@ static void do_rotate(int *grid, int w, int h, int n, int orientable,
     }
 }
 
-static int grid_complete(int *grid, int wh, int orientable)
+static bool grid_complete(int *grid, int wh, bool orientable)
 {
-    int ok = TRUE;
+    bool ok = true;
     int i;
     for (i = 1; i < wh; i++)
 	if (grid[i] < grid[i-1])
-	    ok = FALSE;
+	    ok = false;
     if (orientable) {
 	for (i = 0; i < wh; i++)
 	    if (grid[i] & 3)
-		ok = FALSE;
+		ok = false;
     }
     return ok;
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     int *grid;
     int w = params->w, h = params->h, n = params->n, wh = w*h;
@@ -430,7 +432,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     const char *p;
     int w = params->w, h = params->h, wh = w*h;
@@ -472,7 +474,7 @@ static game_state *new_game(midend *me, const game_params *params,
     state->n = n;
     state->orientable = params->orientable;
     state->completed = 0;
-    state->used_solve = FALSE;
+    state->used_solve = false;
     state->movecount = 0;
     state->movetarget = params->movetarget;
     state->lastx = state->lasty = state->lastr = -1;
@@ -541,20 +543,27 @@ static int compare_int(const void *av, const void *bv)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     return dupstr("S");
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 static char *game_text_format(const game_state *state)
 {
     char *ret, *p, buf[80];
-    int i, x, y, col, o, maxlen;
+    int i, x, y, col, maxlen;
+    bool o = state->orientable;
+
+    /* Pedantic check: ensure buf is large enough to format an int in
+     * decimal, using the bound log10(2) < 1/3. (Obviously in practice
+     * int is not going to be larger than even 32 bits any time soon,
+     * but.) */
+    assert(sizeof(buf) >= 1 + sizeof(int) * CHAR_BIT/3);
 
     /*
      * First work out how many characters we need to display each
@@ -566,7 +575,11 @@ static char *game_text_format(const game_state *state)
 	x = sprintf(buf, "%d", state->grid[i] / 4);
 	if (col < x) col = x;
     }
-    o = (state->orientable ? 1 : 0);
+
+    /* Reassure sprintf-checking compilers like gcc that the field
+     * width we've just computed is not now excessive */
+    if (col >= sizeof(buf))
+        col = sizeof(buf)-1;
 
     /*
      * Now we know the exact total size of the grid we're going to
@@ -600,7 +613,7 @@ static char *game_text_format(const game_state *state)
 
 struct game_ui {
     int cur_x, cur_y;
-    int cur_visible;
+    bool cur_visible;
 };
 
 static game_ui *new_ui(const game_state *state)
@@ -609,7 +622,7 @@ static game_ui *new_ui(const game_state *state)
 
     ui->cur_x = 0;
     ui->cur_y = 0;
-    ui->cur_visible = FALSE;
+    ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
 
     return ui;
 }
@@ -619,22 +632,24 @@ static void free_ui(game_ui *ui)
     sfree(ui);
 }
 
-static char *encode_ui(const game_ui *ui)
-{
-    return NULL;
-}
-
-static void decode_ui(game_ui *ui, const char *encoding)
-{
-}
-
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
 }
 
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    if (!ui->cur_visible) return "";
+    switch (button) {
+      case CURSOR_SELECT: return "Turn left";
+      case CURSOR_SELECT2: return "Turn right";
+    }
+    return "";
+}
+
 struct game_drawstate {
-    int started;
+    bool started;
     int w, h, bgcolour;
     int *grid;
     int tilesize;
@@ -651,18 +666,9 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
     button = button & (~MOD_MASK | MOD_NUM_KEYPAD);
 
-    if (IS_CURSOR_MOVE(button)) {
-        if (button == CURSOR_LEFT && ui->cur_x > 0)
-            ui->cur_x--;
-        if (button == CURSOR_RIGHT && (ui->cur_x+n) < (w))
-            ui->cur_x++;
-        if (button == CURSOR_UP && ui->cur_y > 0)
-            ui->cur_y--;
-        if (button == CURSOR_DOWN && (ui->cur_y+n) < (h))
-            ui->cur_y++;
-        ui->cur_visible = 1;
-        return "";
-    }
+    if (IS_CURSOR_MOVE(button))
+        return move_cursor(button, &ui->cur_x, &ui->cur_y, w-n+1, h-n+1,
+                           false, &ui->cur_visible);
 
     if (button == LEFT_BUTTON || button == RIGHT_BUTTON) {
 	/*
@@ -677,15 +683,15 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	dir = (button == LEFT_BUTTON ? 1 : -1);
 	if (x < 0 || x > w-n || y < 0 || y > h-n)
 	    return NULL;
-        ui->cur_visible = 0;
+        ui->cur_visible = false;
     } else if (IS_CURSOR_SELECT(button)) {
         if (ui->cur_visible) {
             x = ui->cur_x;
             y = ui->cur_y;
             dir = (button == CURSOR_SELECT2) ? -1 : +1;
         } else {
-            ui->cur_visible = 1;
-            return "";
+            ui->cur_visible = true;
+            return MOVE_UI_UPDATE;
         }
     } else if (button == 'a' || button == 'A' || button==MOD_NUM_KEYPAD+'7') {
         x = y = 0;
@@ -753,7 +759,7 @@ static game_state *execute_move(const game_state *from, const char *move)
 	qsort(ret->grid, ret->w*ret->h, sizeof(int), compare_int);
 	for (i = 0; i < ret->w*ret->h; i++)
 	    ret->grid[i] &= ~3;
-	ret->used_solve = TRUE;
+	ret->used_solve = true;
 	ret->completed = ret->movecount = 1;
 
 	return ret;
@@ -785,7 +791,7 @@ static game_state *execute_move(const game_state *from, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     /* Ick: fake up `ds->tilesize' for macro expansion purposes */
     struct { int tilesize; } ads, *ds = &ads;
@@ -829,7 +835,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     struct game_drawstate *ds = snew(struct game_drawstate);
     int i;
 
-    ds->started = FALSE;
+    ds->started = false;
     ds->w = state->w;
     ds->h = state->h;
     ds->bgcolour = COL_BACKGROUND;
@@ -864,8 +870,8 @@ static void rotate(int *xy, struct rotation *rot)
 	xf2 = rot->c * xf + rot->s * yf;
 	yf2 = - rot->s * xf + rot->c * yf;
 
-	xy[0] = (int)(xf2 + rot->ox + 0.5);   /* round to nearest */
-	xy[1] = (int)(yf2 + rot->oy + 0.5);   /* round to nearest */
+	xy[0] = (int)(xf2 + rot->ox + 0.5F);   /* round to nearest */
+	xy[1] = (int)(yf2 + rot->oy + 0.5F);   /* round to nearest */
     }
 }
 
@@ -1052,7 +1058,7 @@ static int highlight_colour(float angle)
 	COL_LOWLIGHT,
     };
 
-    return colours[(int)((angle + 2*PI) / (PI/16)) & 31];
+    return colours[(int)((angle + 2*(float)PI) / ((float)PI/16)) & 31];
 }
 
 static float game_anim_length_real(const game_state *oldstate,
@@ -1086,6 +1092,19 @@ static float game_flash_length(const game_state *oldstate,
         return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        *x = COORD(ui->cur_x);
+        *y = COORD(ui->cur_y);
+        *w = *h = state->n * TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
@@ -1099,12 +1118,13 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     int i, bgcolour;
     struct rotation srot, *rot;
     int lastx = -1, lasty = -1, lastr = -1;
-    int cx, cy, cmoved = 0, n = state->n;
+    int cx, cy, n = state->n;
+    bool cmoved = false;
 
     cx = ui->cur_visible ? ui->cur_x : -state->n;
     cy = ui->cur_visible ? ui->cur_y : -state->n;
     if (cx != ds->cur_x || cy != ds->cur_y)
-        cmoved = 1;
+        cmoved = true;
 
     if (flashtime > 0) {
         int frame = (int)(flashtime / FLASH_FRAME);
@@ -1114,13 +1134,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
     if (!ds->started) {
         int coords[10];
-
-	draw_rect(dr, 0, 0,
-		  TILE_SIZE * state->w + 2 * BORDER,
-		  TILE_SIZE * state->h + 2 * BORDER, COL_BACKGROUND);
-	draw_update(dr, 0, 0,
-		    TILE_SIZE * state->w + 2 * BORDER,
-		    TILE_SIZE * state->h + 2 * BORDER);
 
         /*
          * Recessed area containing the whole puzzle.
@@ -1141,7 +1154,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         coords[0] = COORD(0) - HIGHLIGHT_WIDTH;
         draw_polygon(dr, coords, 5, COL_LOWLIGHT, COL_LOWLIGHT);
 
-        ds->started = TRUE;
+        ds->started = true;
     }
 
     /*
@@ -1169,7 +1182,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	rot->cw = rot->ch = TILE_SIZE * state->n;
 	rot->ox = rot->cx + rot->cw/2;
 	rot->oy = rot->cy + rot->ch/2;
-	angle = (float)((-PI/2 * lastr) * (1.0 - animtime / anim_max));
+	angle = ((-(float)PI/2 * lastr) * (1.0F - animtime / anim_max));
 	rot->c = (float)cos(angle);
 	rot->s = (float)sin(angle);
 
@@ -1189,7 +1202,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      * Now draw each tile.
      */
     for (i = 0; i < state->w * state->h; i++) {
-	int t, cc = 0;
+	int t;
+        bool cc = false;
 	int tx = i % state->w, ty = i / state->w;
 
 	/*
@@ -1209,10 +1223,10 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         if (cmoved) {
             /* cursor has moved (or changed visibility)... */
             if (tx == cx || tx == cx+n-1 || ty == cy || ty == cy+n-1)
-                cc = 1; /* ...we're on new cursor, redraw */
+                cc = true; /* ...we're on new cursor, redraw */
             if (tx == ds->cur_x || tx == ds->cur_x+n-1 ||
                 ty == ds->cur_y || ty == ds->cur_y+n-1)
-                cc = 1; /* ...we were on old cursor, redraw */
+                cc = true; /* ...we were on old cursor, redraw */
         }
 
 	if (ds->bgcolour != bgcolour ||   /* always redraw when flashing */
@@ -1261,19 +1275,6 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     }
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
-{
-    return TRUE;
-}
-
-static void game_print_size(const game_params *params, float *x, float *y)
-{
-}
-
-static void game_print(drawing *dr, const game_state *state, int tilesize)
-{
-}
-
 #ifdef COMBINED
 #define thegame twiddle
 #endif
@@ -1281,25 +1282,28 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Twiddle", "games.twiddle", "twiddle",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
+    NULL, NULL, /* get_prefs, set_prefs */
     new_ui,
     free_ui,
-    encode_ui,
-    decode_ui,
+    NULL, /* encode_ui */
+    NULL, /* decode_ui */
+    NULL, /* game_request_keys */
     game_changed_state,
+    current_key_label,
     interpret_move,
     execute_move,
     PREFERRED_TILE_SIZE, game_compute_size, game_set_size,
@@ -1309,10 +1313,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    FALSE, FALSE, game_print_size, game_print,
-    TRUE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    false, false, NULL, NULL,          /* print_size, print */
+    true,			       /* wants_statusbar */
+    false, NULL,                       /* timing_state */
     0,				       /* flags */
 };
 

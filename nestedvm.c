@@ -17,7 +17,7 @@
 extern void _pause();
 extern int _call_java(int cmd, int arg1, int arg2, int arg3);
 
-void fatal(char *fmt, ...)
+void fatal(const char *fmt, ...)
 {
     va_list ap;
     fprintf(stderr, "fatal error: ");
@@ -31,10 +31,11 @@ void fatal(char *fmt, ...)
 struct frontend {
     // TODO kill unneeded members!
     midend *me;
-    int timer_active;
+    bool timer_active;
     struct timeval last_time;
     config_item *cfg;
-    int cfg_which, cfgret;
+    int cfg_which;
+    bool cfgret;
     int ox, oy, w, h;
 };
 
@@ -53,7 +54,7 @@ void frontend_default_colour(frontend *fe, float *output)
     output[0] = output[1]= output[2] = 0.8f;
 }
 
-void nestedvm_status_bar(void *handle, char *text)
+void nestedvm_status_bar(void *handle, const char *text)
 {
     _call_java(4,0,(int)text,0);
 }
@@ -79,7 +80,7 @@ void nestedvm_unclip(void *handle)
 }
 
 void nestedvm_draw_text(void *handle, int x, int y, int fonttype, int fontsize,
-		   int align, int colour, char *text)
+                        int align, int colour, const char *text)
 {
     frontend *fe = (frontend *)handle;
     _call_java(5, x + fe->ox, y + fe->oy, 
@@ -205,7 +206,7 @@ int jcallback_key_event(int x, int y, int keyval)
     if (fe->ox == -1)
         return 1;
     if (keyval >= 0 &&
-        !midend_process_key(fe->me, x - fe->ox, y - fe->oy, keyval))
+        midend_process_key(fe->me, x - fe->ox, y - fe->oy, keyval) == PKR_QUIT)
 	return 42;
     return 1;
 }
@@ -216,7 +217,7 @@ int jcallback_resize(int width, int height)
     int x, y;
     x = width;
     y = height;
-    midend_size(fe->me, &x, &y, TRUE);
+    midend_size(fe->me, &x, &y, true, 1.0);
     fe->ox = (width - x) / 2;
     fe->oy = (height - y) / 2;
     fe->w = x;
@@ -244,7 +245,7 @@ void deactivate_timer(frontend *fe)
 {
     if (fe->timer_active)
 	_call_java(4, 13, 0, 0);
-    fe->timer_active = FALSE;
+    fe->timer_active = false;
 }
 
 void activate_timer(frontend *fe)
@@ -253,62 +254,100 @@ void activate_timer(frontend *fe)
 	_call_java(4, 12, 0, 0);
 	gettimeofday(&fe->last_time, NULL);
     }
-    fe->timer_active = TRUE;
+    fe->timer_active = true;
 }
 
 void jcallback_config_ok()
 {
     frontend *fe = (frontend *)_fe;
-    char *err;
+    const char *err;
 
     err = midend_set_config(fe->me, fe->cfg_which, fe->cfg);
 
     if (err)
 	_call_java(2, (int) "Error", (int)err, 1);
     else {
-	fe->cfgret = TRUE;
+	fe->cfgret = true;
     }
 }
 
 void jcallback_config_set_string(int item_ptr, int char_ptr) {
     config_item *i = (config_item *)item_ptr;
     char* newval = (char*) char_ptr;
-    sfree(i->sval);
-    i->sval = dupstr(newval);
+    assert(i->type == C_STRING);
+    sfree(i->u.string.sval);
+    i->u.string.sval = dupstr(newval);
     free(newval);
 }
 
 void jcallback_config_set_boolean(int item_ptr, int selected) {
     config_item *i = (config_item *)item_ptr;
-    i->ival = selected != 0 ? TRUE : FALSE;
+    assert(i->type == C_BOOLEAN);
+    i->u.boolean.bval = selected != 0 ? true : false;
 }
 
 void jcallback_config_set_choice(int item_ptr, int selected) {
     config_item *i = (config_item *)item_ptr;
-    i->ival = selected;
+    assert(i->type == C_CHOICES);
+    i->u.choices.selected = selected;
 }
 
-static int get_config(frontend *fe, int which)
+static bool get_config(frontend *fe, int which)
 {
     char *title;
     config_item *i;
     fe->cfg = midend_get_config(fe->me, which, &title);
     fe->cfg_which = which;
-    fe->cfgret = FALSE;
+    fe->cfgret = false;
     _call_java(10, (int)title, 0, 0);
     for (i = fe->cfg; i->type != C_END; i++) {
 	_call_java(5, (int)i, i->type, (int)i->name);
-	_call_java(11, (int)i->sval, i->ival, 0);
+        switch (i->type) {
+          case C_STRING:
+            _call_java(11, (int)i->u.string.sval, 0, 0);
+            break;
+          case C_BOOLEAN:
+            _call_java(11, 0, i->u.boolean.bval, 0);
+            break;
+          case C_CHOICES:
+            _call_java(11, (int)i->u.choices.choicenames,
+                       i->u.choices.selected, 0);
+            break;
+        }
     }
     _call_java(12,0,0,0);
     free_cfg(fe->cfg);
     return fe->cfgret;
 }
 
-int jcallback_menu_key_event(int key)
+int jcallback_newgame_event(void)
 {
     frontend *fe = (frontend *)_fe;
-    if (!midend_process_key(fe->me, 0, 0, key))
+    if (midend_process_key(fe->me, 0, 0, UI_NEWGAME) == PKR_QUIT)
+	return 42;
+    return 0;
+}
+
+int jcallback_undo_event(void)
+{
+    frontend *fe = (frontend *)_fe;
+    if (midend_process_key(fe->me, 0, 0, UI_UNDO) == PKR_QUIT)
+	return 42;
+    return 0;
+}
+
+int jcallback_redo_event(void)
+{
+    frontend *fe = (frontend *)_fe;
+    if (midend_process_key(fe->me, 0, 0, UI_REDO) == PKR_QUIT)
+	return 42;
+    return 0;
+}
+
+int jcallback_quit_event(void)
+{
+    frontend *fe = (frontend *)_fe;
+    if (midend_process_key(fe->me, 0, 0, UI_QUIT) == PKR_QUIT)
 	return 42;
     return 0;
 }
@@ -319,7 +358,7 @@ static void resize_fe(frontend *fe)
 
     x = INT_MAX;
     y = INT_MAX;
-    midend_size(fe->me, &x, &y, FALSE);
+    midend_size(fe->me, &x, &y, false, 1.0);
     _call_java(3, x, y, 0);
 }
 
@@ -339,7 +378,7 @@ int jcallback_preset_event(int ptr_game_params)
 int jcallback_solve_event()
 {
     frontend *fe = (frontend *)_fe;
-    char *msg;
+    const char *msg;
 
     msg = midend_solve(fe->me);
 
@@ -382,26 +421,41 @@ int jcallback_about_event()
     return 0;
 }
 
+void preset_menu_populate(struct preset_menu *menu, int menuid)
+{
+    int i;
+
+    for (i = 0; i < menu->n_entries; i++) {
+        struct preset_menu_entry *entry = &menu->entries[i];
+        if (entry->params) {
+            _call_java(5, (int)entry->params, 0, 0);
+            _call_java(1, (int)entry->title, menuid, entry->id);
+        } else {
+            _call_java(5, 0, 0, 0);
+            _call_java(1, (int)entry->title, menuid, entry->id);
+            preset_menu_populate(entry->submenu, entry->id);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     int i, n;
     float* colours;
 
     _fe = snew(frontend);
-    _fe->timer_active = FALSE;
+    _fe->timer_active = false;
     _fe->me = midend_new(_fe, &thegame, &nestedvm_drawing, _fe);
     if (argc > 1)
 	midend_game_id(_fe->me, argv[1]);   /* ignore failure */
     midend_new_game(_fe->me);
 
-    if ((n = midend_num_presets(_fe->me)) > 0) {
-        int i;
-        for (i = 0; i < n; i++) {
-            char *name;
-            game_params *params;
-            midend_fetch_preset(_fe->me, i, &name, &params);
-	    _call_java(1, (int)name, (int)params, 0);
-        }
+    {
+        struct preset_menu *menu;
+        int nids, topmenu;
+        menu = midend_get_presets(_fe->me, &nids);
+        topmenu = _call_java(1, 0, nids, 0);
+        preset_menu_populate(menu, topmenu);
     }
 
     colours = midend_colours(_fe->me, &n);

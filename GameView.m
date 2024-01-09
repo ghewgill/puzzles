@@ -33,6 +33,11 @@ extern const game keen;
 extern const game map;
 extern const game net;
 extern const game pattern;
+extern const game abcd;
+extern const game crossing;
+extern const game mathrax;
+extern const game seismic;
+extern const game salad;
 extern const game solo;
 extern const game towers;
 extern const game undead;
@@ -60,7 +65,7 @@ const int NBUTTONS = 10;
     int touchButton;
     NSTimer *touchTimer;
     UIToolbar *toolbar;
-    NSMutableDictionary *buttons;
+    NSMutableDictionary *toggles;
 }
 
 @synthesize bitmap;
@@ -68,12 +73,12 @@ const int NBUTTONS = 10;
 
 - (BOOL)net_centre_mode
 {
-    return ourgame == &net && ((UIBarButtonItem *)buttons[@"Centre"]).style == UIBarButtonItemStyleDone;
+    return ourgame == &net && ((UIButton *)toggles[@"Centre"]).selected;
 }
 
 - (BOOL)net_shift_mode
 {
-    return ourgame == &net && ((UIBarButtonItem *)buttons[@"Shift"]).style == UIBarButtonItemStyleDone;
+    return ourgame == &net && ((UIButton *)toggles[@"Shift"]).selected;
 }
 
 struct StringReadContext {
@@ -114,7 +119,7 @@ static int saveGameRead(void *ctx, void *buf, int len)
         me = midend_new(&fe, ourgame, &ios_drawing, &fe);
         fe.colours = (rgb *)midend_colours(me, &fe.ncolours);
         self.backgroundColor = [UIColor colorWithRed:fe.colours[0][0] green:fe.colours[0][1] blue:fe.colours[0][2] alpha:1];
-        buttons = [[NSMutableDictionary alloc] init];
+        toggles = [[NSMutableDictionary alloc] init];
         if (saved) {
             struct StringReadContext srctx;
             srctx.save = (__bridge void *)(saved);
@@ -230,12 +235,12 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     } else {
         toolbar = [[UIToolbar alloc] initWithFrame:r];
         NSArray *items = @[
-            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStyleBordered target:self action:@selector(doGameMenu)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Game" style:UIBarButtonItemStylePlain target:self action:@selector(doGameMenu)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemUndo target:self action:@selector(doUndo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRedo target:self action:@selector(doRedo)],
             [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil],
-            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStyleBordered target:self action:@selector(doType)],
+            [[UIBarButtonItem alloc] initWithTitle:@"Type" style:UIBarButtonItemStylePlain target:self action:@selector(doType)],
         ];
         [toolbar setItems:items];
         if (!IOS7()) {
@@ -259,11 +264,16 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             statusbar = nil;
         }
     }
-    [buttons removeAllObjects];
+    [toggles removeAllObjects];
     if (ourgame == &filling
      || ourgame == &keen
      || ourgame == &map
      || ourgame == &net
+     || ourgame == &salad
+     || ourgame == &abcd
+     || ourgame == &crossing
+     || ourgame == &mathrax
+     || ourgame == &seismic
      || ourgame == &solo
      || ourgame == &towers
      || ourgame == &undead
@@ -271,23 +281,33 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         usable_height -= toolbar_height;
         int main_button_count = 9;
         int extra_button_count = 0;
+        BOOL letters_not_numbers = false;
         const char **labels = NULL;
         const char **extra_labels = NULL;
-        if (ourgame == &filling) {
+        const BOOL *toggle_extra = NULL;
+        if (ourgame == &filling || ourgame == &crossing || ourgame == &mathrax || ourgame == &seismic) {
             static const char *FillingLabels[] = {"0"};
             extra_labels = FillingLabels;
             extra_button_count = 1;
+            if (ourgame == &mathrax || ourgame == &seismic) {
+                main_button_count = atoi(midend_get_game_id(me));
+                if (ourgame == &seismic && main_button_count < 5) {
+                    main_button_count = 5;
+                }
+            }
         } else if (ourgame == &keen) {
-            static const char *KeenLabels[] = {"Marks"};
+            static const char *KeenLabels[] = {"0", "Marks"};
             main_button_count = atoi(midend_get_game_id(me));
             extra_labels = KeenLabels;
-            extra_button_count = 1;
+            extra_button_count = 2;
         } else if (ourgame == &map) {
             static const char *MapLabels[] = {"Labels"};
             main_button_count = 1;
             labels = MapLabels;
         } else if (ourgame == &net) {
             static const char *NetLabels[] = {"Jumble", "Centre", "Shift"};
+            static const BOOL NetToggles[] = {false, true, true};
+            toggle_extra = NetToggles;
             main_button_count = 0;
             extra_labels = NetLabels;
             extra_button_count = 2;
@@ -295,6 +315,52 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             if (strstr(midend_get_game_id(me), "w:")) {
                 extra_button_count = 3;
             }
+        } else if (ourgame == &abcd) {
+            static const char *AbcdLabels[] = {"0"};
+            char *p = midend_get_game_id(me);
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p != 'x') {
+                return;
+            }
+            ++p;
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p != 'n') {
+                return;
+            }
+            ++p;
+            if (!*p) {
+                return;
+            }
+            main_button_count = atoi(p);
+            letters_not_numbers = true;
+            extra_labels = AbcdLabels;
+            extra_button_count = 1;
+        } else if (ourgame == &salad) {
+            static const char *SaladLabels[] = {"X", "0", "Marks"};
+            char *p = midend_get_game_id(me);
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p != 'n') {
+                return;
+            }
+            ++p;
+            if (!*p) {
+                return;
+            }
+            main_button_count = atoi(p);
+            while (*p && isdigit((unsigned char)*p)) {
+                ++p;
+            }
+            if (*p == 'L') {
+                letters_not_numbers = true;
+            }
+            extra_labels = SaladLabels;
+            extra_button_count = 3;
         } else if (ourgame == &solo) {
             const char *game_id = midend_get_game_id(me);
             int x, y;
@@ -322,7 +388,6 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         } else {
             game_toolbar.frame = r;
         }
-        UIBarButtonItemStyle style = ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone && (main_button_count + extra_button_count) > 9) ? UIBarButtonItemStylePlain : UIBarButtonItemStyleBordered;
         NSMutableArray *items = [[NSMutableArray alloc] init];
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
@@ -333,7 +398,11 @@ static void saveGameWrite(void *ctx, void *buf, int len)
                     title = [NSString stringWithUTF8String:labels[i]];
                 } else {
                     if (i < 9) {
-                        title = [NSString stringWithFormat:@"%d", 1+i];
+                        if (letters_not_numbers) {
+                            title = [NSString stringWithFormat:@"%c", 'A'+i];
+                        } else {
+                            title = [NSString stringWithFormat:@"%d", 1+i];
+                        }
                     } else {
                         title = [NSString stringWithFormat:@"%c", 'a'+(i-9)];
                     }
@@ -341,9 +410,18 @@ static void saveGameWrite(void *ctx, void *buf, int len)
             } else {
                 title = [NSString stringWithUTF8String:extra_labels[i - main_button_count]];
             }
-            UIBarButtonItem *button = [[UIBarButtonItem alloc] initWithTitle:title style:style target:self action:@selector(keyButton:)];
+            UIBarButtonItem *button = NULL;
+            if (toggle_extra != NULL && i >= main_button_count && toggle_extra[i - main_button_count]) {
+                UIButton *toggle = [UIButton buttonWithType:UIButtonTypeSystem];
+                [toggle addTarget:self action:@selector(toggleButton:) forControlEvents:UIControlEventTouchDown];
+                [toggle setTitle:title forState:UIControlStateNormal];
+                toggle.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+                toggles[title] = toggle;
+                button = [[UIBarButtonItem alloc] initWithCustomView:toggle];
+            } else {
+                button = [[UIBarButtonItem alloc] initWithTitle:title style:UIBarButtonItemStylePlain target:self action:@selector(keyButton:)];
+            }
             [items addObject:button];
-            buttons[title] = button;
             [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
         }
         [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
@@ -358,7 +436,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     int fh = usable_height * self.contentScaleFactor;
     int w = fw;
     int h = fh;
-    midend_size(me, &w, &h, FALSE);
+    midend_size(me, &w, &h, FALSE, 1.0);
     game_rect = CGRectMake((fw - w)/2/self.contentScaleFactor, (fh - h)/2/self.contentScaleFactor, w/self.contentScaleFactor, h/self.contentScaleFactor);
     game_rect.origin.y += top_margin;
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
@@ -388,6 +466,24 @@ static void saveGameWrite(void *ctx, void *buf, int len)
         *ypixels = max(ts/8, *ypixels);
         *ypixels = min(CGRectGetHeight(game_rect)*self.contentScaleFactor-ts/8 - 1, *ypixels);
     }
+}
+
+- (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event
+{
+	UIPress *press;
+	for (press in presses) {
+		if (press.key != nil && [press.key.charactersIgnoringModifiers length] > 0) {
+			if (
+				ourgame->can_solve
+				&& press.key.modifierFlags & UIKeyModifierControl
+				&& [press.key.charactersIgnoringModifiers isEqual: @"s"]
+			) {
+				[self doSolve];
+			} else {
+				midend_process_key(me, -1, -1, [press.key.charactersIgnoringModifiers characterAtIndex:0]);
+			}
+		}
+	}
 }
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
@@ -505,28 +601,32 @@ static void saveGameWrite(void *ctx, void *buf, int len)
     }
 }
 
-- (void)keyButton:(UIBarButtonItem *)sender
+- (void)toggleButton:(UIButton *)sender
 {
     if (ourgame == &net) {
-        if (sender == buttons[@"Centre"]) {
+        if (sender == toggles[@"Centre"]) {
             if (self.net_centre_mode) {
-                sender.style = UIBarButtonItemStyleBordered;
+                sender.selected = false;
             } else {
-                sender.style = UIBarButtonItemStyleDone;
-                ((UIBarButtonItem *)buttons[@"Shift"]).style = UIBarButtonItemStyleBordered;
+                sender.selected = true;
+                ((UIButton *)toggles[@"Shift"]).selected = false;
             }
             return;
         }
-        if (sender == buttons[@"Shift"]) {
+        if (sender == toggles[@"Shift"]) {
             if (self.net_shift_mode) {
-                sender.style = UIBarButtonItemStyleBordered;
+                sender.selected = false;
             } else {
-                sender.style = UIBarButtonItemStyleDone;
-                ((UIBarButtonItem *)buttons[@"Centre"]).style = UIBarButtonItemStyleBordered;
+                sender.selected = true;
+                ((UIButton *)toggles[@"Centre"]).selected = false;
             }
             return;
         }
     }
+}
+
+- (void)keyButton:(UIBarButtonItem *)sender
+{
     midend_process_key(me, -1, -1, [sender.title characterAtIndex:0]);
 }
 
@@ -613,7 +713,7 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)didApply:(config_item *)config
 {
-    const char *msg = midend_game_id(me, config[0].sval);
+    const char *msg = midend_game_id(me, config[0].u.string.sval);
     if (msg) {
         [[[UIAlertView alloc] initWithTitle:@"Puzzles" message:[NSString stringWithUTF8String:msg] delegate:nil cancelButtonTitle:@"Close" otherButtonTitles:nil] show];
         return;
@@ -647,7 +747,9 @@ static void saveGameWrite(void *ctx, void *buf, int len)
 
 - (void)doType
 {
-    [navigationController pushViewController:[[GameTypeController alloc] initWithGame:ourgame midend:me gameview:self] animated:YES];
+    struct preset_menu *menu;
+    menu = midend_get_presets(me, NULL);
+    [navigationController pushViewController:[[GameTypeController alloc] initWithGame:ourgame midend:me menu:menu top:true gameview:self] animated:YES];
 }
 
 @end
@@ -879,7 +981,7 @@ const struct drawing_api ios_drawing = {
     ios_text_fallback,
 };      
 
-void fatal(char *fmt, ...)
+void fatal(const char *fmt, ...)
 {
 }
 

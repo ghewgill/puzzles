@@ -47,7 +47,12 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#include <limits.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 
@@ -58,7 +63,7 @@
  */
 #if defined STANDALONE_SOLVER
 #define SOLVER_DIAGNOSTICS
-int verbose = 0;
+static int verbose = 0;
 #undef debug
 #define debug(x) printf x
 #elif defined SOLVER_DIAGNOSTICS
@@ -117,7 +122,7 @@ struct game_state {
                            of surrounding lights. For non-black squares,
                            the number of times it's lit. size h*w*/
     unsigned int *flags;        /* size h*w */
-    int completed, used_solve;
+    bool completed, used_solve;
 };
 
 #define GRID(gs,grid,x,y) (gs->grid[(y)*((gs)->w) + (x)])
@@ -129,7 +134,7 @@ struct game_state {
 typedef struct {
     int ox,oy;
     int minx, maxx, miny, maxy;
-    int include_origin;
+    bool include_origin;
 } ll_data;
 
 /* Macro that executes 'block' once per light in lld, including
@@ -179,7 +184,7 @@ static void get_surrounds(const game_state *state, int ox, int oy,
 
 #define DEFAULT_PRESET 0
 
-const struct game_params lightup_presets[] = {
+static const struct game_params lightup_presets[] = {
     { 7, 7, 20, SYMM_ROT4, 0 },
     { 7, 7, 20, SYMM_ROT4, 1 },
     { 7, 7, 20, SYMM_ROT4, 2 },
@@ -204,13 +209,13 @@ static game_params *default_params(void)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     char buf[80];
 
     if (i < 0 || i >= lenof(lightup_presets))
-        return FALSE;
+        return false;
 
     ret = default_params();
     *ret = lightup_presets[i];
@@ -222,7 +227,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
             ret->difficulty == 1 ? "tricky" : "easy");
     *name = dupstr(buf);
 
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -274,7 +279,7 @@ static void decode_params(game_params *params, char const *string)
     }
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[80];
 
@@ -299,37 +304,32 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Width";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->w);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = "Height";
     ret[1].type = C_STRING;
     sprintf(buf, "%d", params->h);
-    ret[1].sval = dupstr(buf);
-    ret[1].ival = 0;
+    ret[1].u.string.sval = dupstr(buf);
 
     ret[2].name = "%age of black squares";
     ret[2].type = C_STRING;
     sprintf(buf, "%d", params->blackpc);
-    ret[2].sval = dupstr(buf);
-    ret[2].ival = 0;
+    ret[2].u.string.sval = dupstr(buf);
 
     ret[3].name = "Symmetry";
     ret[3].type = C_CHOICES;
-    ret[3].sval = ":None"
+    ret[3].u.choices.choicenames = ":None"
                   ":2-way mirror:2-way rotational"
                   ":4-way mirror:4-way rotational";
-    ret[3].ival = params->symm;
+    ret[3].u.choices.selected = params->symm;
 
     ret[4].name = "Difficulty";
     ret[4].type = C_CHOICES;
-    ret[4].sval = ":Easy:Tricky:Hard";
-    ret[4].ival = params->difficulty;
+    ret[4].u.choices.choicenames = ":Easy:Tricky:Hard";
+    ret[4].u.choices.selected = params->difficulty;
 
     ret[5].name = NULL;
     ret[5].type = C_END;
-    ret[5].sval = NULL;
-    ret[5].ival = 0;
 
     return ret;
 }
@@ -338,19 +338,21 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->w =       atoi(cfg[0].sval);
-    ret->h =       atoi(cfg[1].sval);
-    ret->blackpc = atoi(cfg[2].sval);
-    ret->symm =    cfg[3].ival;
-    ret->difficulty = cfg[4].ival;
+    ret->w =       atoi(cfg[0].u.string.sval);
+    ret->h =       atoi(cfg[1].u.string.sval);
+    ret->blackpc = atoi(cfg[2].u.string.sval);
+    ret->symm =    cfg[3].u.choices.selected;
+    ret->difficulty = cfg[4].u.choices.selected;
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->w < 2 || params->h < 2)
         return "Width and height must be at least 2";
+    if (params->w > INT_MAX / params->h)
+        return "Width times height must not be unreasonably large";
     if (full) {
         if (params->blackpc < 5 || params->blackpc > 100)
             return "Percentage of black squares must be between 5% and 100%";
@@ -358,6 +360,8 @@ static char *validate_params(const game_params *params, int full)
             if (params->symm == SYMM_ROT4)
                 return "4-fold symmetry is only available with square grids";
         }
+        if ((params->symm == SYMM_ROT4 || params->symm == SYMM_REF4) && params->w < 3 && params->h < 3)
+            return "Width or height must be at least 3 for 4-way symmetry";
         if (params->symm < 0 || params->symm >= SYMM_MAX)
             return "Unknown symmetry type";
         if (params->difficulty < 0 || params->difficulty > DIFFCOUNT)
@@ -379,7 +383,8 @@ static game_state *new_state(const game_params *params)
     memset(ret->lights, 0, ret->w * ret->h * sizeof(int));
     ret->flags = snewn(ret->w * ret->h, unsigned int);
     memset(ret->flags, 0, ret->w * ret->h * sizeof(unsigned int));
-    ret->completed = ret->used_solve = 0;
+    ret->completed = false;
+    ret->used_solve = false;
     return ret;
 }
 
@@ -414,6 +419,8 @@ static void debug_state(game_state *state)
 {
     int x, y;
     char c = '?';
+
+    (void)c; /* placate -Wunused-but-set-variable if debug() does nothing */
 
     for (y = 0; y < state->h; y++) {
         for (x = 0; x < state->w; x++) {
@@ -450,8 +457,8 @@ static void debug_state(game_state *state)
 /* These are split up because occasionally functions are only
  * interested in one particular aspect. */
 
-/* Returns non-zero if all grid spaces are lit. */
-static int grid_lit(game_state *state)
+/* Returns true if all grid spaces are lit. */
+static bool grid_lit(game_state *state)
 {
     int x, y;
 
@@ -459,14 +466,14 @@ static int grid_lit(game_state *state)
         for (y = 0; y < state->h; y++) {
             if (GRID(state,flags,x,y) & F_BLACK) continue;
             if (GRID(state,lights,x,y) == 0)
-                return 0;
+                return false;
         }
     }
-    return 1;
+    return true;
 }
 
 /* Returns non-zero if any lights are lit by other lights. */
-static int grid_overlap(game_state *state)
+static bool grid_overlap(game_state *state)
 {
     int x, y;
 
@@ -474,13 +481,13 @@ static int grid_overlap(game_state *state)
         for (y = 0; y < state->h; y++) {
             if (!(GRID(state, flags, x, y) & F_LIGHT)) continue;
             if (GRID(state, lights, x, y) > 1)
-                return 1;
+                return true;
         }
     }
-    return 0;
+    return false;
 }
 
-static int number_wrong(const game_state *state, int x, int y)
+static bool number_wrong(const game_state *state, int x, int y)
 {
     surrounds s;
     int i, n, empty, lights = GRID(state, lights, x, y);
@@ -516,7 +523,7 @@ static int number_wrong(const game_state *state, int x, int y)
     return (n > lights || (n + empty < lights));
 }
 
-static int number_correct(game_state *state, int x, int y)
+static bool number_correct(game_state *state, int x, int y)
 {
     surrounds s;
     int n = 0, i, lights = GRID(state, lights, x, y);
@@ -527,34 +534,34 @@ static int number_correct(game_state *state, int x, int y)
         if (GRID(state,flags,s.points[i].x,s.points[i].y) & F_LIGHT)
             n++;
     }
-    return (n == lights) ? 1 : 0;
+    return n == lights;
 }
 
-/* Returns non-zero if any numbers add up incorrectly. */
-static int grid_addsup(game_state *state)
+/* Returns true if any numbers add up incorrectly. */
+static bool grid_addsup(game_state *state)
 {
     int x, y;
 
     for (x = 0; x < state->w; x++) {
         for (y = 0; y < state->h; y++) {
             if (!(GRID(state, flags, x, y) & F_NUMBERED)) continue;
-            if (!number_correct(state, x, y)) return 0;
+            if (!number_correct(state, x, y)) return false;
         }
     }
-    return 1;
+    return true;
 }
 
-static int grid_correct(game_state *state)
+static bool grid_correct(game_state *state)
 {
     if (grid_lit(state) &&
         !grid_overlap(state) &&
-        grid_addsup(state)) return 1;
-    return 0;
+        grid_addsup(state)) return true;
+    return false;
 }
 
 /* --- Board initial setup (blacks, lights, numbers) --- */
 
-static void clean_board(game_state *state, int leave_blacks)
+static void clean_board(game_state *state, bool leave_blacks)
 {
     int x,y;
     for (x = 0; x < state->w; x++) {
@@ -572,18 +579,19 @@ static void clean_board(game_state *state, int leave_blacks)
 static void set_blacks(game_state *state, const game_params *params,
                        random_state *rs)
 {
-    int x, y, degree = 0, rotate = 0, nblack;
+    int x, y, degree = 0, nblack;
+    bool rotate = false;
     int rh, rw, i;
     int wodd = (state->w % 2) ? 1 : 0;
     int hodd = (state->h % 2) ? 1 : 0;
     int xs[4], ys[4];
 
     switch (params->symm) {
-    case SYMM_NONE: degree = 1; rotate = 0; break;
-    case SYMM_ROT2: degree = 2; rotate = 1; break;
-    case SYMM_REF2: degree = 2; rotate = 0; break;
-    case SYMM_ROT4: degree = 4; rotate = 1; break;
-    case SYMM_REF4: degree = 4; rotate = 0; break;
+    case SYMM_NONE: degree = 1; rotate = false; break;
+    case SYMM_ROT2: degree = 2; rotate = true; break;
+    case SYMM_REF2: degree = 2; rotate = false; break;
+    case SYMM_ROT4: degree = 4; rotate = true; break;
+    case SYMM_REF4: degree = 4; rotate = false; break;
     default: assert(!"Unknown symmetry type");
     }
     if (params->symm == SYMM_ROT4 && (state->h != state->w))
@@ -604,7 +612,7 @@ static void set_blacks(game_state *state, const game_params *params,
     }
 
     /* clear, then randomise, required region. */
-    clean_board(state, 0);
+    clean_board(state, false);
     nblack = (rw * rh * params->blackpc) / 100;
     for (i = 0; i < nblack; i++) {
         do {
@@ -652,9 +660,9 @@ static void set_blacks(game_state *state, const game_params *params,
 }
 
 /* Fills in (does not allocate) a ll_data with all the tiles that would
- * be illuminated by a light at point (ox,oy). If origin=1 then the
+ * be illuminated by a light at point (ox,oy). If origin is true then the
  * origin is included in this list. */
-static void list_lights(game_state *state, int ox, int oy, int origin,
+static void list_lights(game_state *state, int ox, int oy, bool origin,
                         ll_data *lld)
 {
     int x,y;
@@ -686,7 +694,7 @@ static void list_lights(game_state *state, int ox, int oy, int origin,
 
 /* Makes sure a light is the given state, editing the lights table to suit the
  * new state if necessary. */
-static void set_light(game_state *state, int ox, int oy, int on)
+static void set_light(game_state *state, int ox, int oy, bool on)
 {
     ll_data lld;
     int diff = 0;
@@ -704,7 +712,7 @@ static void set_light(game_state *state, int ox, int oy, int on)
     }
 
     if (diff != 0) {
-        list_lights(state,ox,oy,1,&lld);
+        list_lights(state,ox,oy,true,&lld);
         FOREACHLIT(&lld, GRID(state,lights,lx,ly) += diff; );
     }
 }
@@ -714,7 +722,7 @@ static int check_dark(game_state *state, int x, int y)
 {
     ll_data lld;
 
-    list_lights(state, x, y, 1, &lld);
+    list_lights(state, x, y, true, &lld);
     FOREACHLIT(&lld, if (GRID(state,lights,lx,ly) == 1) { return 1; } );
     return 0;
 }
@@ -736,7 +744,7 @@ static void place_lights(game_state *state, random_state *rs)
         for (y = 0; y < state->h; y++) {
             GRID(state, flags, x, y) &= ~F_MARK; /* we use this later. */
             if (GRID(state, flags, x, y) & F_BLACK) continue;
-            set_light(state, x, y, 1);
+            set_light(state, x, y, true);
         }
     }
 
@@ -745,7 +753,7 @@ static void place_lights(game_state *state, random_state *rs)
         x = numindices[i] % state->w;
         if (!(GRID(state, flags, x, y) & F_LIGHT)) continue;
         if (GRID(state, flags, x, y) & F_MARK) continue;
-        list_lights(state, x, y, 0, &lld);
+        list_lights(state, x, y, false, &lld);
 
         /* If we're not lighting any lights ourself, don't remove anything. */
         n = 0;
@@ -758,7 +766,7 @@ static void place_lights(game_state *state, random_state *rs)
         FOREACHLIT(&lld, if (GRID(state,flags,lx,ly) & F_LIGHT) { n += check_dark(state,lx,ly); } );
         if (n == 0) {
             /* No, it wouldn't, so we can remove them all. */
-            FOREACHLIT(&lld, set_light(state,lx,ly, 0); );
+            FOREACHLIT(&lld, set_light(state,lx,ly, false); );
             GRID(state,flags,x,y) |= F_MARK;
         }
 
@@ -807,57 +815,58 @@ static void tsl_callback(game_state *state,
     *x = lx; *y = ly; (*n)++;
 }
 
-static int try_solve_light(game_state *state, int ox, int oy,
-                           unsigned int flags, int lights)
+static bool try_solve_light(game_state *state, int ox, int oy,
+                            unsigned int flags, int lights)
 {
     ll_data lld;
     int sx = 0, sy = 0, n = 0;
 
-    if (lights > 0) return 0;
-    if (flags & F_BLACK) return 0;
+    if (lights > 0) return false;
+    if (flags & F_BLACK) return false;
 
     /* We have an unlit square; count how many ways there are left to
      * place a light that lights us (including this square); if only
      * one, we must put a light there. Squares that could light us
      * are, of course, the same as the squares we would light... */
-    list_lights(state, ox, oy, 1, &lld);
+    list_lights(state, ox, oy, true, &lld);
     FOREACHLIT(&lld, { tsl_callback(state, lx, ly, &sx, &sy, &n); });
     if (n == 1) {
-        set_light(state, sx, sy, 1);
+        set_light(state, sx, sy, true);
 #ifdef SOLVER_DIAGNOSTICS
         debug(("(%d,%d) can only be lit from (%d,%d); setting to LIGHT\n",
                 ox,oy,sx,sy));
         if (verbose) debug_state(state);
 #endif
-        return 1;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
-static int could_place_light(unsigned int flags, int lights)
+static bool could_place_light(unsigned int flags, int lights)
 {
-    if (flags & (F_BLACK | F_IMPOSSIBLE)) return 0;
-    return (lights > 0) ? 0 : 1;
+    if (flags & (F_BLACK | F_IMPOSSIBLE)) return false;
+    return !(lights > 0);
 }
 
-static int could_place_light_xy(game_state *state, int x, int y)
+static bool could_place_light_xy(game_state *state, int x, int y)
 {
     int lights = GRID(state,lights,x,y);
     unsigned int flags = GRID(state,flags,x,y);
-    return (could_place_light(flags, lights)) ? 1 : 0;
+    return could_place_light(flags, lights);
 }
 
 /* For a given number square, determine whether we have enough info
  * to unambiguously place its lights. */
-static int try_solve_number(game_state *state, int nx, int ny,
-                            unsigned int nflags, int nlights)
+static bool try_solve_number(game_state *state, int nx, int ny,
+                             unsigned int nflags, int nlights)
 {
     surrounds s;
-    int x, y, nl, ns, i, ret = 0, lights;
+    int x, y, nl, ns, i, lights;
+    bool ret = false;
     unsigned int flags;
 
-    if (!(nflags & F_NUMBERED)) return 0;
+    if (!(nflags & F_NUMBERED)) return false;
     nl = nlights;
     get_surrounds(state,nx,ny,&s);
     ns = s.npoints;
@@ -878,7 +887,7 @@ static int try_solve_number(game_state *state, int nx, int ny,
             s.points[i].f |= F_MARK;
         }
     }
-    if (ns == 0) return 0; /* nowhere to put anything. */
+    if (ns == 0) return false; /* nowhere to put anything. */
     if (nl == 0) {
         /* we have placed all lights we need to around here; all remaining
          * surrounds are therefore IMPOSSIBLE. */
@@ -886,7 +895,7 @@ static int try_solve_number(game_state *state, int nx, int ny,
         for (i = 0; i < s.npoints; i++) {
             if (!(s.points[i].f & F_MARK)) {
                 GRID(state,flags,s.points[i].x,s.points[i].y) |= F_IMPOSSIBLE;
-                ret = 1;
+                ret = true;
             }
         }
 #ifdef SOLVER_DIAGNOSTICS
@@ -899,8 +908,8 @@ static int try_solve_number(game_state *state, int nx, int ny,
         GRID(state,flags,nx,ny) |= F_NUMBERUSED;
         for (i = 0; i < s.npoints; i++) {
             if (!(s.points[i].f & F_MARK)) {
-                set_light(state, s.points[i].x,s.points[i].y, 1);
-                ret = 1;
+                set_light(state, s.points[i].x,s.points[i].y, true);
+                ret = true;
             }
         }
 #ifdef SOLVER_DIAGNOSTICS
@@ -997,7 +1006,7 @@ static void trl_callback_search(game_state *state, int dx, int dy,
 static void trl_callback_discount(game_state *state, int dx, int dy,
                        struct setscratch *scratch, int n, void *ctx)
 {
-    int *didsth = (int *)ctx;
+    bool *didsth = (bool *)ctx;
     int i;
 
     if (GRID(state,flags,dx,dy) & F_IMPOSSIBLE) {
@@ -1030,7 +1039,7 @@ static void trl_callback_discount(game_state *state, int dx, int dy,
     if (verbose) debug_state(state);
 #endif
 
-    *didsth = 1;
+    *didsth = true;
 }
 
 static void trl_callback_incn(game_state *state, int dx, int dy,
@@ -1055,7 +1064,7 @@ static void try_rule_out(game_state *state, int x, int y,
     /* Find all squares that would rule out a light at (x,y) and call trl_cb
      * with them: anything that would light (x,y)... */
 
-    list_lights(state, x, y, 0, &lld);
+    list_lights(state, x, y, false, &lld);
     FOREACHLIT(&lld, { if (could_place_light_xy(state, lx, ly)) { cb(state, lx, ly, scratch, n, ctx); } });
 
     /* ... as well as any empty space (that isn't x,y) next to any clue square
@@ -1100,15 +1109,16 @@ static void debug_scratch(const char *msg, struct setscratch *scratch, int n)
 }
 #endif
 
-static int discount_set(game_state *state,
-                        struct setscratch *scratch, int n)
+static bool discount_set(game_state *state,
+                         struct setscratch *scratch, int n)
 {
-    int i, besti, bestn, didsth = 0;
+    int i, besti, bestn;
+    bool didsth = false;
 
 #ifdef SOLVER_DIAGNOSTICS
     if (verbose > 1) debug_scratch("discount_set", scratch, n);
 #endif
-    if (n == 0) return 0;
+    if (n == 0) return false;
 
     for (i = 0; i < n; i++) {
         try_rule_out(state, scratch[i].x, scratch[i].y, scratch, n,
@@ -1154,11 +1164,12 @@ static void unlit_cb(game_state *state, int lx, int ly,
 }
 
 /* Construct a MAKESLIGHT set from an unlit square. */
-static int discount_unlit(game_state *state, int x, int y,
-                          struct setscratch *scratch)
+static bool discount_unlit(game_state *state, int x, int y,
+                           struct setscratch *scratch)
 {
     ll_data lld;
-    int n, didsth;
+    int n;
+    bool didsth;
 
 #ifdef SOLVER_DIAGNOSTICS
     if (verbose) debug(("Trying to discount for unlit square at (%d,%d).\n", x, y));
@@ -1167,7 +1178,7 @@ static int discount_unlit(game_state *state, int x, int y,
 
     discount_clear(state, scratch, &n);
 
-    list_lights(state, x, y, 1, &lld);
+    list_lights(state, x, y, true, &lld);
     FOREACHLIT(&lld, { unlit_cb(state, lx, ly, scratch, &n); });
     didsth = discount_set(state, scratch, n);
 #ifdef SOLVER_DIAGNOSTICS
@@ -1182,15 +1193,16 @@ static int discount_unlit(game_state *state, int x, int y,
  *  subset of size N-M+1 of those N spaces forms such a set.
  */
 
-static int discount_clue(game_state *state, int x, int y,
+static bool discount_clue(game_state *state, int x, int y,
                           struct setscratch *scratch)
 {
-    int slen, m = GRID(state, lights, x, y), n, i, didsth = 0, lights;
+    int slen, m = GRID(state, lights, x, y), n, i, lights;
+    bool didsth = false;
     unsigned int flags;
     surrounds s, sempty;
     combi_ctx *combi;
 
-    if (m == 0) return 0;
+    if (m == 0) return false;
 
 #ifdef SOLVER_DIAGNOSTICS
     if (verbose) debug(("Trying to discount for sets at clue (%d,%d).\n", x, y));
@@ -1218,9 +1230,9 @@ static int discount_clue(game_state *state, int x, int y,
         }
     }
     n = sempty.npoints; /* sempty is now a surrounds of only blank squares. */
-    if (n == 0) return 0; /* clue is full already. */
+    if (n == 0) return false; /* clue is full already. */
 
-    if (m < 0 || m > n) return 0; /* become impossible. */
+    if (m < 0 || m > n) return false; /* become impossible. */
 
     combi = new_combi(n - m + 1, n);
     while (next_combi(combi)) {
@@ -1230,7 +1242,7 @@ static int discount_clue(game_state *state, int x, int y,
             scratch[slen].y = sempty.points[combi->a[i]].y;
             slen++;
         }
-        if (discount_set(state, scratch, slen)) didsth = 1;
+        if (discount_set(state, scratch, slen)) didsth = true;
     }
     free_combi(combi);
 #ifdef SOLVER_DIAGNOSTICS
@@ -1259,7 +1271,8 @@ static int solve_sub(game_state *state,
                      int *maxdepth)
 {
     unsigned int flags;
-    int x, y, didstuff, ncanplace, lights;
+    int x, y, ncanplace, lights;
+    bool didstuff;
     int bestx, besty, n, bestn, copy_soluble, self_soluble, ret, maxrecurse = 0;
     game_state *scopy;
     ll_data lld;
@@ -1283,7 +1296,7 @@ static int solve_sub(game_state *state,
         if (grid_correct(state)) { ret = 1; goto done; }
 
         ncanplace = 0;
-        didstuff = 0;
+        didstuff = false;
         /* These 2 loops, and the functions they call, are the critical loops
          * for timing; any optimisations should look here first. */
         for (x = 0; x < state->w; x++) {
@@ -1292,8 +1305,10 @@ static int solve_sub(game_state *state,
                 lights = GRID(state,lights,x,y);
                 ncanplace += could_place_light(flags, lights);
 
-                if (try_solve_light(state, x, y, flags, lights)) didstuff = 1;
-                if (try_solve_number(state, x, y, flags, lights)) didstuff = 1;
+                if (try_solve_light(state, x, y, flags, lights))
+                    didstuff = true;
+                if (try_solve_number(state, x, y, flags, lights))
+                    didstuff = true;
             }
         }
         if (didstuff) continue;
@@ -1312,12 +1327,12 @@ static int solve_sub(game_state *state,
 
                     if (!(flags & F_BLACK) && lights == 0) {
                         if (discount_unlit(state, x, y, sscratch)) {
-                            didstuff = 1;
+                            didstuff = true;
                             goto reduction_success;
                         }
                     } else if (flags & F_NUMBERED) {
                         if (discount_clue(state, x, y, sscratch)) {
-                            didstuff = 1;
+                            didstuff = true;
                             goto reduction_success;
                         }
                     }
@@ -1347,7 +1362,7 @@ reduction_success:
                 if (!could_place_light(flags, lights)) continue;
 
                 n = 0;
-                list_lights(state, x, y, 1, &lld);
+                list_lights(state, x, y, true, &lld);
                 FOREACHLIT(&lld, { if (GRID(state,lights,lx,ly) == 0) n++; });
                 if (n > bestn) {
                     bestn = n; bestx = x; besty = y;
@@ -1378,7 +1393,7 @@ reduction_success:
 #ifdef SOLVER_DIAGNOSTICS
         debug(("Recursing #2: trying (%d,%d) as LIGHT\n", bestx, besty));
 #endif
-        set_light(scopy, bestx, besty, 1);
+        set_light(scopy, bestx, besty, true);
         copy_soluble = solve_sub(scopy, solve_flags, depth+1, maxdepth);
 
         /* If we wanted a unique solution but we hit our recursion limit
@@ -1458,14 +1473,14 @@ static void unplace_lights(game_state *state)
     for (x = 0; x < state->w; x++) {
         for (y = 0; y < state->h; y++) {
             if (GRID(state,flags,x,y) & F_LIGHT)
-                set_light(state,x,y,0);
+                set_light(state,x,y,false);
             GRID(state,flags,x,y) &= ~F_IMPOSSIBLE;
             GRID(state,flags,x,y) &= ~F_NUMBERUSED;
         }
     }
 }
 
-static int puzzle_is_good(game_state *state, int difficulty)
+static bool puzzle_is_good(game_state *state, int difficulty)
 {
     int nsol, mdepth = 0;
     unsigned int sflags = flags_from_difficulty(difficulty);
@@ -1482,13 +1497,13 @@ static int puzzle_is_good(game_state *state, int difficulty)
     /* if we wanted an easy puzzle, make sure we didn't need recursion. */
     if (!(sflags & F_SOLVE_ALLOWRECURSE) && mdepth > 0) {
         debug(("Ignoring recursive puzzle.\n"));
-        return 0;
+        return false;
     }
 
     debug(("%d solutions found.\n", nsol));
-    if (nsol <= 0) return 0;
-    if (nsol > 1) return 0;
-    return 1;
+    if (nsol <= 0) return false;
+    if (nsol > 1) return false;
+    return true;
 }
 
 /* --- New game creation and user input code. --- */
@@ -1519,7 +1534,7 @@ static int puzzle_is_good(game_state *state, int difficulty)
 #define MAX_GRIDGEN_TRIES 20
 
 static char *new_game_desc(const game_params *params_in, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     game_params params_copy = *params_in; /* structure copy */
     game_params *params = &params_copy;
@@ -1629,7 +1644,7 @@ goodpuzzle:
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int i;
     for (i = 0; i < params->w*params->h; i++) {
@@ -1700,7 +1715,7 @@ static game_state *new_game(midend *me, const game_params *params,
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     game_state *solved;
     char *move = NULL, buf[80];
@@ -1755,9 +1770,9 @@ done:
     return move;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
+static bool game_can_format_as_text_now(const game_params *params)
 {
-    return TRUE;
+    return true;
 }
 
 /* 'borrowed' from slant.c, mainly. I could have printed it one
@@ -1816,14 +1831,62 @@ static char *game_text_format(const game_state *state)
 }
 
 struct game_ui {
-    int cur_x, cur_y, cur_visible;
+    int cur_x, cur_y;
+    bool cur_visible;
+
+    /*
+     * User preference: when a square contains both a black blob for
+     * 'user is convinced this isn't a light' and a yellow highlight
+     * for 'this square is lit by a light', both of which rule out it
+     * being a light, should we still bother to show the blob?
+     */
+    bool draw_blobs_when_lit;
 };
+
+static void legacy_prefs_override(struct game_ui *ui_out)
+{
+    static bool initialised = false;
+    static int draw_blobs_when_lit = -1;
+
+    if (!initialised) {
+        initialised = true;
+        draw_blobs_when_lit = getenv_bool("LIGHTUP_LIT_BLOBS", -1);
+    }
+
+    if (draw_blobs_when_lit != -1)
+        ui_out->draw_blobs_when_lit = draw_blobs_when_lit;
+}
 
 static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
-    ui->cur_x = ui->cur_y = ui->cur_visible = 0;
+    ui->cur_x = ui->cur_y = 0;
+    ui->cur_visible = getenv_bool("PUZZLES_SHOW_CURSOR", false);
+    ui->draw_blobs_when_lit = true;
+    legacy_prefs_override(ui);
     return ui;
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *ret;
+
+    ret = snewn(2, config_item);
+
+    ret[0].name = "Draw non-light marks even when lit";
+    ret[0].kw = "show-lit-blobs";
+    ret[0].type = C_BOOLEAN;
+    ret[0].u.boolean.bval = ui->draw_blobs_when_lit;
+
+    ret[1].name = NULL;
+    ret[1].type = C_END;
+
+    return ret;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->draw_blobs_when_lit = cfg[0].u.boolean.bval;
 }
 
 static void free_ui(game_ui *ui)
@@ -1831,22 +1894,31 @@ static void free_ui(game_ui *ui)
     sfree(ui);
 }
 
-static char *encode_ui(const game_ui *ui)
-{
-    /* nothing to encode. */
-    return NULL;
-}
-
-static void decode_ui(game_ui *ui, const char *encoding)
-{
-    /* nothing to decode. */
-}
-
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
     if (newstate->completed)
-        ui->cur_visible = 0;
+        ui->cur_visible = false;
+}
+
+static const char *current_key_label(const game_ui *ui,
+                                     const game_state *state, int button)
+{
+    int cx = ui->cur_x, cy = ui->cur_y;
+    unsigned int flags = GRID(state, flags, cx, cy);
+
+    if (!ui->cur_visible) return "";
+    if (button == CURSOR_SELECT) {
+        if (flags & (F_BLACK | F_IMPOSSIBLE)) return "";
+        if (flags & F_LIGHT) return "Clear";
+        return "Light";
+    }
+    if (button == CURSOR_SELECT2) {
+        if (flags & (F_BLACK | F_LIGHT)) return "";
+        if (flags & F_IMPOSSIBLE) return "Clear";
+        return "Mark";
+    }
+    return "";
 }
 
 #define DF_BLACK        1       /* black square */
@@ -1863,7 +1935,7 @@ struct game_drawstate {
     int tilesize, crad;
     int w, h;
     unsigned int *flags;         /* width * height */
-    int started;
+    bool started;
 };
 
 
@@ -1882,18 +1954,17 @@ static char *interpret_move(const game_state *state, game_ui *ui,
     enum { NONE, FLIP_LIGHT, FLIP_IMPOSSIBLE } action = NONE;
     int cx = -1, cy = -1;
     unsigned int flags;
-    char buf[80], *nullret = NULL, *empty = "", c;
+    char buf[80], *nullret = MOVE_NO_EFFECT, *empty = MOVE_UI_UPDATE, c;
 
     if (button == LEFT_BUTTON || button == RIGHT_BUTTON) {
         if (ui->cur_visible)
             nullret = empty;
-        ui->cur_visible = 0;
+        ui->cur_visible = false;
         cx = FROMCOORD(x);
         cy = FROMCOORD(y);
         action = (button == LEFT_BUTTON) ? FLIP_LIGHT : FLIP_IMPOSSIBLE;
     } else if (IS_CURSOR_SELECT(button) ||
-               button == 'i' || button == 'I' ||
-               button == ' ' || button == '\r' || button == '\n') {
+               button == 'i' || button == 'I') {
         if (ui->cur_visible) {
             /* Only allow cursor-effect operations if the cursor is visible
              * (otherwise you have no idea which square it might be affecting) */
@@ -1902,13 +1973,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             action = (button == 'i' || button == 'I' || button == CURSOR_SELECT2) ?
                 FLIP_IMPOSSIBLE : FLIP_LIGHT;
         }
-        ui->cur_visible = 1;
+        ui->cur_visible = true;
     } else if (IS_CURSOR_MOVE(button)) {
-        move_cursor(button, &ui->cur_x, &ui->cur_y, state->w, state->h, 0);
-        ui->cur_visible = 1;
-        nullret = empty;
+        nullret = move_cursor(button, &ui->cur_x, &ui->cur_y,
+                              state->w, state->h, false, &ui->cur_visible);
     } else
-        return NULL;
+        return MOVE_UNUSED;
 
     switch (action) {
     case FLIP_LIGHT:
@@ -1956,7 +2026,7 @@ static game_state *execute_move(const game_state *state, const char *move)
     while (*move) {
         c = *move;
         if (c == 'S') {
-            ret->used_solve = TRUE;
+            ret->used_solve = true;
             move++;
         } else if (c == 'L' || c == 'I') {
             move++;
@@ -1970,9 +2040,9 @@ static game_state *execute_move(const game_state *state, const char *move)
             /* LIGHT and IMPOSSIBLE are mutually exclusive. */
             if (c == 'L') {
                 GRID(ret, flags, x, y) &= ~F_IMPOSSIBLE;
-                set_light(ret, x, y, (flags & F_LIGHT) ? 0 : 1);
+                set_light(ret, x, y, !(flags & F_LIGHT));
             } else {
-                set_light(ret, x, y, 0);
+                set_light(ret, x, y, false);
                 GRID(ret, flags, x, y) ^= F_IMPOSSIBLE;
             }
             move += n;
@@ -1982,7 +2052,7 @@ static game_state *execute_move(const game_state *state, const char *move)
             move++;
         else if (*move) goto badmove;
     }
-    if (grid_correct(ret)) ret->completed = 1;
+    if (grid_correct(ret)) ret->completed = true;
     return ret;
 
 badmove:
@@ -1996,7 +2066,7 @@ badmove:
 
 /* XXX entirely cloned from fifteen.c; separate out? */
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     /* Ick: fake up `ds->tilesize' for macro expansion purposes */
     struct { int tilesize; } ads, *ds = &ads;
@@ -2052,7 +2122,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     for (i = 0; i < ds->w*ds->h; i++)
         ds->flags[i] = -1;
 
-    ds->started = 0;
+    ds->started = false;
 
     return ds;
 }
@@ -2071,7 +2141,7 @@ static void game_free_drawstate(drawing *dr, game_drawstate *ds)
 #define HINT_NUMBERS
 
 static unsigned int tile_flags(game_drawstate *ds, const game_state *state,
-                               const game_ui *ui, int x, int y, int flashing)
+                               const game_ui *ui, int x, int y, bool flashing)
 {
     unsigned int flags = GRID(state, flags, x, y);
     int lights = GRID(state, lights, x, y);
@@ -2105,7 +2175,7 @@ static unsigned int tile_flags(game_drawstate *ds, const game_state *state,
     return ret;
 }
 
-static void tile_redraw(drawing *dr, game_drawstate *ds,
+static void tile_redraw(drawing *dr, game_drawstate *ds, const game_ui *ui,
                         const game_state *state, int x, int y)
 {
     unsigned int ds_flags = GRID(ds, flags, x, y);
@@ -2135,13 +2205,7 @@ static void tile_redraw(drawing *dr, game_drawstate *ds,
             draw_circle(dr, dx + TILE_SIZE/2, dy + TILE_SIZE/2, TILE_RADIUS,
                         lcol, COL_BLACK);
         } else if ((ds_flags & DF_IMPOSSIBLE)) {
-            static int draw_blobs_when_lit = -1;
-            if (draw_blobs_when_lit < 0) {
-		char *env = getenv("LIGHTUP_LIT_BLOBS");
-		draw_blobs_when_lit = (!env || (env[0] == 'y' ||
-                                                env[0] == 'Y'));
-            }
-            if (!(ds_flags & DF_LIT) || draw_blobs_when_lit) {
+            if (!(ds_flags & DF_LIT) || ui->draw_blobs_when_lit) {
                 int rlen = TILE_SIZE / 4;
                 draw_rect(dr, dx + TILE_SIZE/2 - rlen/2,
                           dy + TILE_SIZE/2 - rlen/2,
@@ -2164,16 +2228,12 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                         int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
-    int flashing = FALSE;
+    bool flashing = false;
     int x,y;
 
     if (flashtime) flashing = (int)(flashtime * 3 / FLASH_TIME) != 1;
 
     if (!ds->started) {
-        draw_rect(dr, 0, 0,
-                  TILE_SIZE * ds->w + 2 * BORDER,
-                  TILE_SIZE * ds->h + 2 * BORDER, COL_BACKGROUND);
-
         draw_rect_outline(dr, COORD(0)-1, COORD(0)-1,
                           TILE_SIZE * ds->w + 2,
                           TILE_SIZE * ds->h + 2,
@@ -2182,7 +2242,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         draw_update(dr, 0, 0,
                     TILE_SIZE * ds->w + 2 * BORDER,
                     TILE_SIZE * ds->h + 2 * BORDER);
-        ds->started = 1;
+        ds->started = true;
     }
 
     for (x = 0; x < ds->w; x++) {
@@ -2190,7 +2250,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
             unsigned int ds_flags = tile_flags(ds, state, ui, x, y, flashing);
             if (ds_flags != GRID(ds, flags, x, y)) {
                 GRID(ds, flags, x, y) = ds_flags;
-                tile_redraw(dr, ds, state, x, y);
+                tile_redraw(dr, ds, ui, state, x, y);
             }
         }
     }
@@ -2211,29 +2271,39 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+    if(ui->cur_visible) {
+        *x = COORD(ui->cur_x);
+        *y = COORD(ui->cur_y);
+        *w = *h = TILE_SIZE;
+    }
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
 }
 
-static int game_timing_state(const game_state *state, game_ui *ui)
-{
-    return TRUE;
-}
-
-static void game_print_size(const game_params *params, float *x, float *y)
+static void game_print_size(const game_params *params, const game_ui *ui,
+                            float *x, float *y)
 {
     int pw, ph;
 
     /*
      * I'll use 6mm squares by default.
      */
-    game_compute_size(params, 600, &pw, &ph);
+    game_compute_size(params, 600, ui, &pw, &ph);
     *x = pw / 100.0F;
     *y = ph / 100.0F;
 }
 
-static void game_print(drawing *dr, const game_state *state, int tilesize)
+static void game_print(drawing *dr, const game_state *state, const game_ui *ui,
+                       int tilesize)
 {
     int w = state->w, h = state->h;
     int ink = print_mono_colour(dr, 0);
@@ -2265,7 +2335,7 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
      */
     for (y = 0; y < h; y++)
 	for (x = 0; x < w; x++) {
-            unsigned int ds_flags = tile_flags(ds, state, NULL, x, y, FALSE);
+            unsigned int ds_flags = tile_flags(ds, state, NULL, x, y, false);
 	    int dx = COORD(x), dy = COORD(y);
 	    if (ds_flags & DF_BLACK) {
 		draw_rect(dr, dx, dy, TILE_SIZE, TILE_SIZE, ink);
@@ -2290,25 +2360,28 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Light Up", "games.lightup", "lightup",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    TRUE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    true, game_can_format_as_text_now, game_text_format,
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
-    encode_ui,
-    decode_ui,
+    NULL, /* encode_ui */
+    NULL, /* decode_ui */
+    NULL, /* game_request_keys */
     game_changed_state,
+    current_key_label,
     interpret_move,
     execute_move,
     PREFERRED_TILE_SIZE, game_compute_size, game_set_size,
@@ -2318,10 +2391,11 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    TRUE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    true, false, game_print_size, game_print,
+    false,			       /* wants_statusbar */
+    false, NULL,                       /* timing_state */
     0,				       /* flags */
 };
 
@@ -2331,7 +2405,8 @@ int main(int argc, char **argv)
 {
     game_params *p;
     game_state *s;
-    char *id = NULL, *desc, *err, *result;
+    char *id = NULL, *desc, *result;
+    const char *err;
     int nsol, diff, really_verbose = 0;
     unsigned int sflags;
 

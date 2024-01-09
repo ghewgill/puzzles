@@ -20,10 +20,6 @@
  *    requirements are adequately expressed by a single scalar tile
  *    size), and probably complicate the rest of the puzzles' API as a
  *    result. So I'm not sure I really want to do it.
- *
- *  - It would be nice if we could somehow auto-detect a real `long
- *    long' type on the host platform and use it in place of my
- *    hand-hacked int64s. It'd be faster and more reliable.
  */
 
 #include <stdio.h>
@@ -31,7 +27,15 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#include <limits.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
+#if HAVE_STDINT_H
+#  include <stdint.h>
+#endif
 
 #include "puzzles.h"
 #include "tree234.h"
@@ -48,9 +52,7 @@ enum {
     COL_SYSBACKGROUND,
     COL_BACKGROUND,
     COL_LINE,
-#ifdef SHOW_CROSSINGS
     COL_CROSSEDLINE,
-#endif
     COL_OUTLINE,
     COL_POINT,
     COL_DRAGPOINT,
@@ -91,11 +93,9 @@ struct game_state {
     game_params params;
     int w, h;			       /* extent of coordinate system only */
     point *pts;
-#ifdef SHOW_CROSSINGS
     int *crosses;		       /* mark edges which are crossed */
-#endif
     struct graph *graph;
-    int completed, cheated, just_solved;
+    bool completed, cheated, just_solved;
 };
 
 static int edgecmpC(const void *av, const void *bv)
@@ -125,7 +125,7 @@ static game_params *default_params(void)
     return ret;
 }
 
-static int game_fetch_preset(int i, char **name, game_params **params)
+static bool game_fetch_preset(int i, char **name, game_params **params)
 {
     game_params *ret;
     int n;
@@ -137,7 +137,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
       case 2: n = 15; break;
       case 3: n = 20; break;
       case 4: n = 25; break;
-      default: return FALSE;
+      default: return false;
     }
 
     sprintf(buf, "%d points", n);
@@ -146,7 +146,7 @@ static int game_fetch_preset(int i, char **name, game_params **params)
     *params = ret = snew(game_params);
     ret->n = n;
 
-    return TRUE;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -166,7 +166,7 @@ static void decode_params(game_params *params, char const *string)
     params->n = atoi(string);
 }
 
-static char *encode_params(const game_params *params, int full)
+static char *encode_params(const game_params *params, bool full)
 {
     char buf[80];
 
@@ -185,13 +185,10 @@ static config_item *game_configure(const game_params *params)
     ret[0].name = "Number of points";
     ret[0].type = C_STRING;
     sprintf(buf, "%d", params->n);
-    ret[0].sval = dupstr(buf);
-    ret[0].ival = 0;
+    ret[0].u.string.sval = dupstr(buf);
 
     ret[1].name = NULL;
     ret[1].type = C_END;
-    ret[1].sval = NULL;
-    ret[1].ival = 0;
 
     return ret;
 }
@@ -200,15 +197,17 @@ static game_params *custom_params(const config_item *cfg)
 {
     game_params *ret = snew(game_params);
 
-    ret->n = atoi(cfg[0].sval);
+    ret->n = atoi(cfg[0].u.string.sval);
 
     return ret;
 }
 
-static char *validate_params(const game_params *params, int full)
+static const char *validate_params(const game_params *params, bool full)
 {
     if (params->n < 4)
         return "Number of points must be at least four";
+    if (params->n > INT_MAX / 3)
+        return "Number of points must not be unreasonably large";
     return NULL;
 }
 
@@ -216,6 +215,9 @@ static char *validate_params(const game_params *params, int full)
  * Small number of 64-bit integer arithmetic operations, to prevent
  * integer overflow at the very core of cross().
  */
+
+#if !HAVE_STDINT_H
+/* For prehistoric C implementations, do this the hard way */
 
 typedef struct {
     long hi;
@@ -296,12 +298,27 @@ static int64 dotprod64(long a, long b, long p, long q)
     return ab;
 }
 
+#else /* HAVE_STDINT_H */
+
+typedef int64_t int64;
+#define greater64(i,j) ((i) > (j))
+#define sign64(i) ((i) < 0 ? -1 : (i)==0 ? 0 : +1)
+#define mulu32to64(x,y) ((int64_t)(unsigned long)(x) * (unsigned long)(y))
+#define mul32to64(x,y) ((int64_t)(long)(x) * (long)(y))
+
+static int64 dotprod64(long a, long b, long p, long q)
+{
+    return (int64)a * b + (int64)p * q;
+}
+
+#endif /* HAVE_STDINT_H */
+
 /*
  * Determine whether the line segments between a1 and a2, and
  * between b1 and b2, intersect. We count it as an intersection if
  * any of the endpoints lies _on_ the other line.
  */
-static int cross(point a1, point a2, point b1, point b2)
+static bool cross(point a1, point a2, point b1, point b2)
 {
     long b1x, b1y, b2x, b2y, px, py;
     int64 d1, d2, d3;
@@ -334,7 +351,7 @@ static int cross(point a1, point a2, point b1, point b2)
     /* If they have the same non-zero sign, the lines do not cross. */
     if ((sign64(d1) > 0 && sign64(d2) > 0) ||
 	(sign64(d1) < 0 && sign64(d2) < 0))
-	return FALSE;
+	return false;
 
     /*
      * If the dot products are both exactly zero, then the two line
@@ -351,13 +368,13 @@ static int cross(point a1, point a2, point b1, point b2)
 	d2 = dotprod64(b2x, px, b2y, py);
 	/* If they're both strictly negative, the lines do not cross. */
 	if (sign64(d1) < 0 && sign64(d2) < 0)
-	    return FALSE;
+	    return false;
 	/* Otherwise, take the dot product of a2-a1 with itself. If
 	 * the other two dot products both exceed this, the lines do
 	 * not cross. */
 	d3 = dotprod64(px, px, py, py);
 	if (greater64(d1, d3) && greater64(d2, d3))
-	    return FALSE;
+	    return false;
     }
 
     /*
@@ -376,12 +393,12 @@ static int cross(point a1, point a2, point b1, point b2)
     d2 = dotprod64(b2x, px, b2y, py);
     if ((sign64(d1) > 0 && sign64(d2) > 0) ||
 	(sign64(d1) < 0 && sign64(d2) < 0))
-	return FALSE;
+	return false;
 
     /*
      * The lines must cross.
      */
-    return TRUE;
+    return true;
 }
 
 static unsigned long squarert(unsigned long n) {
@@ -420,10 +437,12 @@ static void addedge(tree234 *edges, int a, int b)
     e->a = min(a, b);
     e->b = max(a, b);
 
-    add234(edges, e);
+    if (add234(edges, e) != e)
+        /* Duplicate edge. */
+        sfree(e);
 }
 
-static int isedge(tree234 *edges, int a, int b)
+static bool isedge(tree234 *edges, int a, int b)
 {
     edge e;
 
@@ -442,8 +461,8 @@ typedef struct vertex {
 
 static int vertcmpC(const void *av, const void *bv)
 {
-    const vertex *a = (vertex *)av;
-    const vertex *b = (vertex *)bv;
+    const vertex *a = (const vertex *)av;
+    const vertex *b = (const vertex *)bv;
 
     if (a->param < b->param)
 	return -1;
@@ -492,7 +511,7 @@ static void make_circle(point *pts, int n, int w)
 }
 
 static char *new_game_desc(const game_params *params, random_state *rs,
-			   char **aux, int interactive)
+			   char **aux, bool interactive)
 {
     int n = params->n, i;
     long w, h, j, k, m;
@@ -543,7 +562,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     edges = newtree234(edgecmp);
     vlist = snewn(n, vertex);
     while (1) {
-	int added = FALSE;
+        bool added = false;
 
 	for (i = 0; i < n; i++) {
 	    v = index234(vertices, i);
@@ -605,7 +624,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 		 * the two vertices involved, and break.
 		 */
 		addedge(edges, j, ki);
-		added = TRUE;
+		added = true;
 		del234(vertices, vs+j);
 		vs[j].param++;
 		add234(vertices, vs+j);
@@ -659,7 +678,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
      */
     ret = NULL;
     {
-	char *sep;
+	const char *sep;
 	char buf[80];
 	int retlen;
 	edge *ea;
@@ -734,7 +753,7 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     return ret;
 }
 
-static char *validate_desc(const game_params *params, const char *desc)
+static const char *validate_desc(const game_params *params, const char *desc)
 {
     int a, b;
 
@@ -755,6 +774,8 @@ static char *validate_desc(const game_params *params, const char *desc)
 		return "Expected ',' after number in game description";
 	    desc++;		       /* eat comma */
 	}
+        if (a == b)
+            return "Node linked to itself in game description";
     }
 
     return NULL;
@@ -762,14 +783,12 @@ static char *validate_desc(const game_params *params, const char *desc)
 
 static void mark_crossings(game_state *state)
 {
-    int ok = TRUE;
+    bool ok = true;
     int i, j;
     edge *e, *e2;
 
-#ifdef SHOW_CROSSINGS
     for (i = 0; (e = index234(state->graph->edges, i)) != NULL; i++)
-	state->crosses[i] = FALSE;
-#endif
+	state->crosses[i] = false;
 
     /*
      * Check correctness: for every pair of edges, see whether they
@@ -782,12 +801,8 @@ static void mark_crossings(game_state *state)
 		continue;
 	    if (cross(state->pts[e2->a], state->pts[e2->b],
 		      state->pts[e->a], state->pts[e->b])) {
-		ok = FALSE;
-#ifdef SHOW_CROSSINGS
-		state->crosses[i] = state->crosses[j] = TRUE;
-#else
-		goto done;	       /* multi-level break - sorry */
-#endif
+		ok = false;
+		state->crosses[i] = state->crosses[j] = true;
 	    }
 	}
     }
@@ -796,11 +811,8 @@ static void mark_crossings(game_state *state)
      * e == NULL if we've gone through all the edge pairs
      * without finding a crossing.
      */
-#ifndef SHOW_CROSSINGS
-    done:
-#endif
     if (ok)
-	state->completed = TRUE;
+	state->completed = true;
 }
 
 static game_state *new_game(midend *me, const game_params *params,
@@ -817,7 +829,7 @@ static game_state *new_game(midend *me, const game_params *params,
     state->graph = snew(struct graph);
     state->graph->refcount = 1;
     state->graph->edges = newtree234(edgecmp);
-    state->completed = state->cheated = state->just_solved = FALSE;
+    state->completed = state->cheated = state->just_solved = false;
 
     while (*desc) {
 	a = atoi(desc);
@@ -835,10 +847,8 @@ static game_state *new_game(midend *me, const game_params *params,
 	addedge(state->graph->edges, a, b);
     }
 
-#ifdef SHOW_CROSSINGS
     state->crosses = snewn(count234(state->graph->edges), int);
     mark_crossings(state);	       /* sets up `crosses' and `completed' */
-#endif
 
     return state;
 }
@@ -858,11 +868,9 @@ static game_state *dup_game(const game_state *state)
     ret->completed = state->completed;
     ret->cheated = state->cheated;
     ret->just_solved = state->just_solved;
-#ifdef SHOW_CROSSINGS
     ret->crosses = snewn(count234(ret->graph->edges), int);
     memcpy(ret->crosses, state->crosses,
 	   count234(ret->graph->edges) * sizeof(int));
-#endif
 
     return ret;
 }
@@ -881,7 +889,7 @@ static void free_game(game_state *state)
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
-                        const char *aux, char **error)
+                        const char *aux, const char **error)
 {
     int n = state->params.n;
     int matrix[4];
@@ -1026,30 +1034,79 @@ static char *solve_game(const game_state *state, const game_state *currstate,
     return ret;
 }
 
-static int game_can_format_as_text_now(const game_params *params)
-{
-    return TRUE;
-}
-
-static char *game_text_format(const game_state *state)
-{
-    return NULL;
-}
-
 struct game_ui {
     int dragpoint;		       /* point being dragged; -1 if none */
     point newpoint;		       /* where it's been dragged to so far */
-    int just_dragged;		       /* reset in game_changed_state */
-    int just_moved;		       /* _set_ in game_changed_state */
+    bool just_dragged;                 /* reset in game_changed_state */
+    bool just_moved;                   /* _set_ in game_changed_state */
     float anim_length;
+
+    /*
+     * User preference option to snap dragged points to a coarse-ish
+     * grid. Requested by a user who otherwise found themself spending
+     * too much time struggling to get lines nicely horizontal or
+     * vertical.
+     */
+    bool snap_to_grid;
+
+    /*
+     * User preference option to highlight graph edges involved in a
+     * crossing.
+     */
+    bool show_crossed_edges;
+
+    /*
+     * User preference option to show vertices as numbers instead of
+     * circular blobs, so you can easily tell them apart.
+     */
+    bool vertex_numbers;
 };
 
 static game_ui *new_ui(const game_state *state)
 {
     game_ui *ui = snew(game_ui);
     ui->dragpoint = -1;
-    ui->just_moved = ui->just_dragged = FALSE;
+    ui->just_moved = ui->just_dragged = false;
+    ui->snap_to_grid = false;
+    ui->show_crossed_edges = false;
+    ui->vertex_numbers = false;
     return ui;
+}
+
+static config_item *get_prefs(game_ui *ui)
+{
+    config_item *cfg;
+
+    cfg = snewn(4, config_item);
+
+    cfg[0].name = "Snap points to a grid";
+    cfg[0].kw = "snap-to-grid";
+    cfg[0].type = C_BOOLEAN;
+    cfg[0].u.boolean.bval = ui->snap_to_grid;
+
+    cfg[1].name = "Show edges that cross another edge";
+    cfg[1].kw = "show-crossed-edges";
+    cfg[1].type = C_BOOLEAN;
+    cfg[1].u.boolean.bval = ui->show_crossed_edges;
+
+    cfg[2].name = "Display style for vertices";
+    cfg[2].kw = "vertex-style";
+    cfg[2].type = C_CHOICES;
+    cfg[2].u.choices.choicenames = ":Circles:Numbers";
+    cfg[2].u.choices.choicekws = ":circle:number";
+    cfg[2].u.choices.selected = ui->vertex_numbers;
+
+    cfg[3].name = NULL;
+    cfg[3].type = C_END;
+
+    return cfg;
+}
+
+static void set_prefs(game_ui *ui, const config_item *cfg)
+{
+    ui->snap_to_grid = cfg[0].u.boolean.bval;
+    ui->show_crossed_edges = cfg[1].u.boolean.bval;
+    ui->vertex_numbers = cfg[2].u.choices.selected;
 }
 
 static void free_ui(game_ui *ui)
@@ -1057,21 +1114,12 @@ static void free_ui(game_ui *ui)
     sfree(ui);
 }
 
-static char *encode_ui(const game_ui *ui)
-{
-    return NULL;
-}
-
-static void decode_ui(game_ui *ui, const char *encoding)
-{
-}
-
 static void game_changed_state(game_ui *ui, const game_state *oldstate,
                                const game_state *newstate)
 {
     ui->dragpoint = -1;
     ui->just_moved = ui->just_dragged;
-    ui->just_dragged = FALSE;
+    ui->just_dragged = false;
 }
 
 struct game_drawstate {
@@ -1079,6 +1127,62 @@ struct game_drawstate {
     int bg, dragpoint;
     long *x, *y;
 };
+
+static void place_dragged_point(const game_state *state, game_ui *ui,
+                                const game_drawstate *ds, int x, int y)
+{
+    if (ui->snap_to_grid) {
+        /*
+         * We snap points to a grid that has n-1 vertices on each
+         * side. This should be large enough to permit a straight-
+         * line drawing of any n-vertex planar graph, and moreover,
+         * any specific planar embedding of that graph.
+         *
+         * Source: David Eppstein's book 'Forbidden Configurations in
+         * Discrete Geometry' mentions (section 16.3, page 182) that
+         * the point configuration he describes as GRID(n-1,n-1) -
+         * that is, the vertices of a square grid with n-1 vertices on
+         * each side - is universal for n-vertex planar graphs. In
+         * other words (from definitions earlier in the chapter), if a
+         * graph G admits any drawing in the plane at all, then it can
+         * be drawn with straight lines, and with all vertices being
+         * vertices of that grid.
+         *
+         * That fact by itself only says that _some_ planar embedding
+         * of G can be drawn in this grid. We'd prefer that _all_
+         * embeddings of G can be so drawn, because 'snap to grid' is
+         * supposed to be a UI affordance, not an extra puzzle
+         * challenge, so we don't want to constrain the player's
+         * choice of planar embedding.
+         *
+         * But it doesn't make a difference. Proof: given a specific
+         * planar embedding of G, triangulate it, by adding extra
+         * edges to every face of degree > 3. When this process
+         * terminates with every face a triangle, we have a new graph
+         * G' such that no edge can be added without it ceasing to be
+         * planar. Standard theorems say that a maximal planar graph
+         * is 3-connected, and that a 3-connected planar graph has a
+         * _unique_ embedding. So any drawing of G' in the plane can
+         * be converted into a drawing of G in the desired embedding,
+         * by simply removing all the extra edges that we added to
+         * turn G into G'. And G' is still an n-vertex planar graph,
+         * hence it can be drawn in GRID(n-1,n-1). []
+         */
+        int d = state->params.n - 1;
+
+        /* Calculate position in terms of the snapping grid. */
+        x = d * x / (state->w * ds->tilesize);
+        y = d * y / (state->h * ds->tilesize);
+        /* Convert to standard co-ordinates, applying a half-square offset. */
+        ui->newpoint.x = (x * 2 + 1) * state->w;
+        ui->newpoint.y = (y * 2 + 1) * state->h;
+        ui->newpoint.d = d * 2;
+    } else {
+        ui->newpoint.x = x;
+        ui->newpoint.y = y;
+        ui->newpoint.d = ds->tilesize;
+    }
+}
 
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
@@ -1114,17 +1218,13 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 	if (bestd <= DRAG_THRESHOLD * DRAG_THRESHOLD) {
 	    ui->dragpoint = best;
-	    ui->newpoint.x = x;
-	    ui->newpoint.y = y;
-	    ui->newpoint.d = ds->tilesize;
-	    return "";
+            place_dragged_point(state, ui, ds, x, y);
+	    return MOVE_UI_UPDATE;
 	}
-
+        return MOVE_NO_EFFECT;
     } else if (IS_MOUSE_DRAG(button) && ui->dragpoint >= 0) {
-	ui->newpoint.x = x;
-	ui->newpoint.y = y;
-	ui->newpoint.d = ds->tilesize;
-	return "";
+        place_dragged_point(state, ui, ds, x, y);
+	return MOVE_UI_UPDATE;
     } else if (IS_MOUSE_RELEASE(button) && ui->dragpoint >= 0) {
 	int p = ui->dragpoint;
 	char buf[80];
@@ -1139,7 +1239,7 @@ static char *interpret_move(const game_state *state, game_ui *ui,
             ui->newpoint.x >= (long)state->w*ui->newpoint.d ||
 	    ui->newpoint.y < 0 ||
             ui->newpoint.y >= (long)state->h*ui->newpoint.d)
-	    return "";
+	    return MOVE_UI_UPDATE;
 
 	/*
 	 * We aren't cancelling the drag. Construct a move string
@@ -1147,11 +1247,12 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 	 */
 	sprintf(buf, "P%d:%ld,%ld/%ld", p,
 		ui->newpoint.x, ui->newpoint.y, ui->newpoint.d);
-	ui->just_dragged = TRUE;
+	ui->just_dragged = true;
 	return dupstr(buf);
-    }
+    } else if (IS_MOUSE_DRAG(button) || IS_MOUSE_RELEASE(button))
+        return MOVE_NO_EFFECT;
 
-    return NULL;
+    return MOVE_UNUSED;
 }
 
 static game_state *execute_move(const game_state *state, const char *move)
@@ -1161,13 +1262,13 @@ static game_state *execute_move(const game_state *state, const char *move)
     long x, y, d;
     game_state *ret = dup_game(state);
 
-    ret->just_solved = FALSE;
+    ret->just_solved = false;
 
     while (*move) {
 	if (*move == 'S') {
 	    move++;
 	    if (*move == ';') move++;
-	    ret->cheated = ret->just_solved = TRUE;
+	    ret->cheated = ret->just_solved = true;
 	}
 	if (*move == 'P' &&
 	    sscanf(move+1, "%d:%ld,%ld/%ld%n", &p, &x, &y, &d, &k) == 4 &&
@@ -1194,7 +1295,7 @@ static game_state *execute_move(const game_state *state, const char *move)
  */
 
 static void game_compute_size(const game_params *params, int tilesize,
-                              int *x, int *y)
+                              const game_ui *ui, int *x, int *y)
 {
     *x = *y = COORDLIMIT(params->n) * tilesize;
 }
@@ -1223,11 +1324,9 @@ static float *game_colours(frontend *fe, int *ncolours)
     ret[COL_LINE * 3 + 1] = 0.0F;
     ret[COL_LINE * 3 + 2] = 0.0F;
 
-#ifdef SHOW_CROSSINGS
     ret[COL_CROSSEDLINE * 3 + 0] = 1.0F;
     ret[COL_CROSSEDLINE * 3 + 1] = 0.0F;
     ret[COL_CROSSEDLINE * 3 + 2] = 0.0F;
-#endif
 
     ret[COL_OUTLINE * 3 + 0] = 0.0F;
     ret[COL_OUTLINE * 3 + 1] = 0.0F;
@@ -1299,7 +1398,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     int w, h;
     edge *e;
     int i, j;
-    int bg, points_moved;
+    int bg;
+    bool points_moved;
 
     /*
      * There's no terribly sensible way to do partial redraws of
@@ -1324,7 +1424,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      * Also in this loop we work out the coordinates of all the
      * points for this redraw.
      */
-    points_moved = FALSE;
+    points_moved = false;
     for (i = 0; i < state->params.n; i++) {
         point p = state->pts[i];
         long x, y;
@@ -1339,7 +1439,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	y = p.y * ds->tilesize / p.d;
 
         if (ds->x[i] != x || ds->y[i] != y)
-            points_moved = TRUE;
+            points_moved = true;
 
         ds->x[i] = x;
         ds->y[i] = y;
@@ -1351,7 +1451,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
     ds->dragpoint = ui->dragpoint;
     ds->bg = bg;
 
-    game_compute_size(&state->params, ds->tilesize, &w, &h);
+    game_compute_size(&state->params, ds->tilesize, ui, &w, &h);
     draw_rect(dr, 0, 0, w, h, bg);
 
     /*
@@ -1360,11 +1460,9 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
     for (i = 0; (e = index234(state->graph->edges, i)) != NULL; i++) {
 	draw_line(dr, ds->x[e->a], ds->y[e->a], ds->x[e->b], ds->y[e->b],
-#ifdef SHOW_CROSSINGS
-		  (oldstate?oldstate:state)->crosses[i] ?
-		  COL_CROSSEDLINE :
-#endif
-		  COL_LINE);
+		  ui->show_crossed_edges &&
+                  (oldstate?oldstate:state)->crosses[i] ?
+		  COL_CROSSEDLINE : COL_LINE);
     }
 
     /*
@@ -1389,19 +1487,17 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 	    }
 
 	    if (c == thisc) {
-#ifdef VERTEX_NUMBERS
-		draw_circle(dr, ds->x[i], ds->y[i], DRAG_THRESHOLD, bg, bg);
-		{
-		    char buf[80];
-		    sprintf(buf, "%d", i);
-		    draw_text(dr, ds->x[i], ds->y[i], FONT_VARIABLE,
+                if (ui->vertex_numbers) {
+                    char buf[80];
+                    draw_circle(dr, ds->x[i], ds->y[i], DRAG_THRESHOLD, bg, bg);
+                    sprintf(buf, "%d", i);
+                    draw_text(dr, ds->x[i], ds->y[i], FONT_VARIABLE,
                               DRAG_THRESHOLD*3/2,
-			      ALIGN_VCENTRE|ALIGN_HCENTRE, c, buf);
-		}
-#else
-		draw_circle(dr, ds->x[i], ds->y[i], CIRCLE_RADIUS,
-                            c, COL_OUTLINE);
-#endif
+                              ALIGN_VCENTRE|ALIGN_HCENTRE, c, buf);
+                } else {
+                    draw_circle(dr, ds->x[i], ds->y[i], CIRCLE_RADIUS,
+                                c, COL_OUTLINE);
+                }
 	    }
 	}
     }
@@ -1430,22 +1526,17 @@ static float game_flash_length(const game_state *oldstate,
     return 0.0F;
 }
 
+static void game_get_cursor_location(const game_ui *ui,
+                                     const game_drawstate *ds,
+                                     const game_state *state,
+                                     const game_params *params,
+                                     int *x, int *y, int *w, int *h)
+{
+}
+
 static int game_status(const game_state *state)
 {
     return state->completed ? +1 : 0;
-}
-
-static int game_timing_state(const game_state *state, game_ui *ui)
-{
-    return TRUE;
-}
-
-static void game_print_size(const game_params *params, float *x, float *y)
-{
-}
-
-static void game_print(drawing *dr, const game_state *state, int tilesize)
-{
 }
 
 #ifdef COMBINED
@@ -1455,25 +1546,28 @@ static void game_print(drawing *dr, const game_state *state, int tilesize)
 const struct game thegame = {
     "Untangle", "games.untangle", "untangle",
     default_params,
-    game_fetch_preset,
+    game_fetch_preset, NULL,
     decode_params,
     encode_params,
     free_params,
     dup_params,
-    TRUE, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
     new_game,
     dup_game,
     free_game,
-    TRUE, solve_game,
-    FALSE, game_can_format_as_text_now, game_text_format,
+    true, solve_game,
+    false, NULL, NULL, /* can_format_as_text_now, text_format */
+    get_prefs, set_prefs,
     new_ui,
     free_ui,
-    encode_ui,
-    decode_ui,
+    NULL, /* encode_ui */
+    NULL, /* decode_ui */
+    NULL, /* game_request_keys */
     game_changed_state,
+    NULL, /* current_key_label */
     interpret_move,
     execute_move,
     PREFERRED_TILESIZE, game_compute_size, game_set_size,
@@ -1483,9 +1577,10 @@ const struct game thegame = {
     game_redraw,
     game_anim_length,
     game_flash_length,
+    game_get_cursor_location,
     game_status,
-    FALSE, FALSE, game_print_size, game_print,
-    FALSE,			       /* wants_statusbar */
-    FALSE, game_timing_state,
+    false, false, NULL, NULL,          /* print_size, print */
+    false,			       /* wants_statusbar */
+    false, NULL,                       /* timing_state */
     SOLVE_ANIMATES,		       /* flags */
 };

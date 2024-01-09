@@ -1,0 +1,35 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :7:Mathrax
+PARAMS  :1:5
+CPARAMS :1:5
+SEED    :15:662175532621364
+DESC    :21:k4g5e,S1dS1bS3aS2cA5a
+NSTATES :2:27
+STATEPOS:2:27
+MOVE    :6:R0,3,1
+MOVE    :6:R1,3,3
+MOVE    :6:R1,3,2
+MOVE    :6:R0,2,5
+MOVE    :6:R2,3,3
+MOVE    :6:R2,3,4
+MOVE    :6:R3,3,3
+MOVE    :6:R3,3,4
+MOVE    :6:R3,3,-
+MOVE    :6:R2,3,-
+MOVE    :6:P2,3,3
+MOVE    :6:P2,3,4
+MOVE    :6:P3,3,3
+MOVE    :6:P3,3,4
+MOVE    :6:P2,2,2
+MOVE    :6:P3,2,2
+MOVE    :6:P2,2,1
+MOVE    :6:P3,2,1
+MOVE    :6:R4,2,3
+MOVE    :6:P2,2,-
+MOVE    :6:P2,3,-
+MOVE    :6:P3,3,-
+MOVE    :6:P3,2,-
+MOVE    :6:R1,4,5
+MOVE    :6:R0,4,3
+MOVE    :6:R4,4,4

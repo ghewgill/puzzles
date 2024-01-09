@@ -4,7 +4,7 @@
 
 #include "puzzles.h"
 #include "tree234.h"
-#include "maxflow.h"
+#include "matching.h"
 
 #ifdef STANDALONE_LATIN_TEST
 #define STANDALONE_SOLVER
@@ -19,8 +19,8 @@
 static int latin_solver_top(struct latin_solver *solver, int maxdiff,
 			    int diff_simple, int diff_set_0, int diff_set_1,
 			    int diff_forcing, int diff_recursive,
-			    usersolver_t const *usersolvers, void *ctx,
-			    ctxnew_t ctxnew, ctxfree_t ctxfree);
+			    usersolver_t const *usersolvers, validator_t valid,
+                            void *ctx, ctxnew_t ctxnew, ctxfree_t ctxfree);
 
 #ifdef STANDALONE_SOLVER
 int solver_show_working, solver_recurse_depth;
@@ -43,21 +43,21 @@ void latin_solver_place(struct latin_solver *solver, int x, int y, int n)
      */
     for (i = 1; i <= o; i++)
 	if (i != n)
-            cube(x,y,i) = FALSE;
+            cube(x,y,i) = false;
 
     /*
      * Rule out this number in all other positions in the row.
      */
     for (i = 0; i < o; i++)
 	if (i != y)
-            cube(x,i,n) = FALSE;
+            cube(x,i,n) = false;
 
     /*
      * Rule out this number in all other positions in the column.
      */
     for (i = 0; i < o; i++)
 	if (i != x)
-            cube(i,y,n) = FALSE;
+            cube(i,y,n) = false;
 
     /*
      * Enter the number in the result grid.
@@ -68,12 +68,12 @@ void latin_solver_place(struct latin_solver *solver, int x, int y, int n)
      * Cross out this number from the list of numbers left to place
      * in its row, its column and its block.
      */
-    solver->row[y*o+n-1] = solver->col[x*o+n-1] = TRUE;
+    solver->row[y*o+n-1] = solver->col[x*o+n-1] = true;
 }
 
 int latin_solver_elim(struct latin_solver *solver, int start, int step
 #ifdef STANDALONE_SOLVER
-		      , char *fmt, ...
+		      , const char *fmt, ...
 #endif
 		      )
 {
@@ -150,7 +150,7 @@ int latin_solver_set(struct latin_solver *solver,
                      struct latin_solver_scratch *scratch,
                      int start, int step1, int step2
 #ifdef STANDALONE_SOLVER
-                     , char *fmt, ...
+                     , const char *fmt, ...
 #endif
                      )
 {
@@ -170,8 +170,8 @@ int latin_solver_set(struct latin_solver *solver,
      * any row with a solitary 1 - and discarding that row and the
      * column containing the 1.
      */
-    memset(rowidx, TRUE, o);
-    memset(colidx, TRUE, o);
+    memset(rowidx, true, o);
+    memset(colidx, true, o);
     for (i = 0; i < o; i++) {
         int count = 0, first = -1;
         for (j = 0; j < o; j++)
@@ -180,7 +180,7 @@ int latin_solver_set(struct latin_solver *solver,
 
 	if (count == 0) return -1;
         if (count == 1)
-            rowidx[i] = colidx[first] = FALSE;
+            rowidx[i] = colidx[first] = false;
     }
 
     /*
@@ -226,10 +226,10 @@ int latin_solver_set(struct latin_solver *solver,
              */
             int rows = 0;
             for (i = 0; i < n; i++) {
-                int ok = TRUE;
+                bool ok = true;
                 for (j = 0; j < n; j++)
                     if (set[j] && grid[i*o+j]) {
-                        ok = FALSE;
+                        ok = false;
                         break;
                     }
                 if (ok)
@@ -261,7 +261,7 @@ int latin_solver_set(struct latin_solver *solver,
 	    }
 
             if (rows >= n - count) {
-                int progress = FALSE;
+                bool progress = false;
 
                 /*
                  * We've got one! Now, for each row which _doesn't_
@@ -275,10 +275,10 @@ int latin_solver_set(struct latin_solver *solver,
                  * positions in the cube to meddle with.
                  */
                 for (i = 0; i < n; i++) {
-                    int ok = TRUE;
+                    bool ok = true;
                     for (j = 0; j < n; j++)
                         if (set[j] && grid[i*o+j]) {
-                            ok = FALSE;
+                            ok = false;
                             break;
                         }
                     if (!ok) {
@@ -310,8 +310,8 @@ int latin_solver_set(struct latin_solver *solver,
                                            names[pn-1], px+1, py+1);
                                 }
 #endif
-                                progress = TRUE;
-                                solver->cube[fpos] = FALSE;
+                                progress = true;
+                                solver->cube[fpos] = false;
                             }
                     }
                 }
@@ -499,7 +499,7 @@ int latin_solver_forcing(struct latin_solver *solver,
                                 (xt == x || yt == y)) {
 #ifdef STANDALONE_SOLVER
                                 if (solver_show_working) {
-                                    char *sep = "";
+                                    const char *sep = "";
                                     int xl, yl;
                                     printf("%*sforcing chain, %s at ends of ",
                                            solver_recurse_depth*4, "",
@@ -522,7 +522,7 @@ int latin_solver_forcing(struct latin_solver *solver,
 					   xt+1, yt+1);
                                 }
 #endif
-                                cube(xt, yt, orign) = FALSE;
+                                cube(xt, yt, orign) = false;
                                 return 1;
                             }
                         }
@@ -563,28 +563,37 @@ void latin_solver_free_scratch(struct latin_solver_scratch *scratch)
     sfree(scratch);
 }
 
-void latin_solver_alloc(struct latin_solver *solver, digit *grid, int o)
+bool latin_solver_alloc(struct latin_solver *solver, digit *grid, int o)
 {
     int x, y;
 
     solver->o = o;
     solver->cube = snewn(o*o*o, unsigned char);
     solver->grid = grid;		/* write straight back to the input */
-    memset(solver->cube, TRUE, o*o*o);
+    memset(solver->cube, 1, o*o*o);
 
     solver->row = snewn(o*o, unsigned char);
     solver->col = snewn(o*o, unsigned char);
-    memset(solver->row, FALSE, o*o);
-    memset(solver->col, FALSE, o*o);
-
-    for (x = 0; x < o; x++)
-	for (y = 0; y < o; y++)
-	    if (grid[y*o+x])
-		latin_solver_place(solver, x, y, grid[y*o+x]);
+    memset(solver->row, 0, o*o);
+    memset(solver->col, 0, o*o);
 
 #ifdef STANDALONE_SOLVER
     solver->names = NULL;
 #endif
+
+    for (x = 0; x < o; x++) {
+	for (y = 0; y < o; y++) {
+            int n = grid[y*o+x];
+            if (n) {
+                if (cube(x, y, n))
+                    latin_solver_place(solver, x, y, n);
+                else
+                    return false;      /* puzzle is already inconsistent */
+            }
+        }
+    }
+
+    return true;
 }
 
 void latin_solver_free(struct latin_solver *solver)
@@ -650,7 +659,7 @@ int latin_solver_diff_simple(struct latin_solver *solver)
 
 int latin_solver_diff_set(struct latin_solver *solver,
                           struct latin_solver_scratch *scratch,
-                          int extreme)
+                          bool extreme)
 {
     int x, y, n, ret, o = solver->o;
 #ifdef STANDALONE_SOLVER
@@ -711,7 +720,7 @@ int latin_solver_diff_set(struct latin_solver *solver,
 static int latin_solver_recurse
     (struct latin_solver *solver, int diff_simple, int diff_set_0,
      int diff_set_1, int diff_forcing, int diff_recursive,
-     usersolver_t const *usersolvers, void *ctx,
+     usersolver_t const *usersolvers, validator_t valid, void *ctx,
      ctxnew_t ctxnew, ctxfree_t ctxfree)
 {
     int best, bestcount;
@@ -775,7 +784,7 @@ static int latin_solver_recurse
 
 #ifdef STANDALONE_SOLVER
         if (solver_show_working) {
-            char *sep = "";
+            const char *sep = "";
             printf("%*srecursing on (%d,%d) [",
                    solver_recurse_depth*4, "", x+1, y+1);
             for (i = 0; i < j; i++) {
@@ -810,14 +819,17 @@ static int latin_solver_recurse
 	    } else {
 		newctx = ctx;
 	    }
-	    latin_solver_alloc(&subsolver, outgrid, o);
 #ifdef STANDALONE_SOLVER
 	    subsolver.names = solver->names;
 #endif
-            ret = latin_solver_top(&subsolver, diff_recursive,
-				   diff_simple, diff_set_0, diff_set_1,
-				   diff_forcing, diff_recursive,
-				   usersolvers, newctx, ctxnew, ctxfree);
+	    if (latin_solver_alloc(&subsolver, outgrid, o))
+                ret = latin_solver_top(&subsolver, diff_recursive,
+                                       diff_simple, diff_set_0, diff_set_1,
+                                       diff_forcing, diff_recursive,
+                                       usersolvers, valid, newctx,
+                                       ctxnew, ctxfree);
+            else
+                ret = diff_impossible;
 	    latin_solver_free(&subsolver);
 	    if (ctxnew)
 		ctxfree(newctx);
@@ -879,8 +891,8 @@ static int latin_solver_recurse
 static int latin_solver_top(struct latin_solver *solver, int maxdiff,
 			    int diff_simple, int diff_set_0, int diff_set_1,
 			    int diff_forcing, int diff_recursive,
-			    usersolver_t const *usersolvers, void *ctx,
-			    ctxnew_t ctxnew, ctxfree_t ctxfree)
+			    usersolver_t const *usersolvers, validator_t valid,
+                            void *ctx, ctxnew_t ctxnew, ctxfree_t ctxfree)
 {
     struct latin_solver_scratch *scratch = latin_solver_new_scratch(solver);
     int ret, diff = diff_simple;
@@ -908,9 +920,9 @@ static int latin_solver_top(struct latin_solver *solver, int maxdiff,
 	    if (ret == 0 && i == diff_simple)
 		ret = latin_solver_diff_simple(solver);
 	    if (ret == 0 && i == diff_set_0)
-		ret = latin_solver_diff_set(solver, scratch, 0);
+		ret = latin_solver_diff_set(solver, scratch, false);
 	    if (ret == 0 && i == diff_set_1)
-		ret = latin_solver_diff_set(solver, scratch, 1);
+		ret = latin_solver_diff_set(solver, scratch, true);
 	    if (ret == 0 && i == diff_forcing)
 		ret = latin_solver_forcing(solver, scratch);
 
@@ -941,7 +953,8 @@ static int latin_solver_top(struct latin_solver *solver, int maxdiff,
         int nsol = latin_solver_recurse(solver,
 					diff_simple, diff_set_0, diff_set_1,
 					diff_forcing, diff_recursive,
-					usersolvers, ctx, ctxnew, ctxfree);
+					usersolvers, valid, ctx,
+                                        ctxnew, ctxfree);
         if (nsol < 0) diff = diff_impossible;
         else if (nsol == 1) diff = diff_recursive;
         else if (nsol > 1) diff = diff_ambiguous;
@@ -964,14 +977,42 @@ static int latin_solver_top(struct latin_solver *solver, int maxdiff,
     got_result:
 
 #ifdef STANDALONE_SOLVER
-    if (solver_show_working)
-        printf("%*s%s found\n",
-               solver_recurse_depth*4, "",
-               diff == diff_impossible ? "no solution (impossible)" :
-               diff == diff_unfinished ? "no solution (unfinished)" :
-               diff == diff_ambiguous ? "multiple solutions" :
-               "one solution");
+    if (solver_show_working) {
+        if (diff != diff_impossible && diff != diff_unfinished &&
+            diff != diff_ambiguous) {
+            int x, y;
+
+            printf("%*sone solution found:\n", solver_recurse_depth*4, "");
+
+            for (y = 0; y < solver->o; y++) {
+                printf("%*s", solver_recurse_depth*4+1, "");
+                for (x = 0; x < solver->o; x++) {
+                    int val = solver->grid[y*solver->o+x];
+                    assert(val);
+                    printf(" %s", solver->names[val-1]);
+                }
+                printf("\n");
+            }
+        } else {
+            printf("%*s%s found\n",
+                   solver_recurse_depth*4, "",
+                   diff == diff_impossible ? "no solution (impossible)" :
+                   diff == diff_unfinished ? "no solution (unfinished)" :
+                   "multiple solutions");
+        }
+    }
 #endif
+
+    if (diff != diff_impossible && diff != diff_unfinished &&
+        diff != diff_ambiguous && valid && !valid(solver, ctx)) {
+#ifdef STANDALONE_SOLVER
+        if (solver_show_working) {
+            printf("%*ssolution failed final validation!\n",
+                   solver_recurse_depth*4, "");
+        }
+#endif
+        diff = diff_impossible;
+    }
 
     latin_solver_free_scratch(scratch);
 
@@ -981,8 +1022,8 @@ static int latin_solver_top(struct latin_solver *solver, int maxdiff,
 int latin_solver_main(struct latin_solver *solver, int maxdiff,
 		      int diff_simple, int diff_set_0, int diff_set_1,
 		      int diff_forcing, int diff_recursive,
-		      usersolver_t const *usersolvers, void *ctx,
-		      ctxnew_t ctxnew, ctxfree_t ctxfree)
+		      usersolver_t const *usersolvers, validator_t valid,
+                      void *ctx, ctxnew_t ctxnew, ctxfree_t ctxfree)
 {
     int diff;
 #ifdef STANDALONE_SOLVER
@@ -1010,7 +1051,7 @@ int latin_solver_main(struct latin_solver *solver, int maxdiff,
     diff = latin_solver_top(solver, maxdiff,
 			    diff_simple, diff_set_0, diff_set_1,
 			    diff_forcing, diff_recursive,
-			    usersolvers, ctx, ctxnew, ctxfree);
+			    usersolvers, valid, ctx, ctxnew, ctxfree);
 
 #ifdef STANDALONE_SOLVER
     sfree(names);
@@ -1023,17 +1064,19 @@ int latin_solver_main(struct latin_solver *solver, int maxdiff,
 int latin_solver(digit *grid, int o, int maxdiff,
 		 int diff_simple, int diff_set_0, int diff_set_1,
 		 int diff_forcing, int diff_recursive,
-		 usersolver_t const *usersolvers, void *ctx,
-		 ctxnew_t ctxnew, ctxfree_t ctxfree)
+		 usersolver_t const *usersolvers, validator_t valid,
+                 void *ctx, ctxnew_t ctxnew, ctxfree_t ctxfree)
 {
     struct latin_solver solver;
     int diff;
 
-    latin_solver_alloc(&solver, grid, o);
-    diff = latin_solver_main(&solver, maxdiff,
-			     diff_simple, diff_set_0, diff_set_1,
-			     diff_forcing, diff_recursive,
-			     usersolvers, ctx, ctxnew, ctxfree);
+    if (latin_solver_alloc(&solver, grid, o))
+        diff = latin_solver_main(&solver, maxdiff,
+                                 diff_simple, diff_set_0, diff_set_1,
+                                 diff_forcing, diff_recursive,
+                                 usersolvers, valid, ctx, ctxnew, ctxfree);
+    else
+        diff = diff_impossible;
     latin_solver_free(&solver);
     return diff;
 }
@@ -1094,11 +1137,11 @@ void latin_debug(digit *sq, int o)
 digit *latin_generate(int o, random_state *rs)
 {
     digit *sq;
-    int *edges, *backedges, *capacity, *flow;
+    int *adjdata, *adjsizes, *matching;
+    int **adjlists;
     void *scratch;
-    int ne, scratchsize;
     int i, j, k;
-    digit *row, *col, *numinv, *num;
+    digit *row;
 
     /*
      * To efficiently generate a latin square in such a way that
@@ -1111,123 +1154,75 @@ digit *latin_generate(int o, random_state *rs)
      * the theorem guarantees that we will never have to backtrack.
      *
      * To find a viable row at each stage, we can make use of the
-     * support functions in maxflow.c.
+     * support functions in matching.c.
      */
 
     sq = snewn(o*o, digit);
 
     /*
-     * In case this method of generation introduces a really subtle
-     * top-to-bottom directional bias, we'll generate the rows in
-     * random order.
+     * matching.c will take care of randomising the generation of each
+     * row of the square, but in case this entire method of generation
+     * introduces a really subtle top-to-bottom directional bias,
+     * we'll also generate the rows themselves in random order.
      */
     row = snewn(o, digit);
-    col = snewn(o, digit);
-    numinv = snewn(o, digit);
-    num = snewn(o, digit);
     for (i = 0; i < o; i++)
 	row[i] = i;
     shuffle(row, i, sizeof(*row), rs);
 
     /*
-     * Set up the infrastructure for the maxflow algorithm.
+     * Set up the infrastructure for the matching subroutine.
      */
-    scratchsize = maxflow_scratch_size(o * 2 + 2);
-    scratch = smalloc(scratchsize);
-    backedges = snewn(o*o + 2*o, int);
-    edges = snewn((o*o + 2*o) * 2, int);
-    capacity = snewn(o*o + 2*o, int);
-    flow = snewn(o*o + 2*o, int);
-    /* Set up the edge array, and the initial capacities. */
-    ne = 0;
-    for (i = 0; i < o; i++) {
-	/* Each LHS vertex is connected to all RHS vertices. */
-	for (j = 0; j < o; j++) {
-	    edges[ne*2] = i;
-	    edges[ne*2+1] = j+o;
-	    /* capacity for this edge is set later on */
-	    ne++;
-	}
-    }
-    for (i = 0; i < o; i++) {
-	/* Each RHS vertex is connected to the distinguished sink vertex. */
-	edges[ne*2] = i+o;
-	edges[ne*2+1] = o*2+1;
-	capacity[ne] = 1;
-	ne++;
-    }
-    for (i = 0; i < o; i++) {
-	/* And the distinguished source vertex connects to each LHS vertex. */
-	edges[ne*2] = o*2;
-	edges[ne*2+1] = i;
-	capacity[ne] = 1;
-	ne++;
-    }
-    assert(ne == o*o + 2*o);
-    /* Now set up backedges. */
-    maxflow_setup_backedges(ne, edges, backedges);
-    
+    scratch = smalloc(matching_scratch_size(o, o));
+    adjdata = snewn(o*o, int);
+    adjlists = snewn(o, int *);
+    adjsizes = snewn(o, int);
+    matching = snewn(o, int);
+
     /*
      * Now generate each row of the latin square.
      */
     for (i = 0; i < o; i++) {
-	/*
-	 * To prevent maxflow from behaving deterministically, we
-	 * separately permute the columns and the digits for the
-	 * purposes of the algorithm, differently for every row.
-	 */
-	for (j = 0; j < o; j++)
-	    col[j] = num[j] = j;
-	shuffle(col, j, sizeof(*col), rs);
-	shuffle(num, j, sizeof(*num), rs);
-	/* We need the num permutation in both forward and inverse forms. */
-	for (j = 0; j < o; j++)
-	    numinv[num[j]] = j;
+        /*
+         * Make adjacency lists for a bipartite graph joining each
+         * column to all the numbers not yet placed in that column.
+         */
+        for (j = 0; j < o; j++) {
+            int *p, *adj = adjdata + j*o;
+            for (k = 0; k < o; k++)
+                adj[k] = 1;
+            for (k = 0; k < i; k++)
+                adj[sq[row[k]*o + j] - 1] = 0;
+            adjlists[j] = p = adj;
+            for (k = 0; k < o; k++)
+                if (adj[k])
+                    *p++ = k;
+            adjsizes[j] = p - adjlists[j];
+        }
 
 	/*
-	 * Set up the capacities for the maxflow run, by examining
-	 * the existing latin square.
+	 * Run the matching algorithm.
 	 */
-	for (j = 0; j < o*o; j++)
-	    capacity[j] = 1;
-	for (j = 0; j < i; j++)
-	    for (k = 0; k < o; k++) {
-		int n = num[sq[row[j]*o + col[k]] - 1];
-		capacity[k*o+n] = 0;
-	    }
-
-	/*
-	 * Run maxflow.
-	 */
-	j = maxflow_with_scratch(scratch, o*2+2, 2*o, 2*o+1, ne,
-				 edges, backedges, capacity, flow, NULL);
+	j = matching_with_scratch(scratch, o, o, adjlists, adjsizes,
+                                  rs, matching, NULL);
 	assert(j == o);   /* by the above theorem, this must have succeeded */
 
 	/*
-	 * And examine the flow array to pick out the new row of
-	 * the latin square.
+	 * And use the output to set up the new row of the latin
+	 * square.
 	 */
-	for (j = 0; j < o; j++) {
-	    for (k = 0; k < o; k++) {
-		if (flow[j*o+k])
-		    break;
-	    }
-	    assert(k < o);
-	    sq[row[i]*o + col[j]] = numinv[k] + 1;
-	}
+	for (j = 0; j < o; j++)
+	    sq[row[i]*o + j] = matching[j] + 1;
     }
 
     /*
      * Done. Free our internal workspaces...
      */
-    sfree(flow);
-    sfree(capacity);
-    sfree(edges);
-    sfree(backedges);
+    sfree(matching);
+    sfree(adjlists);
+    sfree(adjsizes);
+    sfree(adjdata);
     sfree(scratch);
-    sfree(numinv);
-    sfree(num);
-    sfree(col);
     sfree(row);
 
     /*
@@ -1275,12 +1270,12 @@ static int latin_check_cmp(void *v1, void *v2)
 
 #define ELT(sq,x,y) (sq[((y)*order)+(x)])
 
-/* returns non-zero if sq is not a latin square. */
-int latin_check(digit *sq, int order)
+/* returns true if sq is not a latin square. */
+bool latin_check(digit *sq, int order)
 {
     tree234 *dict = newtree234(latin_check_cmp);
     int c, r;
-    int ret = 0;
+    bool ret = false;
     lcparams *lcp, lc, *aret;
 
     /* Use a tree234 as a simple hash table, go through the square
@@ -1303,10 +1298,10 @@ int latin_check(digit *sq, int order)
 
     /* There should be precisely 'order' letters in the alphabet,
      * each occurring 'order' times (making the OxO tree) */
-    if (count234(dict) != order) ret = 1;
+    if (count234(dict) != order) ret = true;
     else {
 	for (c = 0; (lcp = index234(dict, c)) != NULL; c++) {
-	    if (lcp->count != order) ret = 1;
+	    if (lcp->count != order) ret = true;
 	}
     }
     for (c = 0; (lcp = index234(dict, c)) != NULL; c++)
@@ -1315,122 +1310,5 @@ int latin_check(digit *sq, int order)
 
     return ret;
 }
-
-
-/* --------------------------------------------------------
- * Testing (and printing).
- */
-
-#ifdef STANDALONE_LATIN_TEST
-
-#include <stdio.h>
-#include <time.h>
-
-const char *quis;
-
-static void latin_print(digit *sq, int order)
-{
-    int x, y;
-
-    for (y = 0; y < order; y++) {
-	for (x = 0; x < order; x++) {
-	    printf("%2u ", ELT(sq, x, y));
-	}
-	printf("\n");
-    }
-    printf("\n");
-}
-
-static void gen(int order, random_state *rs, int debug)
-{
-    digit *sq;
-
-    solver_show_working = debug;
-
-    sq = latin_generate(order, rs);
-    latin_print(sq, order);
-    if (latin_check(sq, order)) {
-	fprintf(stderr, "Square is not a latin square!");
-	exit(1);
-    }
-
-    sfree(sq);
-}
-
-void test_soak(int order, random_state *rs)
-{
-    digit *sq;
-    int n = 0;
-    time_t tt_start, tt_now, tt_last;
-
-    solver_show_working = 0;
-    tt_now = tt_start = time(NULL);
-
-    while(1) {
-        sq = latin_generate(order, rs);
-        sfree(sq);
-        n++;
-
-        tt_last = time(NULL);
-        if (tt_last > tt_now) {
-            tt_now = tt_last;
-            printf("%d total, %3.1f/s\n", n,
-                   (double)n / (double)(tt_now - tt_start));
-        }
-    }
-}
-
-void usage_exit(const char *msg)
-{
-    if (msg)
-        fprintf(stderr, "%s: %s\n", quis, msg);
-    fprintf(stderr, "Usage: %s [--seed SEED] --soak <params> | [game_id [game_id ...]]\n", quis);
-    exit(1);
-}
-
-int main(int argc, char *argv[])
-{
-    int i, soak = 0;
-    random_state *rs;
-    time_t seed = time(NULL);
-
-    quis = argv[0];
-    while (--argc > 0) {
-	const char *p = *++argv;
-	if (!strcmp(p, "--soak"))
-	    soak = 1;
-	else if (!strcmp(p, "--seed")) {
-	    if (argc == 0)
-		usage_exit("--seed needs an argument");
-	    seed = (time_t)atoi(*++argv);
-	    argc--;
-	} else if (*p == '-')
-		usage_exit("unrecognised option");
-	else
-	    break; /* finished options */
-    }
-
-    rs = random_new((void*)&seed, sizeof(time_t));
-
-    if (soak == 1) {
-	if (argc != 1) usage_exit("only one argument for --soak");
-	test_soak(atoi(*argv), rs);
-    } else {
-	if (argc > 0) {
-	    for (i = 0; i < argc; i++) {
-		gen(atoi(*argv++), rs, 1);
-	    }
-	} else {
-	    while (1) {
-		i = random_upto(rs, 20) + 1;
-		gen(i, rs, 0);
-	    }
-	}
-    }
-    random_free(rs);
-    return 0;
-}
-
-#endif
 
 /* vim: set shiftwidth=4 tabstop=8: */

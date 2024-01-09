@@ -9,19 +9,17 @@
 
 #include "puzzles.h"
 
-#define ROOT2 1.414213562
-
 struct psdata {
     FILE *fp;
-    int colour;
+    bool colour;
     int ytop;
-    int clipped;
+    bool clipped;
     float hatchthick, hatchspace;
     int gamewidth, gameheight;
     drawing *drawing;
 };
 
-static void ps_printf(psdata *ps, char *fmt, ...)
+static void ps_printf(psdata *ps, const char *fmt, ...)
 {
     va_list ap;
 
@@ -73,7 +71,7 @@ static void ps_fill(psdata *ps, int colour)
     }
 }
 
-static void ps_setcolour_internal(psdata *ps, int colour, char *suffix)
+static void ps_setcolour_internal(psdata *ps, int colour, const char *suffix)
 {
     int hatch;
     float r, g, b;
@@ -102,7 +100,8 @@ static void ps_stroke(psdata *ps, int colour)
 }
 
 static void ps_draw_text(void *handle, int x, int y, int fonttype,
-			 int fontsize, int align, int colour, char *text)
+			 int fontsize, int align, int colour,
+                         const char *text)
 {
     psdata *ps = (psdata *)handle;
 
@@ -158,7 +157,7 @@ static void ps_draw_line(void *handle, int x1, int y1, int x2, int y2,
     ps_stroke(ps, colour);
 }
 
-static void ps_draw_polygon(void *handle, int *coords, int npoints,
+static void ps_draw_polygon(void *handle, const int *coords, int npoints,
 			    int fillcolour, int outlinecolour)
 {
     psdata *ps = (psdata *)handle;
@@ -203,7 +202,7 @@ static void ps_unclip(void *handle)
 
     assert(ps->clipped);
     ps_printf(ps, "grestore\n");
-    ps->clipped = FALSE;
+    ps->clipped = false;
 }
  
 static void ps_clip(void *handle, int x, int y, int w, int h)
@@ -221,7 +220,7 @@ static void ps_clip(void *handle, int x, int y, int w, int h)
     ps_printf(ps, "newpath %g %g moveto %d 0 rlineto 0 %d rlineto"
 	      " %d 0 rlineto closepath\n", x - 0.5, y + 0.5, w, -h, -w);
     ps_printf(ps, "clip\n");
-    ps->clipped = TRUE;
+    ps->clipped = true;
 }
 
 static void ps_line_width(void *handle, float width)
@@ -231,7 +230,7 @@ static void ps_line_width(void *handle, float width)
     ps_printf(ps, "%g setlinewidth\n", width);
 }
 
-static void ps_line_dotted(void *handle, int dotted)
+static void ps_line_dotted(void *handle, bool dotted)
 {
     psdata *ps = (psdata *)handle;
 
@@ -352,7 +351,7 @@ static void ps_begin_puzzle(void *handle, float xm, float xc,
 	    "%g dup scale\n"
 	    "0 -%d translate\n", xm, xc, ym, yc, wmm/pw, ph);
     ps->ytop = ph;
-    ps->clipped = FALSE;
+    ps->clipped = false;
     ps->gamewidth = pw;
     ps->gameheight = ph;
     ps->hatchthick = 0.2 * pw / wmm;
@@ -407,14 +406,14 @@ static const struct drawing_api ps_drawing = {
     ps_text_fallback,
 };
 
-psdata *ps_init(FILE *outfile, int colour)
+psdata *ps_init(FILE *outfile, bool colour)
 {
     psdata *ps = snew(psdata);
 
     ps->fp = outfile;
     ps->colour = colour;
     ps->ytop = 0;
-    ps->clipped = FALSE;
+    ps->clipped = false;
     ps->hatchthick = ps->hatchspace = ps->gamewidth = ps->gameheight = 0;
     ps->drawing = drawing_new(&ps_drawing, NULL, ps);
 

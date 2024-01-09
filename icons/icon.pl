@@ -85,9 +85,12 @@
 @dat = ();
 
 $depth = undef;
+$convert = "convert";
 foreach $_ (@ARGV) {
     if (/^-(24|8|4|1)$/) {
 	$depth = $1;
+    } elsif (/^--convert=(.*)$/) {
+        $convert = $1;
     } elsif (defined $depth) {
 	&readicon($_, $depth);
     } else {
@@ -127,7 +130,7 @@ sub readicon {
     # point, to avoid having to do it ourselves (.BMP and hence
     # .ICO are bottom-up).
     my $data = [];
-    open IDATA, "convert -flip -depth 8 $filename rgba:- |";
+    open IDATA, "-|", $convert, "-set", "colorspace", "sRGB", "-flip", "-depth", "8", $filename, "rgba:-";
     push @$data, $rgb while (read IDATA,$rgb,4,0) == 4;
     close IDATA;
     # Check we have the right amount of data.
@@ -203,7 +206,8 @@ sub readicon {
 		$currbits += $depth;
 		if ($x < $w && defined ($pix = $data->[$y*$w+$x])) {
 		    if (!defined $pal{$pix}) {
-			die "illegal colour value $pix at pixel $i in $filename\n";
+                        my $pixprintable = unpack "H*", $pix;
+			die "illegal colour value $pixprintable at pixel ($x,$y) in $filename\n";
 		    }
 		    $currbyte |= $pal{$pix};
 		}

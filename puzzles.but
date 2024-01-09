@@ -12,6 +12,13 @@
 \cfg{html-contents-depth-0}{1}
 \cfg{html-contents-depth-1}{2}
 \cfg{html-leaf-contains-contents}{true}
+\cfg{html-head-end}{<meta name="viewport" content="width=device-width, initial-scale=1">}
+
+\cfg{chm-filename}{puzzles.chm}
+\cfg{chm-contents-filename}{index.html}
+\cfg{chm-template-filename}{%k.html}
+\cfg{chm-head-end}{<link rel="stylesheet" type="text/css" href="chm.css">}
+\cfg{chm-extra-file}{chm.css}
 
 \cfg{info-filename}{puzzles.info}
 
@@ -30,7 +37,7 @@
 
 This is a collection of small one-player puzzle games.
 
-\copyright This manual is copyright 2004-2014 Simon Tatham. All rights
+\copyright This manual is copyright 2004-2024 Simon Tatham. All rights
 reserved. You may distribute this documentation under the MIT licence.
 See \k{licence} for the licence text in full.
 
@@ -65,13 +72,13 @@ with the game binaries or the code, except pretending you wrote them
 yourself, or suing me if anything goes wrong. 
 
 The most recent versions, and \i{source code}, can be found at
-\I{website}\W{http://www.chiark.greenend.org.uk/~sgtatham/puzzles/}\cw{http://www.chiark.greenend.org.uk/~sgtatham/puzzles/}.
+\I{website}\W{https://www.chiark.greenend.org.uk/~sgtatham/puzzles/}\cw{https://www.chiark.greenend.org.uk/~sgtatham/puzzles/}.
 
 Please report \I{feedback}\i{bugs} to
 \W{mailto:anakin@pobox.com}\cw{anakin@pobox.com}.
 You might find it helpful to read this article before reporting a bug:
 
-\W{http://www.chiark.greenend.org.uk/~sgtatham/bugs.html}\cw{http://www.chiark.greenend.org.uk/~sgtatham/bugs.html}
+\W{https://www.chiark.greenend.org.uk/~sgtatham/bugs.html}\cw{https://www.chiark.greenend.org.uk/~sgtatham/bugs.html}
 
 \ii{Patches} are welcome. Especially if they provide a new front end
 (to make all these games run on another platform), or a new game.
@@ -124,12 +131,12 @@ current puzzle. (Only for puzzles which make sense to print, of
 course \dash it's hard to think of a sensible printable representation
 of Fifteen!)
 
-\dt \ii\e{Undo} (\q{U}, Ctrl+\q{Z}, Ctrl+\q{_})
+\dt \ii\e{Undo} (\q{U}, Ctrl+\q{Z}, Ctrl+\q{_}, \q{*})
 
 \dd Undoes a single move. (You can undo moves back to the start of the
 session.)
 
-\dt \ii\e{Redo} (\q{R}, Ctrl+\q{R})
+\dt \ii\e{Redo} (\q{R}, Ctrl+\q{R}, \q{#})
 
 \dd Redoes a previously undone move.
 
@@ -170,6 +177,22 @@ solving it yourself after seeing the answer, you can just press Undo.
 \dt \I{exit}\ii\e{Quit} (\q{Q}, Ctrl+\q{Q})
 
 \dd Closes the application entirely.
+
+\dt \i\e{Preferences}
+
+\dd Where supported, brings up a dialog allowing you to configure
+personal preferences about a particular game. Some of these
+preferences will be specific to a particular game; others will be
+common to all games.
+
+\lcont{
+
+One option common to all games allows you to turn off the one-key
+shortcuts like \q{N} for new game or \q{Q} for quit, so that there's
+less chance of hitting them by accident. You can still access the same
+shortcuts with the Ctrl key.
+
+}
 
 \H{common-id} Specifying games with the \ii{game ID}
 
@@ -341,6 +364,11 @@ The most common use of this option is in conjunction with \c{--print},
 in which case its behaviour is slightly different; see below.
 
 }
+
+\dt \cw{--delete-prefs}
+
+\dd This option causes the puzzle to delete the configuration file in
+which its user preferences were stored, if there is one.
 
 \dt \I{printing, on Unix}\cw{--print }\e{w}\cw{x}\e{h}
 
@@ -529,6 +557,16 @@ feature and risk having ambiguous puzzles. (Also, finding \e{all}
 the possible solutions can be an additional challenge for an
 advanced player.)
 
+\H{net-prefs} \I{preferences, for Net}Net user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure when loops are highlighted
+as errors. By default, they're always highlighted; by changing this
+option, you can ask for a loop to be highlighted only if every tile
+forming part of the loop is locked. This avoids the loop highlighting
+acting as a spoiler for available deductions about squares you haven't
+even looked at yet.
+
 
 \C{cube} \i{Cube}
 
@@ -595,7 +633,8 @@ respectively.
 \cfg{winhelp-topic}{games.fifteen}
 
 The old ones are the best: this is the good old \q{\i{15-puzzle}}
-with sliding tiles. You have a 4\by\.4 square grid; 15 squares
+with sliding tiles, which dates from the 1870s.
+You have a 4\by\.4 square grid; 15 squares
 contain numbered tiles, and the sixteenth is empty. Your move is to
 choose a tile next to the empty space, and slide it into the space.
 The aim is to end up with the tiles in numerical order, with the
@@ -614,8 +653,13 @@ A left-click with the mouse in the row or column containing the empty
 space will move as many tiles as necessary to move the space to the
 mouse pointer.
 
-The arrow keys will move a tile adjacent to the space in the direction
-indicated (moving the space in the \e{opposite} direction).
+By default, the arrow keys will move a tile adjacent to the space in
+the direction indicated (moving the space in the \e{opposite}
+direction).
+
+Pressing \q{h} will make a suggested move.  Pressing \q{h} enough
+times will solve the game, but it may scramble your progress while
+doing so.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -624,6 +668,18 @@ indicated (moving the space in the \e{opposite} direction).
 The only options available from the \q{Custom...} option on the \q{Type}
 menu are \e{Width} and \e{Height}, which are self-explanatory. (Once
 you've changed these, it's not a \q{15-puzzle} any more, of course!)
+
+\H{fifteen-prefs} \I{preferences, for Fifteen}Fifteen user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure the sense of the arrow
+keys. With the default setting, \q{Move the tile}, the arrow key you
+press indicates the direction that you want a tile to move, so that
+(for example) if you want to move the tile left of the gap rightwards
+into the gap, you'd press Right. With the opposite setting, \q{Move
+the gap}, the behaviour of the arrow keys is reversed, and you would
+press Left to move the tile left of the gap into the gap, so that the
+\e{gap} ends up one square left of where it was.
 
 
 \C{sixteen} \i{Sixteen}
@@ -657,6 +713,13 @@ direction.
 Alternatively, use the cursor keys to move the position indicator
 around the edge of the grid, and use the return key to move the
 row/column in the direction indicated. 
+
+You can also move the tiles directly.  Move the cursor onto a tile,
+hold Control and press an arrow key to move the tile under the
+cursor and move the cursor along with the tile.  Or, hold Shift to
+move only the tile.  Pressing Enter simulates holding down Control
+(press Enter again to release), while pressing Space simulates
+holding down shift.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -749,7 +812,7 @@ for, the more likely it is that solutions shorter than the target
 length will turn out to be possible.
 
 
-\C{rectangles} \i{Rectangles}
+\C{rect} \i{Rectangles}
 
 \cfg{winhelp-topic}{games.rectangles}
 
@@ -768,9 +831,9 @@ quite as good as hand-crafted puzzles would be, but on the plus side
 you get an inexhaustible supply of puzzles tailored to your own
 specification.
 
-\B{nikoli-rect} \W{http://www.nikoli.co.jp/puzzles/7/index_text-e.htm}\cw{http://www.nikoli.co.jp/puzzles/7/index_text-e.htm}
+\B{nikoli-rect} \W{https://www.nikoli.co.jp/en/puzzles/shikaku/}\cw{https://www.nikoli.co.jp/en/puzzles/shikaku/}
 
-\B{puzzle-palace-rect} \W{http://www.puzzle.gr.jp/puzzle/sikaku/palm/index.html.en}\cw{http://www.puzzle.gr.jp/puzzle/sikaku/palm/index.html.en}
+\B{puzzle-palace-rect} \W{https://web.archive.org/web/20041024001459/http://www.puzzle.gr.jp/puzzle/sikaku/palm/index.html.en}\cw{https://web.archive.org/web/20041024001459/http://www.puzzle.gr.jp/puzzle/sikaku/palm/index.html.en}
 
 \H{rectangles-controls} \I{controls, for Rectangles}Rectangles controls
 
@@ -786,7 +849,8 @@ around the board. Pressing the return key then allows you to use the
 cursor keys to drag a rectangle out from that position, and pressing
 the return key again completes the rectangle. Using the space bar
 instead of the return key allows you to erase the contents of a
-rectangle without affecting its edges, as above.
+rectangle without affecting its edges, as above. Pressing escape
+cancels a drag.
 
 When a rectangle of the correct size is completed, it will be shaded.
 
@@ -861,10 +925,10 @@ Netslide was contributed to this collection by Richard Boulton.
 \cfg{winhelp-topic}{games.pattern}
 
 You have a grid of squares, which must all be filled in either black
-or white. Beside each row of the grid are listed the lengths of the
-runs of black squares on that row; above each column are listed the
-lengths of the runs of black squares in that column. Your aim is to
-fill in the entire grid black or white.
+or white. Beside each row of the grid are listed, in order, the
+lengths of the runs of black squares on that row; above each column
+are listed, in order, the lengths of the runs of black squares in that
+column. Your aim is to fill in the entire grid black or white.
 
 I first saw this puzzle form around 1995, under the name
 \q{\i{nonograms}}. I've seen it in various places since then, under
@@ -896,6 +960,10 @@ grey.
 You can also move around the grid with the cursor keys. Pressing the
 return key will cycle the current cell through empty, then black, then
 white, then empty, and the space bar does the same cycle in reverse.
+
+Moving the cursor while holding Control will colour the moved-over
+squares black.  Holding Shift will colour the moved-over squares
+white, and holding both will colour them grey.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -954,7 +1022,7 @@ of the modern form of the puzzle, and it was first published in
 of the history of the puzzle can be found on Wikipedia
 \k{wikipedia-solo}.
 
-\B{nikoli-solo} \W{http://www.nikoli.co.jp/puzzles/1/index_text-e.htm}\cw{http://www.nikoli.co.jp/puzzles/1/index_text-e.htm}
+\B{nikoli-solo} \W{https://www.nikoli.co.jp/en/puzzles/sudoku/}\cw{https://www.nikoli.co.jp/en/puzzles/sudoku/}
 
 \B{wikipedia-solo} \W{http://en.wikipedia.org/wiki/Sudoku}\cw{http://en.wikipedia.org/wiki/Sudoku}
 
@@ -1313,9 +1381,18 @@ after marking.
 
 Alternatively, with the keyboard, the up and down cursor keys can be
 used to select a peg colour, the left and right keys to select a
-peg position, and the space bar or Enter key to place a peg of the
+peg position, and the Enter key to place a peg of the
 selected colour in the chosen position. \q{D} or Backspace removes a
-peg, and \q{H} adds a hold marker.
+peg, and Space adds a hold marker.
+
+The number keys can also be used to insert pegs: \q{1} inserts the
+top-most colour, \q{2} the second one, and so forth.  These also
+move the peg cursor to the right.  Pressing \q{L} will label the
+pegs with their numbers.
+
+Pressing \q{h} or \q{?} will fill the current guess with a suggested
+guess.  Using this is not recommended for 10 or more pegs as it is
+slow.
 
 When the guess is complete, the smaller feedback pegs will be highlighted;
 clicking on these (or moving the peg cursor to them with the arrow keys
@@ -1367,6 +1444,13 @@ that, use one extra colour.
 this increases the search space (making things harder), and is turned on by
 default.
 
+\H{guess-prefs} \I{preferences, for Guess}Guess user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure whether pegs are labelled
+with their numbers.  Unlike the \q{L} key, this will persist between
+games.
+
 
 \C{pegs} \i{Pegs}
 
@@ -1414,8 +1498,9 @@ These parameters are available from the \q{Custom...} option on the
 
 \dd Controls whether you are given a board of a standard shape or a
 randomly generated shape. The two standard shapes currently
-supported are \q{Cross} and \q{Octagon} (also commonly known as the
-English and European traditional board layouts respectively).
+supported are \q{Cross} (in various sizes) and \q{Octagon}.
+The 7\by\.7 Cross is the traditional English board layout.
+The Octagon is the traditional French one.
 Selecting \q{Random} will give you a different board shape every
 time (but always one that is known to have a solution).
 
@@ -1454,6 +1539,10 @@ the return key will place a domino covering those numbers, or
 pressing the space bar will lay a line between the two squares.
 Repeating either action removes the domino or line.
 
+Pressing a number key will highlight all occurrences of that
+number. Pressing that number again will clear the highlighting. Up to two
+different numbers can be highlighted at any given time.
+
 (All the actions described in \k{common-actions} are also available.)
 
 \H{dominosa-parameters} \I{parameters, for Dominosa}Dominosa parameters
@@ -1489,7 +1578,7 @@ to position the points so that no line crosses another.
 I originally saw this in the form of a Flash game called \i{Planarity}
 \k{Planarity}, written by John Tantalo.
 
-\B{Planarity} \W{http://home.cwru.edu/~jnt5/Planarity}\cw{http://home.cwru.edu/~jnt5/Planarity}
+\B{Planarity} \W{http://planarity.net}\cw{http://planarity.net}
 
 \H{untangle-controls} \i{Untangle controls}
 
@@ -1527,11 +1616,11 @@ affected by balls in one of the following ways:
    re-emerge. This includes beams that meet a ball on the first rank
    of the arena.
 
-\b A beam with a ball to its front-left square gets deflected 90 degrees
-   to the right.
+\b A beam with a ball in its front-left square and no ball ahead of it
+   gets deflected 90 degrees to the right.
 
-\b A beam with a ball to its front-right square gets similarly deflected 
-   to the left. 
+\b A beam with a ball in its front-right square and no ball ahead of
+   it gets similarly deflected to the left.
 
 \b A beam that would re-emerge from its entry location is considered to be
    \q{reflected}. 
@@ -1561,7 +1650,7 @@ of the beam behaviours shown above:
 \c |......O.|
 \c H........|
 \c |.....O..|
-\c  12-RH---
+\c  12-RR---
 
 As shown, it is possible for a beam to receive multiple reflections
 before re-emerging (see turn 3). Similarly, a beam may be reflected
@@ -1682,7 +1771,7 @@ grid because that would immediately cause a loop.)
 Credit for this puzzle goes to \i{Nikoli} \k{nikoli-slant}.
 
 \B{nikoli-slant}
-\W{http://www.nikoli.co.jp/puzzles/39/index.htm}\cw{http://www.nikoli.co.jp/puzzles/39/index.htm}
+\W{https://www.nikoli.co.jp/ja/puzzles/gokigen_naname/}\cw{https://www.nikoli.co.jp/ja/puzzles/gokigen_naname/}
 (in Japanese)
 
 \H{slant-controls} \i{Slant controls}
@@ -1704,7 +1793,10 @@ the game entirely with one button if you need to.)
 
 You can also use the cursor keys to move around the grid. Pressing the
 return or space keys will place a \cw{\\} or a \cw{/}, respectively,
-and will then cycle them as above.
+and will then cycle them as above.  You can also press \cw{/} or
+\cw{\\} to place a \cw{/} or \cw{\\}, respectively, independent of
+what is already in the cursor square.  Backspace removes any line from
+the cursor square.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -1727,6 +1819,12 @@ might know that two squares slant in the same direction, even if you
 don't yet know what that direction is, and this might enable you to
 deduce something about still other squares.) Even at Hard level,
 guesswork and backtracking should never be necessary.
+
+\H{slant-prefs} \I{preferences, for Slant}Slant user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure which way round the mouse
+buttons work.
 
 
 \C{lightup} \i{Light Up}
@@ -1757,8 +1855,7 @@ Credit for this puzzle goes to \i{Nikoli} \k{nikoli-lightup}.
 Light Up was contributed to this collection by James Harvey.
 
 \B{nikoli-lightup}
-\W{http://www.nikoli.co.jp/puzzles/32/index-e.htm}\cw{http://www.nikoli.co.jp/puzzles/32/index-e.htm}
-(beware of Flash)
+\W{https://www.nikoli.co.jp/en/puzzles/akari/}\cw{https://www.nikoli.co.jp/en/puzzles/akari/}
 
 \H{lightup-controls} \i{Light Up controls}
 
@@ -1812,6 +1909,12 @@ noticeably.)
 backtracking or guessing, \q{Hard} means that some guesses will
 probably be necessary.
 
+\H{lightup-prefs} \I{preferences, for Light Up}Light Up user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure whether \q{this is not a
+light} marks are shown when the square is also lit.
+
 
 \C{map} \i{Map}
 
@@ -1821,7 +1924,7 @@ You are given a map consisting of a number of regions. Your task is
 to colour each region with one of four colours, in such a way that
 no two regions sharing a boundary have the same colour. You are
 provided with some regions already coloured, sufficient to make the
-remainder of the solution unique.
+remainder of the solution unique, and these cannot be changed.
 
 Only regions which share a length of border are required to be
 different colours. Two regions which meet at only one \e{point}
@@ -1829,9 +1932,9 @@ different colours. Two regions which meet at only one \e{point}
 
 I believe this puzzle is original; I've never seen an implementation
 of it anywhere else. The concept of a \i{four-colouring} puzzle was
-suggested by Owen Dunn; credit must also go to Nikoli and to Verity
+suggested by Alexandra Lanes; credit must also go to Nikoli and to Verity
 Allan for inspiring the train of thought that led to me realising
-Owen's suggestion was a viable puzzle. Thanks also to Gareth Taylor
+Alex's suggestion was a viable puzzle. Thanks also to Gareth Taylor
 for many detailed suggestions.
 
 \H{map-controls} \i{Map controls}
@@ -1905,6 +2008,12 @@ Unreasonable puzzles may require guessing and backtracking.
 
 }
 
+\H{map-prefs} \I{preferences, for Map}Map user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure the style of the victory
+flash and also whether the regions start out labelled with numbers.
+
 
 \C{loopy} \i{Loopy}
 
@@ -1932,8 +2041,7 @@ and subsequently enhanced to handle various types of non-square grid
 by Lambros Lambrou.
 
 \B{nikoli-loopy}
-\W{http://www.nikoli.co.jp/puzzles/3/index-e.htm}\cw{http://www.nikoli.co.jp/puzzles/3/index-e.htm}
-(beware of Flash)
+\W{https://www.nikoli.co.jp/en/puzzles/slitherlink/}\cw{https://www.nikoli.co.jp/en/puzzles/slitherlink/}
 
 \H{loopy-controls} \i{Loopy controls}
 
@@ -1978,6 +2086,34 @@ same; this makes them the least confusing to play.
 \#{FIXME: what distinguishes Easy, Medium, and Hard? In particular,
 when are backtracking/guesswork required, if ever?}
 
+\H{loopy-prefs} \I{preferences, for Loopy}Loopy user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure the following things:
+
+\q{Draw excluded grid lines faintly}. This is on by default: when a
+line of the grid has been explicitly excluded from the solution by
+right-clicking it, the line is still drawn, just in a faint grey
+colour. If you turn this option off, excluded lines are not drawn at
+all.
+
+\q{Auto-follow unique paths of edges}. This is off by default. When
+it's on, clicking to change the status of a single grid line will
+potentially propagate the change along multiple lines, if one or both
+ends of the line you clicked connect to only one other line. (The idea
+is that if two lines meet at a vertex and no other lines do at all,
+then those lines are either both part of the loop or neither, so
+there's no reason you should have to click separately to toggle each
+one.)
+
+In the mode \q{Based on grid only}, the effects of a click will only
+propagate across vertices that have degree 2 in the underlying grid.
+For example, in the square grid, the effect will \e{only} occur at the
+four grid corners.
+
+In the mode \q{Based on grid and game state}, the propagation will
+also take account of edges you've already excluded from the solution,
+so that it will do even more work for you.
 
 \C{inertia} \i{Inertia}
 
@@ -2024,9 +2160,7 @@ begin on this path. If you then move in that direction, the arrow
 will update to indicate the next direction on the path. You can also
 press Space to automatically move in the direction of the hint
 arrow. If you move in a different direction from the one shown by
-the arrow, the hint arrows will stop appearing because you have
-strayed from the provided path; you can then use \q{Solve} again to
-generate a new path if you want to.
+the arrow, arrows will be shown only if the puzzle is still solvable.
 
 All the actions described in \k{common-actions} are also available.
 In particular, if you do run into a mine and die, you can use the
@@ -2085,7 +2219,9 @@ remainder of a row once you have placed all its tents.)
 You can also use the cursor keys to move around the grid. Pressing the
 return key over an empty square will place a tent, and pressing the
 space bar over an empty square will colour it green; either key will
-clear an occupied square.
+clear an occupied square.  Holding Shift and pressing the cursor keys
+will colour empty squares green.  Holding Control and pressing the
+cursor keys will colour green both empty squares and squares with tents.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -2136,7 +2272,7 @@ Credit for this puzzle goes to \i{Nikoli} \k{nikoli-bridges}.
 Bridges was contributed to this collection by James Harvey.
 
 \B{nikoli-bridges}
-\W{http://www.nikoli.co.jp/puzzles/14/index-e.htm}\cw{http://www.nikoli.co.jp/puzzles/14/index-e.htm}
+\W{https://www.nikoli.co.jp/en/puzzles/Hashiwokakero/}\cw{https://www.nikoli.co.jp/en/puzzles/Hashiwokakero/}
 
 \H{bridges-controls} \i{Bridges controls}
 
@@ -2168,12 +2304,21 @@ it and restore your ability to modify it.
 
 You can also use the cursor keys to move around the grid: if possible
 the cursor will always move orthogonally, otherwise it will move
-towards the nearest island to the indicated direction. Pressing the
-return key followed by a cursor key will lay a bridge in that direction
-(if available); pressing the space bar followed by a cursor key will
-lay a \q{non-bridge} marker.
+towards the nearest island to the indicated direction. Holding Control
+and pressing a cursor key will lay a bridge in that direction (if
+available); Shift and a cursor key will lay a \q{non-bridge} marker.
+Pressing the return key followed by a cursor key will also lay a
+bridge in that direction.
 
-You can mark an island as finished by pressing the return key twice.
+You can mark an island as finished by pressing the space bar or by
+pressing the return key twice.
+
+By pressing a number key, you can jump to the nearest island with that
+number.  Letters \q{a}, ..., \q{f} count as 10, ..., 15 and \q{0} as
+16.
+
+The \q{G} key will draw a grey line between each pair of islands that
+could be connected with a bridge or non-bridge but are currently not.
 
 Violations of the puzzle rules will be marked in red:
 
@@ -2246,6 +2391,13 @@ tightly-packed islands.
 
 }
 
+\H{bridges-prefs} \I{preferences, for Bridges}Bridges user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure whether possible bridge
+locations are shown.  Unlike the \q{G} key, this will persist between
+games.
+
 
 \C{unequal} \i{Unequal}
 
@@ -2312,8 +2464,8 @@ a number, or when you left-click and press space. Right-clicking and
 pressing space will also erase pencil marks.
 
 As for Solo, the cursor keys can be used in conjunction with the digit
-keys to set numbers or pencil marks. You can also use the 'M' key to
-auto-fill every numeric hint, ready for removal as required, or the 'H'
+keys to set numbers or pencil marks. You can also use the \q{M} key to
+auto-fill every numeric hint, ready for removal as required, or the \q{H}
 key to do the same but also to remove all obvious hints. 
 
 Alternatively, use the cursor keys to move the mark around the grid.
@@ -2321,6 +2473,11 @@ Pressing the return key toggles the mark (from a normal mark to a
 pencil mark), and typing a number in is entered in the square in the
 appropriate way; typing in a 0 or using the space bar will clear a
 filled square. 
+
+Left-clicking a clue will mark it as done (grey it out), or unmark it
+if it is already marked.  Holding Control or Shift and pressing an
+arrow key likewise marks any clue adjacent to the cursor in the given
+direction.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -2353,10 +2510,15 @@ increasingly complex reasoning to avoid having to backtrack.
 \cfg{winhelp-topic}{games.galaxies}
 
 You have a rectangular grid containing a number of dots. Your aim is
-to draw edges along the grid lines which divide the rectangle into
-regions in such a way that every region is 180\u00b0{-degree}
-rotationally symmetric, and contains exactly one dot which is
-located at its centre of symmetry.
+to partition the rectangle into connected regions of squares, in such
+a way that every region is 180\u00b0{-degree} rotationally symmetric,
+and contains exactly one dot which is located at its centre of
+symmetry.
+
+To enter your solution, you draw lines along the grid edges to mark
+the boundaries of the regions. The puzzle is complete when the marked
+lines on the grid are precisely those that separate two squares
+belonging to different regions.
 
 This puzzle was invented by \i{Nikoli} \k{nikoli-galaxies}, under
 the name \q{Tentai Show}; its name is commonly translated into
@@ -2364,18 +2526,18 @@ English as \q{Spiral Galaxies}.
 
 Galaxies was contributed to this collection by James Harvey.
 
-\B{nikoli-galaxies} \W{http://www.nikoli.co.jp/en/puzzles/astronomical_show/}\cw{http://www.nikoli.co.jp/en/puzzles/astronomical_show/}
+\B{nikoli-galaxies} \W{https://www.nikoli.co.jp/en/puzzles/tentai_show/}\cw{https://www.nikoli.co.jp/en/puzzles/tentai_show/}
 
 \H{galaxies-controls} \i{Galaxies controls}
 
 \IM{Galaxies controls} controls, for Galaxies
 
 Left-click on any grid line to draw an edge if there isn't one
-already, or to remove one if there is. When you create a valid
-region (one which is closed, contains exactly one dot, is
-180\u00b0{-degree} symmetric about that dot, and contains no
-extraneous edges inside it) it will be highlighted automatically; so
-your aim is to have the whole grid highlighted in that way.
+already, or to remove one if there is. When you create a valid region
+(one which is closed, contains exactly one dot, is 180\u00b0{-degree}
+symmetric about that dot, and contains no extraneous edges between two
+of its own squares), it will be highlighted automatically; so your aim
+is to have the whole grid highlighted in that way.
 
 During solving, you might know that a particular grid square belongs
 to a specific dot, but not be sure of where the edges go and which
@@ -2437,7 +2599,7 @@ Credit for this puzzle goes to \i{Nikoli} \k{nikoli-fillomino}.
 Filling was contributed to this collection by Jonas K\u00F6{oe}lker.
 
 \B{nikoli-fillomino}
-\W{http://www.nikoli.co.jp/en/puzzles/fillomino/}\cw{http://www.nikoli.co.jp/en/puzzles/fillomino/}
+\W{https://www.nikoli.co.jp/en/puzzles/fillomino/}\cw{https://www.nikoli.co.jp/en/puzzles/fillomino/}
 
 \H{filling-controls} \I{controls, for Filling}Filling controls
 
@@ -2449,10 +2611,11 @@ press 0, Space, Backspace or Enter to clear it again (or use the Undo
 feature).
 
 You can also move around the grid with the cursor keys; typing a digit will
-fill the square containing the cursor with that number, or typing 0, Space,
-or Enter will clear it. You can also select multiple squares for numbering
-or clearing by using the return key, before typing a digit to fill in the
-highlighted squares (as above).
+fill the square containing the cursor with that number; typing 0 will clear
+it.  You can also select multiple squares for numbering or clearing with the
+return and arrow keys, before typing a digit to fill or clear the highlighted
+squares (as above).  The space bar adds and removes single squares to and from
+the selection.  Backspace and escape remove all squares from the selection.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -2567,6 +2730,10 @@ level, some backtracking will be required, but the solution should
 still be unique. The remaining levels require increasingly complex
 reasoning to avoid having to backtrack.
 
+\dt \e{Multiplication only}
+
+\dd If this is enabled, all boxes will be multiplication boxes.
+With this rule, the puzzle is known as \q{Inshi No Heya}.
 
 \C{towers} \i{Towers}
 
@@ -2637,6 +2804,10 @@ mode in which you can enter or remove pencil marks.
 Pressing M will fill in a full set of pencil marks in every square
 that does not have a main digit in it.
 
+Left-clicking a clue will mark it as done (grey it out), or unmark it
+if it is already marked.  Holding Control or Shift and pressing an
+arrow key likewise marks any clue in the given direction.
+
 (All the actions described in \k{common-actions} are also available.)
 
 \H{towers-parameters} \I{parameters, for Towers}Towers parameters
@@ -2656,6 +2827,14 @@ These parameters are available from the \q{Custom...} option on the
 level, some backtracking will be required, but the solution should
 still be unique. The remaining levels require increasingly complex
 reasoning to avoid having to backtrack.
+
+\H{towers-prefs} \I{preferences, for Towers}Towers user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure the style of the game
+display. If you don't like the three-dimensional mode, selecting
+\q{2D} will switch to a simpler display style in which towers are
+shown by just writing their height in the square.
 
 
 \C{singles} \i{Singles}
@@ -2680,8 +2859,7 @@ Credit for this puzzle goes to \i{Nikoli} \k{nikoli-hitori} who call it
 Singles was contributed to this collection by James Harvey.
 
 \B{nikoli-hitori}
-\W{http://www.nikoli.com/en/puzzles/hitori/index.html}\cw{http://www.nikoli.com/en/puzzles/hitori/index.html}
-(beware of Flash)
+\W{https://www.nikoli.co.jp/en/puzzles/hitori/}\cw{https://www.nikoli.co.jp/en/puzzles/hitori/}
 
 \H{singles-controls} \i{Singles controls}
 
@@ -2689,7 +2867,9 @@ Singles was contributed to this collection by James Harvey.
 
 Left-clicking on an empty square will colour it black; left-clicking again 
 will restore the number. Right-clicking will add a circle (useful for 
-indicating that a cell is definitely not black). 
+indicating that a cell is definitely not black). Clicking outside the
+grid will toggle whether black squares completely hide the numbers on
+them, or display them in dark grey.
 
 You can also use the cursor keys to move around the grid. Pressing the
 return or space keys will turn a square black or add a circle respectively,
@@ -2710,6 +2890,12 @@ These parameters are available from the \q{Custom...} option on the
 
 \dd Controls the difficulty of the generated puzzle.
 
+\H{Singles-prefs} \I{preferences, for Singles}Singles user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure whether numbers on black
+squares are visible.  Unlike clicking outside the grid, this will
+persist between games.
 
 \C{magnets} \i{Magnets}
 
@@ -2747,6 +2933,9 @@ Right-clicking on an empty square places a blank domino there.
 Right-clicking again places two question marks on the domino, signifying
 \q{this cannot be blank} (which can be useful to note deductions while
 solving), and right-clicking again empties the domino. 
+
+Left-clicking a clue will mark it as done (grey it out), or unmark it if
+it is already marked.
 
 You can also use the cursor keys to move a cursor around the grid. 
 Pressing the return key will lay a domino with a positive pole at that
@@ -2861,6 +3050,13 @@ These parameters are available from the \q{Custom...} option on the
 (the start at the top left, and the end at the bottom right). If false the start
 and end squares are placed randomly (although always both shown). 
 
+\H{signpost-prefs} \I{preferences, for Signpost}Signpost user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure the style of the victory
+effect.
+
+
 \C{range} \i{Range}
 
 \cfg{winhelp-topic}{games.range}
@@ -2895,7 +3091,7 @@ it \q{Kurodoko}, \q{Kuromasu} or \q{Where is Black Cells}.
 Range was contributed to this collection by Jonas K\u00F6{oe}lker.
 
 \B{nikoli-range}
-\W{http://www.nikoli.co.jp/en/puzzles/where_is_black_cells/}\cw{http://www.nikoli.co.jp/en/puzzles/where_is_black_cells/}
+\W{https://www.nikoli.co.jp/en/puzzles/kurodoko/}\cw{https://www.nikoli.co.jp/en/puzzles/kurodoko/}
 
 \H{range-controls} \I{controls, for Range}Range controls
 
@@ -2907,7 +3103,10 @@ dotted or empty) in opposite directions.
 
 You can also use the cursor keys to move around the grid squares.
 Pressing Return does the same as clicking with the left button, while
-pressing Space does the same as a right button click.
+pressing Space does the same as a right button click.  Moving with the
+cursor keys while holding Shift will place dots in all squares that
+are moved through.
+
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -2919,6 +3118,13 @@ These parameters are available from the \q{Custom...} option on the
 \dt \e{Width}, \e{Height}
 
 \dd Size of grid in squares.
+
+\H{range-prefs} \I{preferences, for Range}Range user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure which way round the mouse
+buttons work.
+
 
 \C{pearl} \i{Pearl}
 
@@ -2952,7 +3158,7 @@ Credit for this puzzle goes to \i{Nikoli}, who call it \q{Masyu}.
 Thanks to James Harvey for assistance with the implementation.
 
 \B{nikoli-pearl}
-\W{http://www.nikoli.co.jp/en/puzzles/masyu/}\cw{http://www.nikoli.co.jp/en/puzzles/masyu/}
+\W{https://www.nikoli.co.jp/en/puzzles/masyu/}\cw{https://www.nikoli.co.jp/en/puzzles/masyu/}
 
 \H{pearl-controls} \I{controls, for Pearl}Pearl controls
 
@@ -2971,10 +3177,13 @@ white clue has to be a corner, but don't yet know which way the corner
 turns, you might mark the one way it \e{can't} go with a cross.)
 
 Alternatively, use the cursor keys to move the cursor.  Use the Enter
-key to begin and end keyboard `drag' operations.  Use the Space key to
-cancel the drag.  Use Ctrl-arrowkey and Shift-arrowkey to simulate a
-left or right click, respectively, on the edge in the given direction
-relative to the cursor, i.e. to draw a segment or a cross.
+key to begin and end keyboard \q{drag} operations.  Use the Space,
+Escape or Backspace keys to cancel the drag.  Or, hold Control while
+dragging with the cursor keys to toggle segments as you move between
+squares.
+
+Pressing Control-Shift-arrowkey or Shift-arrowkey simulates a left or
+right click, respectively, on the edge in the direction of the key.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -2982,6 +3191,41 @@ relative to the cursor, i.e. to draw a segment or a cross.
 
 These parameters are available from the \q{Custom...} option on the
 \q{Type} menu.
+
+\dt \e{Width}, \e{Height}
+
+\dd Size of grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Controls the difficulty of the generated puzzle.
+
+\dt \e{Allow unsoluble}
+
+\dd If this is set, then the game will be generated in the simplest
+way: every clue square that can possibly be provided will be shown,
+and the generator will not check whether the puzzle can be uniquely
+solved.
+
+\lcont{
+
+This speeds up game generation, and allows much larger grids to be
+played. At least one possible solution will still always exist, but
+there's no guarantee that it will be unique, or that it will be
+possible to deduce it step by step.
+
+}
+
+\H{pearl-prefs} \I{preferences, for Pearl}Pearl user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure the style of the game
+display. \q{Traditional} is the default mode, in which the loop runs
+between centres of grid squares, and each clue occupies a square.
+\q{Loopy-style} is an alternative mode that looks more like Loopy
+(\k{loopy}), in which the loop runs between grid \e{vertices}, and the
+clues also occupy vertices.
+
 
 \C{undead} \i{Undead}
 
@@ -3017,12 +3261,13 @@ Undead was contributed to this collection by Steffen Bauer.
 Undead has a similar control system to Solo, Unequal and Keen.
 
 To play Undead, click the mouse in any empty square and then type a
-letter on the keyboard indicating the type of monster: \q{G} for a
-ghost, \q{V} for a vampire, or \q{Z} for a zombie. If you make a
+letter or number on the keyboard indicating the type of monster:
+\q{G} or \q{1} for a ghost, \q{V} or \q{2} for a vampire,
+or \q{Z} or \q{3} for a zombie. If you make a
 mistake, click the mouse in the incorrect square and press Space to
 clear it again (or use the Undo feature).
 
-If you \e{right}-click in a square and then type a letter, the
+If you \e{right}-click in a square and then type a letter or number, the
 corresponding monster will be shown in reduced size in that square, as
 a \q{pencil mark}. You can have pencil marks for multiple monsters in
 the same square. A square containing a full-size monster cannot also
@@ -3035,7 +3280,7 @@ monster, or you can use them as lists of the possible monster in a
 given square, or anything else you feel like.
 
 To erase a single pencil mark, right-click in the square and type
-the same letter again.
+the same letter or number again.
 
 All pencil marks in a square are erased when you left-click and type a
 monster letter, or when you left-click and press Space. Right-clicking
@@ -3043,13 +3288,16 @@ and pressing space will also erase pencil marks.
 
 As for Solo, the cursor keys can be used in conjunction with the letter
 keys to place monsters or pencil marks. Use the cursor keys to move a
-highlight around the grid, and type a monster letter to enter it in
+highlight around the grid, and type a monster letter or number to enter it in
 the highlighted square. Pressing return toggles the highlight into a
 mode in which you can enter or remove pencil marks.
 
 If you prefer plain letters of the alphabet to cute monster pictures,
 you can press \q{A} to toggle between showing the monsters as monsters or
 showing them as letters.
+
+Left-clicking a clue will mark it as done (grey it out), or unmark it
+if it is already marked.
 
 (All the actions described in \k{common-actions} are also available.)
 
@@ -3065,6 +3313,13 @@ These parameters are available from the \q{Custom...} option on the
 \dt \e{Difficulty}
 
 \dd Controls the difficulty of the generated puzzle.
+
+\H{undead-prefs} \I{preferences, for Undead}Undead user preferences
+
+On platforms that support user preferences, the \q{Preferences} option
+on the \q{Game} menu will let you configure whether Undead uses letters
+or pictures to represent monsters.
+
 
 \C{unruly} \i{Unruly}
 
@@ -3135,7 +3390,7 @@ running its own internal solver. You win if you can make the whole
 grid the same colour in that many moves or fewer.
 
 I saw this game (with a fixed grid size, fixed number of colours, and
-fixed move limit) at \W{http://floodit.appspot.com}\cw{floodit.appspot.com}.
+fixed move limit) at http://floodit.appspot.com (no longer accessible).
 
 \H{flood-controls} \I{controls, for Flood}Flood controls
 
@@ -3239,13 +3494,651 @@ more twiddly and interesting. If you want to restore the possibility,
 turn this option off.
 
 
+\C{palisade} \i{Palisade}
+
+\cfg{winhelp-topic}{games.palisade}
+
+You're given a grid of squares, some of which contain numbers.  Your
+goal is to subdivide the grid into contiguous regions, all of the same
+(given) size, such that each square containing a number is adjacent to
+exactly that many edges (including those between the inside and the
+outside of the grid).
+
+Credit for this puzzle goes to \i{Nikoli}, who call it \q{Five Cells}.
+\k{nikoli-palisade}.
+
+Palisade was contributed to this collection by Jonas K\u00F6{oe}lker.
+
+\B{nikoli-palisade}
+\W{https://www.nikoli.co.jp/en/puzzles/five_cells/}\cw{https://www.nikoli.co.jp/en/puzzles/five_cells/}
+
+\H{palisade-controls} \I{controls, for Palisade}Palisade controls
+
+Left-click to place an edge.  Right-click to indicate \q{no edge}.
+Alternatively, the arrow keys will move a keyboard cursor.  Holding
+Control while pressing an arrow key will place an edge.  Press
+Shift-arrowkey to switch off an edge.  Repeat an action to perform
+its inverse.
+
+(All the actions described in \k{common-actions} are also available.)
+
+\H{Palisade-parameters} \I{parameters, for Palisade}Palisade parameters
+
+These parameters are available from the \q{Custom...} option on the
+\q{Type} menu.
+
+\dt \e{Width}, \e{Height}
+
+\dd Size of grid in squares.
+
+\dt \e{Region size}
+
+\dd The size of the regions into which the grid must be subdivided.
+
+\C{mosaic} \i{Mosaic}
+
+\cfg{winhelp-topic}{games.mosaic}
+
+You are given a grid of squares, which you must colour either black or
+white.
+
+Some squares contain clue numbers. Each clue tells you the number of
+black squares in the 3\times\.3 region surrounding the clue \dash
+\e{including} the clue square itself.
+
+This game is variously known in other locations as: ArtMosaico, Count
+and Darken, Cuenta Y Sombrea, Fill-a-Pix, Fill-In, Komsu Karala,
+Magipic, Majipiku, Mosaico, Mosaik, Mozaiek, Nampre Puzzle,
+Nurie-Puzzle, Oekaki-Pix, Voisimage.
+
+Mosaic was contributed to this collection by Didi Kohen. Colour design
+by Michal Shomer. The implementation is loosely based on
+\W{https://github.com/mordechaim/Mosaic}\cw{github.com/mordechaim/Mosaic}.
+
+\H{mosaic-controls} \I{controls, for Mosaic}Mosaic controls
+
+To play Mosaic, click the mouse in a square to change its colour.
+Left-clicking an empty square will turn it black, and right-clicking
+will turn it white. Keep clicking the same button to cycle through the
+three possible states for the square.
+
+If you hold down the mouse button and drag, you can colour multiple
+cells in a single action.
+
+You can also use the cursor keys to move around the grid. Pressing the
+return or space keys will turn an empty square black or white
+respectively (and then cycle the colours in the same way as the mouse
+buttons), and pressing Backspace will reset a square to empty.
+
+\H{Mosaic-parameters} \I{parameters, for Mosaic}Mosaic parameters
+
+These parameters are available from the \q{Custom...} option on the
+\q{Type} menu.
+
+\dt \e{Width}, \e{Height}
+
+\dd Size of grid in squares.
+
+\dt \e{Aggressive generation}
+
+\dd With this option set, the game generator will try harder to
+eliminate unnecessary clues on the board. This slows down generation,
+so it's not recommended for boards larger than, say, 30\times\.30.
+
+\C{abcd} \i{ABCD}
+
+\cfg{winhelp-topic}{games.abcd}
+
+You're given an empty grid, and several rows of numbers on the side.
+You have to write a letter in every empty cell, following these rules:
+
+\n The numbers on the edge indicate how many instances of a specific
+letter appear in that row or column.
+
+\n Identical letters can not be horizontally or vertically adjacent.
+
+The inventor of this type is unknown. This puzzle is also known under
+the names \e{ABCD Puzzle}, \e{ABC-Kombi} or \e{ABCD-R\u00e4{a}tsel}.
+
+More information: \W{https://www.janko.at/Raetsel/Abc-Kombi/index.htm}\cw{www.janko.at/Raetsel/Abc-Kombi/index.htm}
+
+\H{abcd-controls} \i{ABCD Controls}
+
+\IM{ABCD Controls} controls, for ABCD
+
+ABCD uses the same control scheme as Solo, but with letters instead of numbers.
+
+Left-click to select a cell, then type a letter on your keyboard to enter it.
+Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a letter to add a pencil mark. Pencil marks can
+be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter
+to toggle between entering letters and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{abcd-parameters} \I{parameters, for ABCD}ABCD parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares (excluding the size of the numbers on the
+edge).
+
+\dt \e{Letters}
+
+\dd The amount of different letters that can appear in the puzzle.
+
+\dt \e{Remove clues}
+
+\dd When enabled, the difficulty is increased by hiding certain number clues.
+
+\dt \e{Allow diagonal touching}
+
+\dd When disabled, letters cannot be diagonally adjacent (in addition to
+letters not being orthogonally adjacent).
+
+\C{ascent} \i{Ascent}
+
+\cfg{winhelp-topic}{games.ascent}
+
+You're given a grid, with several numbers inside. Your objective is to place each number exactly once, so a path is formed from the lowest number (i.e. 1) to the highest number. Two numbers that are in sequence must be horizontally, vertically or diagonally adjacent.
+
+The puzzle can be played on a rectangular or hexagonal grid. It's also possible to play on a rectangular grid while not allowing the path to move diagonally.
+
+In the alternate game mode 'Edges', the grid is surrounded by numbers placed inside arrows. An arrow points to the row, column or diagonal where this number appears in the path.
+
+This puzzle is invented by Gyora Benedek, and is known as \e{Hidato} (or the non-trademarked name \e{Hidoku}). Edges mode is an implementation of \e{1to25} invented by Jeff Widderich.
+
+More information: \W{http://www.janko.at/Raetsel/Hidoku/index.htm}\cw{http://www.janko.at/Raetsel/Hidoku/index.htm}
+
+\H{ascent-controls} \i{Ascent Controls}
+
+\IM{Ascent Controls} controls, for Ascent
+
+There are three ways to enter a number:
+
+\n Click a number to highlight it, then click (or drag to) an adjacent cell to place the next number in the sequence. The arrow keys and Enter can be used to emulate mouse clicks.
+
+\n Click an empty cell, then type a multi-digit number. To confirm a number, either press Enter, an arrow key, or click any cell.
+
+\n In Edges mode, click and drag from an edge number, then release in an empty grid cell in the same row, column or diagonal.
+
+To remove numbers, right-click or right-drag a number.
+
+It's also possible to draw a path while the numbers inside the path are still unknown. Left-click and drag across cells to draw a line. Right-click or right-drag to clear the line going through a cell.
+
+If a path has only a single number, the endpoints will display one or two smaller numbers, which represent the numbers which are valid for this cell.
+
+\H{ascent-parameters} \I{parameters, for Ascent}Ascent parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Always show start and end points}
+
+\dd When enabled, the first and last number are always given. Disable this option for an added challenge.
+
+\dt \e{Symmetrical clues}
+
+\dd When enabled, all given numbers form a symmetric pattern. This usually leads to easier puzzles.
+
+\dt \e{Grid type}
+
+\dd Choose between 'Rectangle', 'Rectangle (no diagonals)', 'Hexagon', 'Honeycomb' and 'Edges' mode.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{boats} \i{Boats}
+
+\cfg{winhelp-topic}{games.boats}
+
+You're given a grid, and a list of boats which must be located inside that grid. Boats can be rotated. Two boats cannot be horizontally, vertically or diagonally adjacent.
+
+The numbers on the side indicate the amount of cells inside that row or column which are occupied by a boat.
+
+Some boat segments are given (corner pieces, centers, or single-length boats), along with their orientation.
+
+At the bottom of the puzzle is a list of every boat that must be placed in the grid. When a boat is found, it is automatically crossed off of this list. Make sure a boat is surrounded by water on all sides, to indicate that it cannot possibly grow any further.
+
+This puzzle is best known as \e{Battleships}.
+
+More information: \W{https://www.janko.at/Raetsel/Battleships/index.htm}\cw{https://www.janko.at/Raetsel/Battleships/index.htm}
+
+\H{boats-controls} \i{Boats Controls}
+
+\IM{Boats Controls} controls, for Boats
+
+Left-click to place a boat segment in the grid. Unknown boat segments are represented by a small rectangle, and will automatically change into the correct shape when the surrounding cells are filled in.
+
+Right-click to place water, to indicate that a boat cannot be placed here.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to place a boat segment, and press Space to place water.
+
+\H{boats-parameters} \I{parameters, for Boats}Boats parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Fleet size}
+
+\dd The size of the largest possible boat.
+
+\dt \e{Fleet configuration}
+
+\dd Customize the fleet by entering a list of numbers. Each number indicates how many times a boat of a specific size appears. For example, the configuration \cw{3,2,1} represents 3 boats of size 1, 2 boats of size 2, and 1 boat of size 3.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\dt \e{Remove numbers}
+
+\dd When enabled, the difficulty is increased by hiding certain number clues.
+
+\C{bricks} \i{Bricks}
+
+\cfg{winhelp-topic}{games.bricks}
+
+Objective of the game: Shade several cells in the hexagonal grid 
+while following these rules:
+
+\n Each shaded cell must have at least one shaded cell below it
+   (unless it's on the bottom row).
+
+\n There can not be 3 or more shaded cells in a horizontal row.
+
+\n A number indicates the amount of shaded cells around it.
+
+\n Cells with numbers cannot be shaded.
+
+This genre was invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli} under the name \e{Tawamurenga}.
+
+\H{bricks-controls} \i{Bricks Controls}
+
+\IM{Bricks Controls} controls, for Bricks
+
+Left-click to shade a cell. Right-click to unshade a cell. You can also click and drag to place multiple squares.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to shade a square, and press Space to unshade a square.
+
+You can also use the numpad (keys 1, 3, 7, 9) to move the cursor diagonally.
+
+\H{bricks-parameters} \I{parameters, for Bricks}Bricks parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{clusters} \i{Clusters}
+
+\cfg{winhelp-topic}{games.clusters}
+
+You're given a grid, with several dots inside colored squares. Your objective is to fill every empty space with one of two colors while following these rules:
+
+\n Tiles which are adjacent to 1 other tile of the same color are denoted with a dot. All of these tiles are given.
+
+\n All other tiles must be adjacent to 2 or more tiles of the same color.
+
+This puzzle type was invented by Inaba Naoki under the name \e{\u30AF\u30E9\u30B9\u30BF\u30FC}, or literally \e{Kurasuta}, which Google Translate names 'Cluster'. The original puzzles are available here: \W{http://www.inabapuzzle.com/honkaku/kura.html}\cw{http://www.inabapuzzle.com/honkaku/kura.html}
+
+\H{clusters-controls} \i{Clusters Controls}
+
+\IM{Clusters Controls} controls, for Clusters
+
+Left-click to place blue squares. Right-click to place red squares. You can also click and drag to place multiple squares.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to place a blue square, and press Space to place a red square.
+
+\H{clusters-parameters} \I{parameters, for Clusters}Clusters parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\C{crossing} \i{Crossing}
+
+\cfg{winhelp-topic}{games.crossing}
+
+You're given a grid with several black squares, and a list of numbers. Your objective is to fill every empty square with a digit, so each number appears once in the grid when reading from left-to-right or from top-to-bottom.
+
+This is an implementation of \e{Nansuke}, which was invented by Nikoli. It's sometimes known as \e{Number Skeleton}.
+
+More information: \W{https://www.nikoli.co.jp/en/puzzles/nansuke/}\cw{https://www.nikoli.co.jp/en/puzzles/nansuke/}
+
+\H{crossing-controls} \i{Crossing Controls}
+
+\IM{Crossing Controls} controls, for Crossing
+
+Crossing uses the same control scheme as Solo.
+
+Left-click to select a cell, then type a number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a number to add a pencil mark. Pencil marks can be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering number and entering pencil marks.
+
+\H{crossing-parameters} \I{parameters, for Crossing}Crossing parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Symmetric walls}
+
+\dd When enabled, all walls form a rotationally symmetric pattern.
+
+\C{mathrax} \i{Mathrax}
+
+\cfg{winhelp-topic}{games.mathrax}
+
+You have a square grid; each square may contain a digit from 1 to the size of the grid, and some squares have clues overlapping them. Your objective is to fill the grid with numbers so that no number appears more than once in a row or column, and all clues are satisfied.
+
+The following clues can appear:
+
+\b An 'E' indicates that the four adjacent digits are even.
+
+\b An 'O' indicates that the four adjacent digits are odd.
+
+\b An '=' indicates that diagonally adjacent digits are equal.
+
+\b A number indicates the result of the given operation when applied to each pair of diagonally adjacent digits. (topleft * bottomright) = (topright * bottomleft)
+
+The inventor of Mathrax is unknown. 
+
+More information: \W{https://www.janko.at/Raetsel/Mathrax/index.htm}\cw{https://www.janko.at/Raetsel/Mathrax/index.htm}
+
+\H{mathrax-controls} \i{Mathrax Controls}
+
+\IM{Mathrax Controls} controls, for Mathrax
+
+Mathrax uses the same control scheme as Solo.
+
+Left-click to select a cell, then type a number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a number to add a pencil mark. Pencil marks can be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering number and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{mathrax-parameters} \I{parameters, for Mathrax}Mathrax parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Size (s*s)}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\dt \e{Addition clues}
+
+\dd Allows clues with the addition operation to appear.
+
+\dt \e{Subtraction clues}
+
+\dd Allows clues with the subtraction operation to appear. Note that clues with a difference of zero are covered by Equality clues instead.
+
+\dt \e{Multiplication clues}
+
+\dd Allows clues with the multiplication operation to appear.
+
+\dt \e{Division clues}
+
+\dd Allows clues with the division operation to appear. Note that clues with a ratio of one are covered by Equality clues instead.
+
+\dt \e{Equality clues}
+
+\dd Allows clues with equality signs to appear.
+
+\dt \e{Even/odd clues}
+
+\dd Allows Even clues and Odd clues to appear.
+
+\C{rome} \i{Rome}
+
+\cfg{winhelp-topic}{games.rome}
+
+You're given a grid that has been divided into areas, containing arrows and one or more goals (represented by circles). Your goal is to fill every empty space with an arrow pointing up, down, left or right while following these rules:
+
+\n Every outlined area contains different arrows.
+
+\n Following the arrows must lead to one of the circled goals.
+
+This type was invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli}, who name it \e{Roma}.
+
+More information: \W{http://www.janko.at/Raetsel/Nikoli/Roma.htm}\cw{http://www.janko.at/Raetsel/Nikoli/Roma.htm}
+
+\H{rome-controls} \i{Rome Controls}
+
+\IM{Rome Controls} controls, for Rome
+
+Click and hold a square, then drag in one of the four directions to place an arrow.
+
+Right-click and drag to place a pencil mark. Pencil marks can be used for any purpose.
+
+The keyboard can also be used. Move the cursor with the arrow keys, and press Enter followed with an arrow key to place an arrow. Use Space to add pencil marks. Alternatively, use the arrows on the numpad to enter arrows directly.
+
+\H{rome-parameters} \I{parameters, for Rome}Rome parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{salad} \i{Salad}
+
+\cfg{winhelp-topic}{games.salad}
+
+You have a square grid; each square may contain a character from A (or 1) to a given maximum. Your objective is to put characters in some of the squares, so each character appears exactly once in each row and column.
+
+The rules vary depending on the game mode:
+
+\b ABC End View mode: Letters on the edge show which letter appears first when 'looking' into the grid.
+
+\b Number Ball mode: Squares with a ball must contain a number. Squares with a cross must remain empty.
+
+Number Ball was invented by Inaba Naoki. The original puzzles are available here: \W{http://www.janko.at/Raetsel/Nanbaboru/index.htm}\cw{http://www.janko.at/Raetsel/Nanbaboru/index.htm}
+
+I don't know who first designed ABC End View.
+
+\H{salad-controls} \i{Salad Controls}
+
+\IM{Salad Controls} controls, for Salad
+
+Salad uses a control scheme similar to Solo, but with the ability to mark empty squares.
+
+Left-click to select a cell, then type a letter or number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Press 'X' to mark a cell as empty, or press 'O' to mark a cell as "definitely not empty".
+
+Right-click a cell, then type a letter or number to add a pencil mark. Pencil marks can be used for any purpose. The letter 'X' can also be used to indicate a cell that might be empty.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering letters/numbers and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{salad-parameters} \I{parameters, for Salad}Salad parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Game mode}
+
+\dd Switch between ABC End View and Number Ball mode.
+
+\dt \e{Size (s*s)}
+
+\dd Size of the grid in squares.
+
+\dt \e{Symbols}
+
+\dd The amount of different symbols that appear in each row.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle.
+
+\C{seismic} \i{Seismic}
+
+\cfg{winhelp-topic}{games.seismic}
+
+You're given a grid that has been divided into areas. Fill each empty cell with a number so each area of size N contains one instance of each number between 1 and N. Depending on the game mode, the following rule is added:
+
+\b Seismic: Two equal numbers N in the same row or column must have at least N spaces between them.
+
+\b Tectonic: Two equal numbers cannot be horizontally, vertically or diagonally adjacent.
+
+Seismic mode is an implementation of \e{Hakyuu}, a puzzle invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli}. It's also known as \e{Ripple Effect}. More information: \W{http://www.janko.at/Raetsel/Hakyuu/index.htm}\cw{http://www.janko.at/Raetsel/Hakyuu/index.htm}
+
+I don't know who first invented Tectonic.
+
+\H{seismic-controls} \i{Seismic Controls}
+
+\IM{Seismic Controls} controls, for Seismic
+
+Seismic uses the same control scheme as Solo, but the interface automatically enforces the maximum number on each area, so it's not possible to enter numbers that are out of range.
+
+Left-click to select a cell, then type a number on your keyboard to enter it. Press Backspace or Space to clear a cell.
+
+Right-click a cell, then type a number to add a pencil mark. Pencil marks can be used for any purpose.
+
+You can also use the arrow keys to move the selected cell around. Press Enter to toggle between entering number and entering pencil marks.
+
+Press the 'M' key to fill every empty cell with all possible pencil marks.
+
+\H{seismic-parameters} \I{parameters, for Seismic}Seismic parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu. 
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\dt \e{Game mode}
+
+\dd Switch between Seismic and Tectonic mode.
+
+\C{spokes} \i{Spokes}
+
+\cfg{winhelp-topic}{games.spokes}
+
+You are given a grid filled with hubs with numbers on them. Your objective is to draw lines between them while following these rules:
+
+\n You can only draw a line starting from a hub's point. If there is no point visible, you cannot draw a line.
+
+\n Only one line can be drawn between two hubs.
+
+\n The number indicates the amount of lines starting from a hub.
+
+\n Lines cannot cross each other.
+
+\n All hubs must form a single connected group.
+
+The inventor of this puzzle type is unknown.
+
+\H{spokes-controls} \i{Spokes Controls}
+
+\IM{Spokes Controls} controls, for Spokes
+
+To draw a line, left-click and drag from one hub to another. You can mark a dot as unused by dragging between hubs with the right mouse button.
+
+You can also use the keyboard. Use the arrow keys to move the cursor on top of a dot, then press Enter to draw a line or Space to mark it.
+
+\H{spokes-parameters} \I{parameters, for Spokes}Spokes parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{Difficulty}
+
+\dd Determine the difficulty of the generated puzzle. Higher difficulties require more complex reasoning.
+
+\C{sticks} \i{Sticks}
+
+\cfg{winhelp-topic}{games.sticks}
+
+You are given a grid with several black cells. Fill every blank cell with a line, which connects two cell edges and goes horizontally or vertically through the center of the cell. The lines must follow these rules:
+
+\n A number overlapping a line indicates the length of that line.
+
+\n A line can't overlap more than one number.
+
+\n Numbers in black cells indicate the amount of lines connected to the cell.
+
+This puzzle type was invented by \W{https://www.nikoli.co.jp/}\cw{Nikoli}, and is known as \e{Tatebo-Yokobo}.
+
+More information: \W{https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm}\cw{https://www.janko.at/Raetsel/Tateboo-Yokoboo/index.htm}
+
+\H{sticks-controls} \i{Sticks Controls}
+
+\IM{Sticks Controls} controls, for Sticks
+
+To place a line, drag the mouse horizontally or vertically inside a cell.
+
+To place a line without dragging the mouse, left-click to place a vertical line and right-click to place a horizontal line.
+
+To play with a keyboard, use the arrow keys to move the cursor. Press Enter to place a vertical line, and press Space to place a horizontal line.
+
+\H{sticks-parameters} \I{parameters, for Sticks}Sticks parameters
+
+These parameters are available from the 'Custom...' option on the 'Type' menu.
+
+\dt \e{Width, Height}
+
+\dd Size of the grid in squares.
+
+\dt \e{%age of black squares}
+
+\dd Rough percentage of black squares in the grid.
+
+\dt \e{Symmetry}
+
+\dd Allows you to specify the required symmetry of the black squares in the grid.
+
 \A{licence} \I{MIT licence}\ii{Licence}
 
-This software is \i{copyright} 2004-2014 Simon Tatham.
+This software is \i{copyright} 2004-2024 Simon Tatham.
 
 Portions copyright Richard Boulton, James Harvey, Mike Pinna, Jonas
 K\u00F6{oe}lker, Dariusz Olszewski, Michael Schierl, Lambros Lambrou,
-Bernd Schmidt, Steffen Bauer, Lennard Sprong and Rogier Goossens.
+Bernd Schmidt, Steffen Bauer, Lennard Sprong, Rogier Goossens, Michael
+Quevillon, Asher Gordon, Didi Kohen, and Ben Harris.
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation files
