@@ -1,0 +1,28 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :6:Sticks
+PARAMS  :8:7x7b20s4
+CPARAMS :8:7x7b20s4
+SEED    :15:339799538765190
+DESC    :47:3_2B1b2d1B4cB_1_2a2B2a1_2dB1dB3cB3_1_2d3aB2_1_2
+NSTATES :2:20
+STATEPOS:2:20
+MOVE    :7:B4;B18;
+MOVE    :8:A10;A12;
+MOVE    :3:B9;
+MOVE    :6:B1;B8;
+MOVE    :14:B0;B7;B14;B21;
+MOVE    :4:C21;
+MOVE    :4:A21;
+MOVE    :4:B22;
+MOVE    :4:A29;
+MOVE    :4:A35;
+MOVE    :3:B3;
+MOVE    :4:B17;
+MOVE    :4:B24;
+MOVE    :4:A16;
+MOVE    :8:B23;B30;
+MOVE    :4:A31;
+MOVE    :8:B19;B26;
+MOVE    :6:A5;A6;
+MOVE    :8:B13;B27;

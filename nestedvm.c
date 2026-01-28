@@ -17,7 +17,7 @@
 extern void _pause();
 extern int _call_java(int cmd, int arg1, int arg2, int arg3);
 
-void fatal(char *fmt, ...)
+void fatal(const char *fmt, ...)
 {
     va_list ap;
     fprintf(stderr, "fatal error: ");
@@ -31,10 +31,11 @@ void fatal(char *fmt, ...)
 struct frontend {
     // TODO kill unneeded members!
     midend *me;
-    int timer_active;
+    bool timer_active;
     struct timeval last_time;
     config_item *cfg;
-    int cfg_which, cfgret;
+    int cfg_which;
+    bool cfgret;
     int ox, oy, w, h;
 };
 
@@ -53,59 +54,59 @@ void frontend_default_colour(frontend *fe, float *output)
     output[0] = output[1]= output[2] = 0.8f;
 }
 
-void nestedvm_status_bar(void *handle, char *text)
+void nestedvm_status_bar(drawing *dr, const char *text)
 {
     _call_java(4,0,(int)text,0);
 }
 
-void nestedvm_start_draw(void *handle)
+void nestedvm_start_draw(drawing *dr)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(5, 0, fe->w, fe->h);
     _call_java(4, 1, fe->ox, fe->oy);
 }
 
-void nestedvm_clip(void *handle, int x, int y, int w, int h)
+void nestedvm_clip(drawing *dr, int x, int y, int w, int h)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(5, w, h, 0);
     _call_java(4, 3, x + fe->ox, y + fe->oy);
 }
 
-void nestedvm_unclip(void *handle)
+void nestedvm_unclip(drawing *dr)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(4, 4, fe->ox, fe->oy);
 }
 
-void nestedvm_draw_text(void *handle, int x, int y, int fonttype, int fontsize,
-		   int align, int colour, char *text)
+void nestedvm_draw_text(drawing *dr, int x, int y, int fonttype, int fontsize,
+                        int align, int colour, const char *text)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(5, x + fe->ox, y + fe->oy, 
 	       (fonttype == FONT_FIXED ? 0x10 : 0x0) | align);
     _call_java(7, fontsize, colour, (int)text);
 }
 
-void nestedvm_draw_rect(void *handle, int x, int y, int w, int h, int colour)
+void nestedvm_draw_rect(drawing *dr, int x, int y, int w, int h, int colour)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(5, w, h, colour);
     _call_java(4, 5, x + fe->ox, y + fe->oy);
 }
 
-void nestedvm_draw_line(void *handle, int x1, int y1, int x2, int y2, 
+void nestedvm_draw_line(drawing *dr, int x1, int y1, int x2, int y2,
 			int colour)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(5, x2 + fe->ox, y2 + fe->oy, colour);
     _call_java(4, 6, x1 + fe->ox, y1 + fe->oy);
 }
 
-void nestedvm_draw_poly(void *handle, int *coords, int npoints,
+void nestedvm_draw_poly(drawing *dr, int *coords, int npoints,
 			int fillcolour, int outlinecolour)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     int i;
     _call_java(4, 7, npoints, 0);
     for (i = 0; i < npoints; i++) {
@@ -114,19 +115,19 @@ void nestedvm_draw_poly(void *handle, int *coords, int npoints,
     _call_java(4, 8, outlinecolour, fillcolour);
 }
 
-void nestedvm_draw_circle(void *handle, int cx, int cy, int radius,
+void nestedvm_draw_circle(drawing *dr, int cx, int cy, int radius,
 		     int fillcolour, int outlinecolour)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     _call_java(5, cx+fe->ox, cy+fe->oy, radius);
     _call_java(4, 9, outlinecolour, fillcolour);
 }
 
 struct blitter {
-    int handle, w, h, x, y;
+    int handle, w, h;
 };
 
-blitter *nestedvm_blitter_new(void *handle, int w, int h)
+blitter *nestedvm_blitter_new(drawing *dr, int w, int h)
 {
     blitter *bl = snew(blitter);
     bl->handle = -1;
@@ -135,40 +136,34 @@ blitter *nestedvm_blitter_new(void *handle, int w, int h)
     return bl;
 }
 
-void nestedvm_blitter_free(void *handle, blitter *bl)
+void nestedvm_blitter_free(drawing *dr, blitter *bl)
 {
     if (bl->handle != -1)
 	_call_java(4, 11, bl->handle, 0);
     sfree(bl);
 }
 
-void nestedvm_blitter_save(void *handle, blitter *bl, int x, int y)
+void nestedvm_blitter_save(drawing *dr, blitter *bl, int x, int y)
 {
-    frontend *fe = (frontend *)handle;    
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     if (bl->handle == -1)
 	bl->handle = _call_java(4,10,bl->w, bl->h);
-    bl->x = x;
-    bl->y = y;
     _call_java(8, bl->handle, x + fe->ox, y + fe->oy);
 }
 
-void nestedvm_blitter_load(void *handle, blitter *bl, int x, int y)
+void nestedvm_blitter_load(drawing *dr, blitter *bl, int x, int y)
 {
-    frontend *fe = (frontend *)handle;
+    frontend *fe = GET_HANDLE_AS_TYPE(dr, frontend);
     assert(bl->handle != -1);
-    if (x == BLITTER_FROMSAVED && y == BLITTER_FROMSAVED) {
-        x = bl->x;
-        y = bl->y;
-    }
     _call_java(9, bl->handle, x + fe->ox, y + fe->oy);
 }
 
-void nestedvm_end_draw(void *handle)
+void nestedvm_end_draw(drawing *dr)
 {
     _call_java(4,2,0,0);
 }
 
-char *nestedvm_text_fallback(void *handle, const char *const *strings,
+char *nestedvm_text_fallback(drawing *dr, const char *const *strings,
 			     int nstrings)
 {
     /*
@@ -179,10 +174,15 @@ char *nestedvm_text_fallback(void *handle, const char *const *strings,
 }
 
 const struct drawing_api nestedvm_drawing = {
+    1,
     nestedvm_draw_text,
     nestedvm_draw_rect,
     nestedvm_draw_line,
+#ifdef USE_DRAW_POLYGON_FALLBACK
+    draw_polygon_fallback,
+#else
     nestedvm_draw_poly,
+#endif
     nestedvm_draw_circle,
     NULL, // draw_update,
     nestedvm_clip,
@@ -205,7 +205,7 @@ int jcallback_key_event(int x, int y, int keyval)
     if (fe->ox == -1)
         return 1;
     if (keyval >= 0 &&
-        !midend_process_key(fe->me, x - fe->ox, y - fe->oy, keyval))
+        midend_process_key(fe->me, x - fe->ox, y - fe->oy, keyval) == PKR_QUIT)
 	return 42;
     return 1;
 }
@@ -216,7 +216,7 @@ int jcallback_resize(int width, int height)
     int x, y;
     x = width;
     y = height;
-    midend_size(fe->me, &x, &y, TRUE);
+    midend_size(fe->me, &x, &y, true, 1.0);
     fe->ox = (width - x) / 2;
     fe->oy = (height - y) / 2;
     fe->w = x;
@@ -244,7 +244,7 @@ void deactivate_timer(frontend *fe)
 {
     if (fe->timer_active)
 	_call_java(4, 13, 0, 0);
-    fe->timer_active = FALSE;
+    fe->timer_active = false;
 }
 
 void activate_timer(frontend *fe)
@@ -253,62 +253,100 @@ void activate_timer(frontend *fe)
 	_call_java(4, 12, 0, 0);
 	gettimeofday(&fe->last_time, NULL);
     }
-    fe->timer_active = TRUE;
+    fe->timer_active = true;
 }
 
 void jcallback_config_ok()
 {
     frontend *fe = (frontend *)_fe;
-    char *err;
+    const char *err;
 
     err = midend_set_config(fe->me, fe->cfg_which, fe->cfg);
 
     if (err)
 	_call_java(2, (int) "Error", (int)err, 1);
     else {
-	fe->cfgret = TRUE;
+	fe->cfgret = true;
     }
 }
 
 void jcallback_config_set_string(int item_ptr, int char_ptr) {
     config_item *i = (config_item *)item_ptr;
     char* newval = (char*) char_ptr;
-    sfree(i->sval);
-    i->sval = dupstr(newval);
+    assert(i->type == C_STRING);
+    sfree(i->u.string.sval);
+    i->u.string.sval = dupstr(newval);
     free(newval);
 }
 
 void jcallback_config_set_boolean(int item_ptr, int selected) {
     config_item *i = (config_item *)item_ptr;
-    i->ival = selected != 0 ? TRUE : FALSE;
+    assert(i->type == C_BOOLEAN);
+    i->u.boolean.bval = selected != 0 ? true : false;
 }
 
 void jcallback_config_set_choice(int item_ptr, int selected) {
     config_item *i = (config_item *)item_ptr;
-    i->ival = selected;
+    assert(i->type == C_CHOICES);
+    i->u.choices.selected = selected;
 }
 
-static int get_config(frontend *fe, int which)
+static bool get_config(frontend *fe, int which)
 {
     char *title;
     config_item *i;
     fe->cfg = midend_get_config(fe->me, which, &title);
     fe->cfg_which = which;
-    fe->cfgret = FALSE;
+    fe->cfgret = false;
     _call_java(10, (int)title, 0, 0);
     for (i = fe->cfg; i->type != C_END; i++) {
 	_call_java(5, (int)i, i->type, (int)i->name);
-	_call_java(11, (int)i->sval, i->ival, 0);
+        switch (i->type) {
+          case C_STRING:
+            _call_java(11, (int)i->u.string.sval, 0, 0);
+            break;
+          case C_BOOLEAN:
+            _call_java(11, 0, i->u.boolean.bval, 0);
+            break;
+          case C_CHOICES:
+            _call_java(11, (int)i->u.choices.choicenames,
+                       i->u.choices.selected, 0);
+            break;
+        }
     }
     _call_java(12,0,0,0);
     free_cfg(fe->cfg);
     return fe->cfgret;
 }
 
-int jcallback_menu_key_event(int key)
+int jcallback_newgame_event(void)
 {
     frontend *fe = (frontend *)_fe;
-    if (!midend_process_key(fe->me, 0, 0, key))
+    if (midend_process_key(fe->me, 0, 0, UI_NEWGAME) == PKR_QUIT)
+	return 42;
+    return 0;
+}
+
+int jcallback_undo_event(void)
+{
+    frontend *fe = (frontend *)_fe;
+    if (midend_process_key(fe->me, 0, 0, UI_UNDO) == PKR_QUIT)
+	return 42;
+    return 0;
+}
+
+int jcallback_redo_event(void)
+{
+    frontend *fe = (frontend *)_fe;
+    if (midend_process_key(fe->me, 0, 0, UI_REDO) == PKR_QUIT)
+	return 42;
+    return 0;
+}
+
+int jcallback_quit_event(void)
+{
+    frontend *fe = (frontend *)_fe;
+    if (midend_process_key(fe->me, 0, 0, UI_QUIT) == PKR_QUIT)
 	return 42;
     return 0;
 }
@@ -319,7 +357,7 @@ static void resize_fe(frontend *fe)
 
     x = INT_MAX;
     y = INT_MAX;
-    midend_size(fe->me, &x, &y, FALSE);
+    midend_size(fe->me, &x, &y, false, 1.0);
     _call_java(3, x, y, 0);
 }
 
@@ -339,7 +377,7 @@ int jcallback_preset_event(int ptr_game_params)
 int jcallback_solve_event()
 {
     frontend *fe = (frontend *)_fe;
-    char *msg;
+    const char *msg;
 
     msg = midend_solve(fe->me);
 
@@ -382,26 +420,41 @@ int jcallback_about_event()
     return 0;
 }
 
+void preset_menu_populate(struct preset_menu *menu, int menuid)
+{
+    int i;
+
+    for (i = 0; i < menu->n_entries; i++) {
+        struct preset_menu_entry *entry = &menu->entries[i];
+        if (entry->params) {
+            _call_java(5, (int)entry->params, 0, 0);
+            _call_java(1, (int)entry->title, menuid, entry->id);
+        } else {
+            _call_java(5, 0, 0, 0);
+            _call_java(1, (int)entry->title, menuid, entry->id);
+            preset_menu_populate(entry->submenu, entry->id);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     int i, n;
     float* colours;
 
     _fe = snew(frontend);
-    _fe->timer_active = FALSE;
+    _fe->timer_active = false;
     _fe->me = midend_new(_fe, &thegame, &nestedvm_drawing, _fe);
     if (argc > 1)
 	midend_game_id(_fe->me, argv[1]);   /* ignore failure */
     midend_new_game(_fe->me);
 
-    if ((n = midend_num_presets(_fe->me)) > 0) {
-        int i;
-        for (i = 0; i < n; i++) {
-            char *name;
-            game_params *params;
-            midend_fetch_preset(_fe->me, i, &name, &params);
-	    _call_java(1, (int)name, (int)params, 0);
-        }
+    {
+        struct preset_menu *menu;
+        int nids, topmenu;
+        menu = midend_get_presets(_fe->me, &nids);
+        topmenu = _call_java(1, 0, nids, 0);
+        preset_menu_populate(menu, topmenu);
     }
 
     colours = midend_colours(_fe->me, &n);

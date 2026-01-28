@@ -8,7 +8,11 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
+#ifdef NO_TGMATH_H
+#  include <math.h>
+#else
+#  include <tgmath.h>
+#endif
 
 #include "puzzles.h"
 #include "tree234.h"
@@ -75,16 +79,16 @@ static int black_sort_cmpfn(void *v1, void *v2)
 /* 'board' is an array of enum face_colour, indicating which faces are
  * currently black/white/grey.  'colour' is FACE_WHITE or FACE_BLACK.
  * Returns whether it's legal to colour the given face with this colour. */
-static int can_colour_face(grid *g, char* board, int face_index,
-                           enum face_colour colour)
+static bool can_colour_face(grid *g, char* board, int face_index,
+                            enum face_colour colour)
 {
     int i, j;
-    grid_face *test_face = g->faces + face_index;
+    grid_face *test_face = g->faces[face_index];
     grid_face *starting_face, *current_face;
     grid_dot *starting_dot;
     int transitions;
-    int current_state, s; /* booleans: equal or not-equal to 'colour' */
-    int found_same_coloured_neighbour = FALSE;
+    bool current_state, s; /* equal or not-equal to 'colour' */
+    bool found_same_coloured_neighbour = false;
     assert(board[face_index] != colour);
 
     /* Can only consider a face for colouring if it's adjacent to a face
@@ -93,12 +97,12 @@ static int can_colour_face(grid *g, char* board, int face_index,
         grid_edge *e = test_face->edges[i];
         grid_face *f = (e->face1 == test_face) ? e->face2 : e->face1;
         if (FACE_COLOUR(f) == colour) {
-            found_same_coloured_neighbour = TRUE;
+            found_same_coloured_neighbour = true;
             break;
         }
     }
     if (!found_same_coloured_neighbour)
-        return FALSE;
+        return false;
 
     /* Need to avoid creating a loop of faces of this colour around some
      * differently-coloured faces.
@@ -158,11 +162,11 @@ static int can_colour_face(grid *g, char* board, int face_index,
     current_state = (FACE_COLOUR(current_face) == colour);
     starting_dot = NULL;
     starting_face = NULL;
-    while (TRUE) {
+    while (true) {
         /* Advance to next face.
          * Need to loop here because it might take several goes to
          * find it. */
-        while (TRUE) {
+        while (true) {
             j++;
             if (j == test_face->dots[i]->order)
                 j = 0;
@@ -206,7 +210,7 @@ static int can_colour_face(grid *g, char* board, int face_index,
         }
     }
 
-    return (transitions == 2) ? TRUE : FALSE;
+    return (transitions == 2) ? true : false;
 }
 
 /* Count the number of neighbours of 'face', having colour 'colour' */
@@ -306,7 +310,7 @@ void generate_loop(grid *g, char *board, random_state *rs,
     tree234 *lightable_faces_sorted;
     tree234 *darkable_faces_sorted;
     int *face_list;
-    int do_random_pass;
+    bool do_random_pass;
 
     /* Make a board */
     memset(board, FACE_GREY, num_faces);
@@ -344,7 +348,7 @@ void generate_loop(grid *g, char *board, random_state *rs,
      * to check every face of the board (the grid structure does not keep a
      * list of the infinite face's neighbours). */
     for (i = 0; i < num_faces; i++) {
-        grid_face *f = g->faces + i;
+        grid_face *f = g->faces[i];
         struct face_score *fs = face_scores + i;
         if (board[i] != FACE_GREY) continue;
         /* We need the full colourability check here, it's not enough simply
@@ -361,7 +365,7 @@ void generate_loop(grid *g, char *board, random_state *rs,
     }
 
     /* Colour faces one at a time until no more faces are colourable. */
-    while (TRUE)
+    while (true)
     {
         enum face_colour colour;
         tree234 *faces_to_pick;
@@ -426,7 +430,7 @@ void generate_loop(grid *g, char *board, random_state *rs,
         del234(darkable_faces_sorted, fs);
 
         /* Remember which face we've just coloured */
-        cur_face = g->faces + i;
+        cur_face = g->faces[i];
 
         /* The face we've just coloured potentially affects the colourability
          * and the scores of any neighbouring faces (touching at a corner or
@@ -452,7 +456,7 @@ void generate_loop(grid *g, char *board, random_state *rs,
                 if (FACE_COLOUR(f) != FACE_GREY) continue; 
 
                 /* Find the face index and face_score* corresponding to f */
-                fi = f - g->faces;                
+                fi = f->index;
                 fs = face_scores + fi;
 
                 /* Remove from lightable list if it's in there.  We do this,
@@ -501,19 +505,19 @@ void generate_loop(grid *g, char *board, random_state *rs,
      * make some illicit deductions.  To combat this (and make the path more
      * interesting), we do one final pass making random flips. */
 
-    /* Set to TRUE for final pass */
-    do_random_pass = FALSE;
+    /* Set to true for final pass */
+    do_random_pass = false;
 
-    while (TRUE) {
+    while (true) {
         /* Remember whether a flip occurred during this pass */
-        int flipped = FALSE;
+        bool flipped = false;
 
         for (i = 0; i < num_faces; ++i) {
             int j = face_list[i];
             enum face_colour opp =
                 (board[j] == FACE_WHITE) ? FACE_BLACK : FACE_WHITE;
             if (can_colour_face(g, board, j, opp)) {
-                grid_face *face = g->faces +j;
+                grid_face *face = g->faces[j];
                 if (do_random_pass) {
                     /* final random pass */
                     if (!random_upto(rs, 10))
@@ -522,14 +526,14 @@ void generate_loop(grid *g, char *board, random_state *rs,
                     /* normal pass - flip when neighbour count is 1 */
                     if (face_num_neighbours(g, board, face, opp) == 1) {
                         board[j] = opp;
-                        flipped = TRUE;
+                        flipped = true;
                     }
                 }
             }
         }
 
         if (do_random_pass) break;
-        if (!flipped) do_random_pass = TRUE;
+        if (!flipped) do_random_pass = true;
     }
 
     sfree(face_list);

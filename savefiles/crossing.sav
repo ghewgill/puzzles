@@ -1,0 +1,18 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :8:Crossing
+PARAMS  :3:5x5
+CPARAMS :3:5x5
+SEED    :15:769159380986477
+DESC    :40:2a3c6a1b1b3,12,18,24,182,389,22593,27359
+NSTATES :2:10
+STATEPOS:2:10
+MOVE    :6:R0,2,2
+MOVE    :6:R0,1,8
+MOVE    :6:R0,0,1
+MOVE    :6:R1,2,2
+MOVE    :6:R2,2,5
+MOVE    :6:R3,2,9
+MOVE    :6:R4,2,3
+MOVE    :6:R1,3,4
+MOVE    :6:R1,0,8

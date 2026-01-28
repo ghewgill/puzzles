@@ -40,7 +40,7 @@
         while (config_items[num].type != C_END) {
             [choices addObject:@[]];
             if (config_items[num].type == C_CHOICES) {
-                NSString *sval = [NSString stringWithUTF8String:config_items[num].sval];
+                NSString *sval = [NSString stringWithUTF8String:config_items[num].u.string.sval];
                 NSCharacterSet *delim = [NSCharacterSet characterSetWithCharactersInString:[sval substringToIndex:1]];
                 choices[num] = [[sval substringFromIndex:1] componentsSeparatedByCharactersInSet:delim];
             }
@@ -134,7 +134,7 @@
                         text.tag = indexPath.row;
                         [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
                         text.textAlignment = NSTextAlignmentRight;
-                        text.text = [NSString stringWithUTF8String:config_items[indexPath.row].sval];
+                        text.text = [NSString stringWithUTF8String:config_items[indexPath.row].u.string.sval];
                         [cell addSubview:text];
                         break;
                     }
@@ -142,7 +142,7 @@
                         UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(self.view.frame.size.width-95-roffset, 9, 80, 31)];
                         sw.tag = indexPath.row;
                         [sw addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventValueChanged];
-                        sw.on = config_items[indexPath.row].ival;
+                        sw.on = config_items[indexPath.row].u.boolean.bval;
                         [cell addSubview:sw];
                         break;
                     }
@@ -151,7 +151,7 @@
                         UITextField *label = [[UITextField alloc] initWithFrame:CGRectMake(self.view.frame.size.width-200-roffset, IOS7() ? 7 : 11, 165, 31)];
                         label.enabled = NO;
                         label.textAlignment = NSTextAlignmentRight;
-                        label.text = choiceText[indexPath.row][config_items[indexPath.row].ival];
+                        label.text = choiceText[indexPath.row][config_items[indexPath.row].u.choices.selected];
                         [cell addSubview:label];
                         break;
                     }
@@ -160,7 +160,7 @@
                 UITextField *text = [[UITextField alloc] initWithFrame:CGRectMake(20+roffset, 12, self.view.frame.size.width-(20+roffset)*2, 31)];
                 text.tag = indexPath.row;
                 [text addTarget:self action:@selector(valueChanged:) forControlEvents:UIControlEventEditingChanged];
-                text.text = [NSString stringWithUTF8String:config_items[indexPath.row].sval];
+                text.text = [NSString stringWithUTF8String:config_items[indexPath.row].u.string.sval];
                 [cell addSubview:text];
             }
             break;
@@ -223,13 +223,13 @@
     switch (item->type) {
         case C_STRING: {
             UITextField *text = (UITextField *)sender;
-            free(item->sval);
-            item->sval = dupstr([text.text cStringUsingEncoding:NSUTF8StringEncoding]);
+            free(item->u.string.sval);
+            item->u.string.sval = dupstr([text.text cStringUsingEncoding:NSUTF8StringEncoding]);
             break;
         }
         case C_BOOLEAN: {
             UISwitch *sw = (UISwitch *)sender;
-            item->ival = sw.on;
+            item->u.boolean.bval = sw.on;
             break;
         }
         case C_CHOICES: {
@@ -257,7 +257,7 @@
     if (indexPath.section == 0) {
         if (config_items[indexPath.row].type == C_CHOICES) {
             NSArray *choices = choiceText[indexPath.row];
-            int value = config_items[indexPath.row].ival;
+            int value = config_items[indexPath.row].u.choices.selected;
             NSString *title = [NSString stringWithUTF8String:config_items[indexPath.row].name];
             GameSettingsChoiceController *gscc = [[GameSettingsChoiceController alloc] initWithGame:thegame index:indexPath.row choices:choices value:value title:title delegate:self];
             [self.navigationController pushViewController:gscc animated:YES];
@@ -270,7 +270,7 @@
 
 - (void)didSelectChoice:(int)index value:(int)value
 {
-    config_items[index].ival = value;
+    config_items[index].u.choices.selected = value;
     [self.tableView reloadData];
 }
 

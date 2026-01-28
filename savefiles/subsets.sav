@@ -1,0 +1,26 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :7:Subsets
+PARAMS  :5:4x4n4
+CPARAMS :5:4x4n4
+SEED    :15:961039262703030
+DESC    :45:_D,5,_R,_,_,6,_RD,_U,_,13R,_,12U,14,_URL,_,_L
+NSTATES :2:18
+STATEPOS:2:18
+MOVE    :5:K13,0
+MOVE    :5:K13,2
+MOVE    :5:K13,3
+MOVE    :5:K13,1
+MOVE    :5:C10,1
+MOVE    :5:K10,0
+MOVE    :5:C10,2
+MOVE    :5:K10,3
+MOVE    :5:C10,3
+MOVE    :5:U10,3
+MOVE    :4:K6,0
+MOVE    :4:K8,0
+MOVE    :4:K8,1
+MOVE    :4:C3,0
+MOVE    :4:C3,2
+MOVE    :4:C3,3
+MOVE    :4:C3,1

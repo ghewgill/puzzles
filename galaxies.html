@@ -3,19 +3,21 @@
 <html>
 <head>
 <meta http-equiv="content-type" content="text/html; charset=US-ASCII">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Galaxies</title>
 <link rel="previous" href="unequal.html">
 <link rel="ToC" href="index.html">
+<link rel="up" href="index.html">
 <link rel="index" href="docindex.html">
 <link rel="next" href="filling.html">
-<link rel="stylesheet" type="text/css" href="style.css">
-</head>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body>
 <p><a href="unequal.html">Previous</a> | <a href="index.html">Contents</a> | <a href="docindex.html">Index</a> | <a href="filling.html">Next</a></p>
 <h1><a name="C28"></a>Chapter 28: <a name="i0"></a>Galaxies</h1>
 <p>
-You have a rectangular grid containing a number of dots. Your aim is to draw edges along the grid lines which divide the rectangle into regions in such a way that every region is 180&#176; rotationally symmetric, and contains exactly one dot which is located at its centre of symmetry.
+You have a rectangular grid containing a number of dots. Your aim is to partition the rectangle into connected regions of squares, in such a way that every region is 180&#176; rotationally symmetric, and contains exactly one dot which is located at its centre of symmetry.
+</p>
+<p>
+To enter your solution, you draw lines along the grid edges to mark the boundaries of the regions. The puzzle is complete when the marked lines on the grid are precisely those that separate two squares belonging to different regions.
 </p>
 <p>
 This puzzle was invented by <a name="i1"></a>Nikoli <a href="#p0">[13]</a>, under the name &#8216;Tentai Show&#8217;; its name is commonly translated into English as &#8216;Spiral Galaxies&#8217;.
@@ -24,11 +26,11 @@ This puzzle was invented by <a name="i1"></a>Nikoli <a href="#p0">[13]</a>, unde
 Galaxies was contributed to this collection by James Harvey.
 </p>
 <p><a name="p0"></a>
-[13] <a href="http://www.nikoli.co.jp/en/puzzles/astronomical_show/"><code>http://www.nikoli.co.jp/en/puzzles/astronomical_show/</code></a>
+[13] <a href="https://www.nikoli.co.jp/en/puzzles/tentai_show/"><code>https://www.nikoli.co.jp/en/puzzles/tentai_show/</code></a>
 </p>
 <h2><a name="S28.1"></a>28.1 <a name="i2"></a>Galaxies controls</h2>
 <p>
-Left-click on any grid line to draw an edge if there isn't one already, or to remove one if there is. When you create a valid region (one which is closed, contains exactly one dot, is 180&#176; symmetric about that dot, and contains no extraneous edges inside it) it will be highlighted automatically; so your aim is to have the whole grid highlighted in that way.
+Left-click on any grid line to draw an edge if there isn't one already, or to remove one if there is. When you create a valid region (one which is closed, contains exactly one dot, is 180&#176; symmetric about that dot, and contains no extraneous edges between two of its own squares), it will be highlighted automatically; so your aim is to have the whole grid highlighted in that way.
 </p>
 <p>
 During solving, you might know that a particular grid square belongs to a specific dot, but not be sure of where the edges go and which other squares are connected to the dot. In order to mark this so you don't forget, you can right-click on the dot and drag, which will create an arrow marker pointing at the dot. Drop that in a square of your choice and it will remind you which dot it's associated with. You can also right-click on existing arrows to pick them up and move them, or destroy them by dropping them off the edge of the grid. (Also, if you're not sure which dot an arrow is pointing at, you can pick it up and move it around to make it clearer. It will swivel constantly as you drag it, to stay pointed at its parent dot.)

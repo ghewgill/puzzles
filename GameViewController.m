@@ -54,6 +54,13 @@
     [super viewDidLoad];
 	// Do any additional setup after loading the view.
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Help" style:UIBarButtonItemStylePlain target:self action:@selector(showHelp)];
+	self.navigationItem.hidesBackButton = true;
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Back" style:UIBarButtonItemStylePlain target:self action:@selector(backTapped)];
+}
+
+- (void)backTapped
+{
+	[self.navigationController popViewControllerAnimated:(true)];
 }
 
 - (void)viewWillDisappear:(BOOL)animated

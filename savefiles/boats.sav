@@ -1,0 +1,33 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :5:Boats
+PARAMS  :13:6x6f3dh,3,2,1
+CPARAMS :13:6x6f3dh,3,2,1
+SEED    :15:591264663656540
+DESC    :26:2,1,1,3,2,1,2,2,2,1,3,0,pW
+NSTATES :2:25
+STATEPOS:2:25
+MOVE    :12:P0,5,5,5,-,W
+MOVE    :12:P2,3,2,3,-,B
+MOVE    :12:P2,3,2,3,*,W
+MOVE    :12:P4,3,4,3,-,B
+MOVE    :12:P4,3,4,3,*,W
+MOVE    :12:P0,4,2,4,-,W
+MOVE    :12:P0,4,2,4,W,-
+MOVE    :12:P2,4,4,4,-,B
+MOVE    :12:P1,3,1,4,-,W
+MOVE    :12:P3,3,3,3,-,W
+MOVE    :12:P5,4,5,4,-,W
+MOVE    :12:P4,3,4,3,W,-
+MOVE    :12:P4,3,5,3,-,W
+MOVE    :12:P0,4,0,4,-,W
+MOVE    :12:P0,3,0,3,-,B
+MOVE    :12:P1,2,1,2,-,W
+MOVE    :12:P2,0,2,2,-,W
+MOVE    :12:P3,0,3,0,-,B
+MOVE    :12:P4,1,4,1,-,W
+MOVE    :12:P4,0,4,0,-,B
+MOVE    :12:P3,1,3,1,-,W
+MOVE    :12:P3,2,3,2,-,B
+MOVE    :12:P5,0,5,0,-,W
+MOVE    :12:P5,1,5,1,-,W

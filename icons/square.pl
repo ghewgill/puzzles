@@ -8,7 +8,7 @@
 #  - the input image file name
 #  - the output image file name.
 
-($osize, $oborder, $infile, $outfile) = @ARGV;
+($convert, $osize, $oborder, $infile, $outfile) = @ARGV;
 
 # Determine the input image's size.
 $ident = `identify -format "%w %h" $infile`;
@@ -17,7 +17,7 @@ $ident =~ /(\d+) (\d+)/ or die "unable to get size for $infile\n";
 
 # Read the input image data.
 $data = [];
-open IDATA, "convert -depth 8 $infile rgb:- |";
+open IDATA, "-|", $convert, "-depth", "8", $infile, "rgb:-";
 push @$data, $rgb while (read IDATA,$rgb,3,0) == 3;
 close IDATA;
 # Check we have the right amount of data.
@@ -42,13 +42,13 @@ $back = $plist[0];
 # Crop rows and columns off the image to find the central rectangle
 # of non-background stuff.
 $ystart = 0;
-$ystart++ while $ystart < $h and scalar(grep { $_ ne $back } map { $data->[$ystart*$w+$_] } 0 .. ($w-1)) == 0;
+$ystart++ while $ystart < $h - 1 and scalar(grep { $_ ne $back } map { $data->[$ystart*$w+$_] } 0 .. ($w-1)) == 0;
 $yend = $h-1;
-$yend-- while $yend >= $ystart and scalar(grep { $_ ne $back } map { $data->[$yend*$w+$_] } 0 .. ($w-1)) == 0;
+$yend-- while $yend > $ystart and scalar(grep { $_ ne $back } map { $data->[$yend*$w+$_] } 0 .. ($w-1)) == 0;
 $xstart = 0;
-$xstart++ while $xstart < $w and scalar(grep { $_ ne $back } map { $data->[$_*$w+$xstart] } 0 .. ($h-1)) == 0;
+$xstart++ while $xstart < $w - 1 and scalar(grep { $_ ne $back } map { $data->[$_*$w+$xstart] } 0 .. ($h-1)) == 0;
 $xend = $w-1;
-$xend-- while $xend >= $xstart and scalar(grep { $_ ne $back } map { $data->[$_*$w+$xend] } 0 .. ($h-1)) == 0;
+$xend-- while $xend > $xstart and scalar(grep { $_ ne $back } map { $data->[$_*$w+$xend] } 0 .. ($h-1)) == 0;
 
 # Decide how much border we're going to put back on to make the
 # image perfectly square.
@@ -82,7 +82,7 @@ $oh = $yend - $ystart + 1;
 die "internal computation problem" if $ow != $oh; # should be square
 
 # Now write out the resulting image, and resize it appropriately.
-open IDATA, "| convert -size ${ow}x${oh} -depth 8 -resize ${osize}x${osize}! rgb:- $outfile";
+open IDATA, "|-", $convert, "-size", "${ow}x${oh}", "-depth", "8", "-resize", "${osize}x${osize}!", "rgb:-", $outfile;
 for ($y = $ystart; $y <= $yend; $y++) {
     for ($x = $xstart; $x <= $xend; $x++) {
 	if ($x >= 0 && $x < $w && $y >= 0 && $y < $h) {

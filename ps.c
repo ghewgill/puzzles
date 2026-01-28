@@ -9,19 +9,17 @@
 
 #include "puzzles.h"
 
-#define ROOT2 1.414213562
-
 struct psdata {
     FILE *fp;
-    int colour;
+    bool colour;
     int ytop;
-    int clipped;
+    bool clipped;
     float hatchthick, hatchspace;
     int gamewidth, gameheight;
     drawing *drawing;
 };
 
-static void ps_printf(psdata *ps, char *fmt, ...)
+static void ps_printf(psdata *ps, const char *fmt, ...)
 {
     va_list ap;
 
@@ -73,7 +71,7 @@ static void ps_fill(psdata *ps, int colour)
     }
 }
 
-static void ps_setcolour_internal(psdata *ps, int colour, char *suffix)
+static void ps_setcolour_internal(psdata *ps, int colour, const char *suffix)
 {
     int hatch;
     float r, g, b;
@@ -101,10 +99,11 @@ static void ps_stroke(psdata *ps, int colour)
     ps_setcolour_internal(ps, colour, " stroke");
 }
 
-static void ps_draw_text(void *handle, int x, int y, int fonttype,
-			 int fontsize, int align, int colour, char *text)
+static void ps_draw_text(drawing *dr, int x, int y, int fonttype,
+			 int fontsize, int align, int colour,
+                         const char *text)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     y = ps->ytop - y;
     ps_setcolour(ps, colour);
@@ -134,9 +133,9 @@ static void ps_draw_text(void *handle, int x, int y, int fonttype,
 	ps_printf(ps, "show\n");
 }
 
-static void ps_draw_rect(void *handle, int x, int y, int w, int h, int colour)
+static void ps_draw_rect(drawing *dr, int x, int y, int w, int h, int colour)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     y = ps->ytop - y;
     /*
@@ -147,10 +146,10 @@ static void ps_draw_rect(void *handle, int x, int y, int w, int h, int colour)
     ps_fill(ps, colour);
 }
 
-static void ps_draw_line(void *handle, int x1, int y1, int x2, int y2,
+static void ps_draw_line(drawing *dr, int x1, int y1, int x2, int y2,
 			 int colour)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     y1 = ps->ytop - y1;
     y2 = ps->ytop - y2;
@@ -158,10 +157,10 @@ static void ps_draw_line(void *handle, int x1, int y1, int x2, int y2,
     ps_stroke(ps, colour);
 }
 
-static void ps_draw_polygon(void *handle, int *coords, int npoints,
+static void ps_draw_polygon(drawing *dr, const int *coords, int npoints,
 			    int fillcolour, int outlinecolour)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     int i;
 
@@ -180,10 +179,10 @@ static void ps_draw_polygon(void *handle, int *coords, int npoints,
     ps_stroke(ps, outlinecolour);
 }
 
-static void ps_draw_circle(void *handle, int cx, int cy, int radius,
+static void ps_draw_circle(drawing *dr, int cx, int cy, int radius,
 			   int fillcolour, int outlinecolour)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     cy = ps->ytop - cy;
 
@@ -197,21 +196,21 @@ static void ps_draw_circle(void *handle, int cx, int cy, int radius,
     ps_stroke(ps, outlinecolour);
 }
 
-static void ps_unclip(void *handle)
+static void ps_unclip(drawing *dr)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     assert(ps->clipped);
     ps_printf(ps, "grestore\n");
-    ps->clipped = FALSE;
+    ps->clipped = false;
 }
  
-static void ps_clip(void *handle, int x, int y, int w, int h)
+static void ps_clip(drawing *dr, int x, int y, int w, int h)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     if (ps->clipped)
-	ps_unclip(ps);
+	ps_unclip(dr);
 
     y = ps->ytop - y;
     /*
@@ -221,19 +220,19 @@ static void ps_clip(void *handle, int x, int y, int w, int h)
     ps_printf(ps, "newpath %g %g moveto %d 0 rlineto 0 %d rlineto"
 	      " %d 0 rlineto closepath\n", x - 0.5, y + 0.5, w, -h, -w);
     ps_printf(ps, "clip\n");
-    ps->clipped = TRUE;
+    ps->clipped = true;
 }
 
-static void ps_line_width(void *handle, float width)
+static void ps_line_width(drawing *dr, float width)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     ps_printf(ps, "%g setlinewidth\n", width);
 }
 
-static void ps_line_dotted(void *handle, int dotted)
+static void ps_line_dotted(drawing *dr, bool dotted)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     if (dotted) {
 	ps_printf(ps, "[ currentlinewidth 3 mul ] 0 setdash\n");
@@ -242,7 +241,7 @@ static void ps_line_dotted(void *handle, int dotted)
     }
 }
 
-static char *ps_text_fallback(void *handle, const char *const *strings,
+static char *ps_text_fallback(drawing *dr, const char *const *strings,
 			      int nstrings)
 {
     /*
@@ -285,9 +284,9 @@ static char *ps_text_fallback(void *handle, const char *const *strings,
     return NULL;
 }
 
-static void ps_begin_doc(void *handle, int pages)
+static void ps_begin_doc(drawing *dr, int pages)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     fputs("%!PS-Adobe-3.0\n", ps->fp);
     fputs("%%Creator: Simon Tatham's Portable Puzzle Collection\n", ps->fp);
@@ -332,18 +331,18 @@ static void ps_begin_doc(void *handle, int pages)
     fputs("%%EndProlog\n", ps->fp);
 }
 
-static void ps_begin_page(void *handle, int number)
+static void ps_begin_page(drawing *dr, int number)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     fprintf(ps->fp, "%%%%Page: %d %d\ngsave save\n%g dup scale\n",
 	    number, number, 72.0 / 25.4);
 }
 
-static void ps_begin_puzzle(void *handle, float xm, float xc,
+static void ps_begin_puzzle(drawing *dr, float xm, float xc,
 			    float ym, float yc, int pw, int ph, float wmm)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     fprintf(ps->fp, "gsave\n"
 	    "clippath flattenpath pathbbox pop pop translate\n"
@@ -352,35 +351,36 @@ static void ps_begin_puzzle(void *handle, float xm, float xc,
 	    "%g dup scale\n"
 	    "0 -%d translate\n", xm, xc, ym, yc, wmm/pw, ph);
     ps->ytop = ph;
-    ps->clipped = FALSE;
+    ps->clipped = false;
     ps->gamewidth = pw;
     ps->gameheight = ph;
     ps->hatchthick = 0.2 * pw / wmm;
     ps->hatchspace = 1.0 * pw / wmm;
 }
 
-static void ps_end_puzzle(void *handle)
+static void ps_end_puzzle(drawing *dr)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     fputs("grestore\n", ps->fp);
 }
 
-static void ps_end_page(void *handle, int number)
+static void ps_end_page(drawing *dr, int number)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     fputs("restore grestore showpage\n", ps->fp);
 }
 
-static void ps_end_doc(void *handle)
+static void ps_end_doc(drawing *dr)
 {
-    psdata *ps = (psdata *)handle;
+    psdata *ps = GET_HANDLE_AS_TYPE(dr, psdata);
 
     fputs("%%EOF\n", ps->fp);
 }
 
 static const struct drawing_api ps_drawing = {
+    1,
     ps_draw_text,
     ps_draw_rect,
     ps_draw_line,
@@ -407,14 +407,14 @@ static const struct drawing_api ps_drawing = {
     ps_text_fallback,
 };
 
-psdata *ps_init(FILE *outfile, int colour)
+psdata *ps_init(FILE *outfile, bool colour)
 {
     psdata *ps = snew(psdata);
 
     ps->fp = outfile;
     ps->colour = colour;
     ps->ytop = 0;
-    ps->clipped = FALSE;
+    ps->clipped = false;
     ps->hatchthick = ps->hatchspace = ps->gamewidth = ps->gameheight = 0;
     ps->drawing = drawing_new(&ps_drawing, NULL, ps);
 

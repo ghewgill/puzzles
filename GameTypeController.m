@@ -17,16 +17,20 @@
 @implementation GameTypeController {
     const game *thegame;
     midend *me;
+    struct preset_menu *menu;
+    BOOL top;
     GameView *gameview;
 }
 
-- (id)initWithGame:(const game *)game midend:(midend *)m gameview:(GameView *)gv
+- (id)initWithGame:(const game *)game midend:(midend *)m menu:(struct preset_menu *)pm top:(BOOL)tp gameview:(GameView *)gv
 {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (self) {
         // Custom initialization
         thegame = game;
         me = m;
+        menu = pm;
+        top = tp;
         gameview = gv;
     }
     return self;
@@ -68,7 +72,7 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // Return the number of rows in the section.
-    return midend_num_presets(me) + 1;
+    return menu->n_entries + (top ? 1 : 0);
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -78,17 +82,16 @@
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
     
     // Configure the cell...
-    if (indexPath.row < midend_num_presets(me)) {
-        char *name;
-        game_params *params;
-        midend_fetch_preset(me, indexPath.row, &name, &params);
-        cell.textLabel.text = [NSString stringWithUTF8String:name];
-        if (indexPath.row == midend_which_preset(me)) {
+    int currentPreset = midend_which_preset(me);
+    if (indexPath.row < menu->n_entries) {
+        struct preset_menu_entry entry = menu->entries[indexPath.row];
+        cell.textLabel.text = [NSString stringWithUTF8String:entry.title];
+        if (entry.id == currentPreset) {
             cell.accessoryType = UITableViewCellAccessoryCheckmark;
         }
     } else {
         cell.textLabel.text = @"Custom";
-        if (midend_which_preset(me) < 0) {
+        if (currentPreset < 0) {
             cell.accessoryType = UITableViewCellAccessoryCheckmark;
         } else {
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -153,14 +156,16 @@
      // Pass the selected object to the new view controller.
      [self.navigationController pushViewController:detailViewController animated:YES];
      */
-    if (indexPath.row < midend_num_presets(me)) {
-        char *name;
-        game_params *params;
-        midend_fetch_preset(me, indexPath.row, &name, &params);
-        midend_set_params(me, params);
-        [gameview startNewGame];
-        // bit of a hack here, gameview.nextResponder is actually the view controller we want
-        [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
+    if (indexPath.row < menu->n_entries) {
+        struct preset_menu_entry entry = menu->entries[indexPath.row];
+        if (entry.params) {
+            midend_set_params(me, entry.params);
+            [gameview startNewGame];
+            // bit of a hack here, gameview.nextResponder is actually the view controller we want
+            [self.navigationController popToViewController:(UIViewController *)gameview.nextResponder animated:YES];
+        } else {
+            [self.navigationController pushViewController:[[GameTypeController alloc] initWithGame:thegame midend:me menu:entry.submenu top:false gameview:gameview] animated:YES];
+        }
     } else {
         char *wintitle;
         config_item *config = midend_get_config(me, CFG_SETTINGS, &wintitle);

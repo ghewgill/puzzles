@@ -1,0 +1,24 @@
+SAVEFILE:41:Simon Tatham's Portable Puzzle Collection
+VERSION :1:1
+GAME    :4:Rome
+PARAMS  :5:6x6de
+CPARAMS :5:6x6dt
+SEED    :15:521840491570574
+DESC    :50:2a1a1a2aa2a2aa1aba6a1a3c1b4,dXDaLDaRcLaDhLUaUcRaLa
+NSTATES :2:16
+STATEPOS:2:16
+MOVE    :6:R3,0,R
+MOVE    :6:R2,0,L
+MOVE    :6:R3,1,U
+MOVE    :6:R3,2,U
+MOVE    :6:R3,3,U
+MOVE    :6:R4,3,L
+MOVE    :6:R2,3,R
+MOVE    :6:R3,4,L
+MOVE    :6:R3,5,U
+MOVE    :6:R5,2,L
+MOVE    :6:R5,1,D
+MOVE    :6:R5,5,U
+MOVE    :6:R5,4,L
+MOVE    :6:R5,3,D
+MOVE    :6:R2,3,-

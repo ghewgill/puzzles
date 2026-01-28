@@ -9,8 +9,10 @@ use strict;
 use warnings;
 use HTML::Entities;
 
-open my $desc, "<", "gamedesc.txt"
-    or die "gamedesc.txt: open: $!\n";
+my $gamedesc = shift @ARGV;
+
+open my $desc, "<", $gamedesc
+    or die "$gamedesc: open: $!\n";
 
 open my $spans, ">", "wwwspans.html"
     or die "wwwspans.html: open: $!\n";
@@ -27,7 +29,7 @@ while (<$desc>) {
         '<span class="puzzle"><table>'.
         '<tr><th align="center">%s</th></tr>'.
         '<tr><td align="center">'.
-        '<img style="margin: 0.5em" alt="" title="%s" width=150 height=150 border=0 src="%s-web.png" />'.
+        '<a href="js/%s.html"><img style="margin: 0.5em" alt="" title="%s" width=150 height=150 border=0 src="%s-web.png" /></a>'.
         '</td></tr>'.
         '<tr><td align="center" style="font-size: 70%%"><code>[</code>'.
         ' <a href="java/%s.html">java</a> '.
@@ -41,6 +43,7 @@ while (<$desc>) {
         '<tr><td align="center">%s</td></tr></table></span>'.
         "\n",
         encode_entities($displayname),
+        encode_entities($id),
         encode_entities($description),
         encode_entities($id),
         encode_entities($id),

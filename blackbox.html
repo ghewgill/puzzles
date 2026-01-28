@@ -3,14 +3,13 @@
 <html>
 <head>
 <meta http-equiv="content-type" content="text/html; charset=US-ASCII">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Black Box</title>
 <link rel="previous" href="untangle.html">
 <link rel="ToC" href="index.html">
+<link rel="up" href="index.html">
 <link rel="index" href="docindex.html">
 <link rel="next" href="slant.html">
-<link rel="stylesheet" type="text/css" href="style.css">
-</head>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body>
 <p><a href="untangle.html">Previous</a> | <a href="index.html">Contents</a> | <a href="docindex.html">Index</a> | <a href="slant.html">Next</a></p>
 <h1><a name="C19"></a>Chapter 19: <a name="i0"></a>Black Box</h1>
@@ -24,10 +23,10 @@ Beams will travel straight from their origin until they hit the opposite side of
 A beam that hits a ball head-on is absorbed and will never re-emerge. This includes beams that meet a ball on the first rank of the arena.
 </li>
 <li>
-A beam with a ball to its front-left square gets deflected 90 degrees to the right.
+A beam with a ball in its front-left square and no ball ahead of it gets deflected 90 degrees to the right.
 </li>
 <li>
-A beam with a ball to its front-right square gets similarly deflected to the left.
+A beam with a ball in its front-right square and no ball ahead of it gets similarly deflected to the left.
 </li>
 <li>
 A beam that would re-emerge from its entry location is considered to be &#8216;reflected&#8217;.
@@ -54,7 +53,7 @@ Here is a diagram showing how the positions of balls can create each of the beam
 |......O.|
 H........|
 |.....O..|
- 12-RH---
+ 12-RR---
 </code></pre>
 <p>
 As shown, it is possible for a beam to receive multiple reflections before re-emerging (see turn 3). Similarly, a beam may be reflected (possibly more than once) before receiving a hit (the &#8216;H&#8217; on the left side of the example).
